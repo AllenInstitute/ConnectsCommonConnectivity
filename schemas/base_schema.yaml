@@ -1,0 +1,72 @@
+id: https://brain-connects.org/ic3-base-schema
+name: base_schema
+description: Core shared definitions (prefixes, types, enums, global slots) for the connectivity model.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+imports:
+  - linkml:types
+default_prefix: cc
+default_range: string
+
+types:
+  Probability:
+    base: float
+    minimum_value: 0.0
+    maximum_value: 1.0
+  JsonObject:
+    base: string
+    description: Raw JSON object serialized as a string.
+    pattern: '^\s*\{.*\}\s*$'
+
+enums:
+  Modality:
+    permissible_values:
+      BARCODED:
+        description: Barcoded projection mapping methods (e.g., MAPseq, BARseq) producing molecule detection counts.
+      MORPHOLOGY:
+        description: Morphological reconstructions providing structural projection features.
+      TRACER:
+        description: Traditional tracer experiments.
+      OTHER:
+        description: Other modality.
+  MeasurementType:
+    description: Types of projection-related measurements. Extendable per modality.
+    permissible_values:
+      DETECTIONS:
+        description: Count of detected RNA/barcode molecules in a region (barcoded modalities).
+      NUMBER_OF_TIPS:
+        description: Number of axonal terminal tips reconstructed in a region (morphology derived metric).
+      MICRONS_OF_AXON:
+        description: Microns of axon contained in a region (morphology derived metric).
+      SIGNAL_INTENSITY:
+        description: General normalized signal intensity (e.g., tracer fluorescence).
+  Unit:
+    permissible_values:
+      COUNT:
+        description: Plain count unit.
+      MICRONS:
+        description: Micrometers length measurement.
+      ARBITRARY_UNIT:
+        description: Unspecified normalized unit.
+      NONE:
+        description: Dimensionless.
+
+slots:
+  id:
+    identifier: true
+    description: Unique identifier within the class context.
+    range: string
+  name:
+    required: true
+    description: A human-readable name or title.
+  modality:
+    description: Source modality for the data item (if relevant).
+  publication:
+    description: Reference to publication describing the dataset.
+  # Cross-cutting measurement/clustering specific slots removed to module schemas.
+  dataset:
+    description: Reference to the DataSet this item belongs to.
+    range: DataSet

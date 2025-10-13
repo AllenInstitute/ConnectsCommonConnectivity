@@ -1,0 +1,25 @@
+id: https://brain-connects.org/ic3-core-schema
+name: core_schema
+description: Core data entities (datasets and items).
+imports:
+  - base_schema
+
+classes:
+  DataSet:
+    description: A collection of DataItems (e.g., all neurons from a study, all barcoded detections in a volume).
+    slots:
+      - id
+      - name
+      - publication
+      - modality
+  DataItem:
+    description: An individual datum (e.g., neuron reconstruction, barcoded detection, injection experiment).
+    slots:
+      - id
+      - name
+      - dataset
+    slot_usage:
+      dataset:
+        range: DataSet
+        multivalued: false
+        required: true

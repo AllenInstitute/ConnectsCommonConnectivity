@@ -3,26 +3,26 @@
 
 regions:
   - id: BR1
-    label: Region 1
+    name: Region 1
     acronym: R1
   - id: BR2
-    label: Region 2
+    name: Region 2
     acronym: R2
   - id: BR3
-    label: Region 3
+    name: Region 3
     acronym: R3
 
 datasets:
   - id: DS1
-    label: Example Barcode Dataset
+    name: Example Barcode Dataset
     modality: BARCODED
 
 items:
   - id: CELL1
-    label: Cell 1
+    name: Cell 1
     dataset: DS1
   - id: CELL2
-    label: Cell 2
+    name: Cell 2
     dataset: DS1
 
 # Per-cell measurement sets (vector of values aligned with target_regions)

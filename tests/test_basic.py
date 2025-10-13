@@ -8,5 +8,5 @@ def test_model_generation():
     models = ccc.generate_pydantic_models()
     assert "BrainRegion" in models
     BrainRegion = models["BrainRegion"]
-    br = BrainRegion(id="X", label="Some Region", species="mouse")
+    br = BrainRegion(id="X", name="Some Region", species="mouse")
     assert br.id == "X"

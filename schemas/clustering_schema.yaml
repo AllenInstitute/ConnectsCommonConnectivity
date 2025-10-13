@@ -1,0 +1,174 @@
+id: https://brain-connects.org/ic3-clustering-schema
+name: clustering_schema
+description: Classes related to clustering algorithms and their outputs.
+imports:
+  - base_schema
+  - core_schema
+
+classes:
+  AlgorithmRun:
+    description: Metadata about a single execution of a clustering algorithm.
+    slots:
+      - id
+      - algorithm_name
+      - algorithm_version
+      - parameters_json
+      - run_timestamp
+      - input_dataset
+      - produced_hierarchies
+      - score_description
+      - distance_description
+    slot_usage:
+      algorithm_name:
+        range: string
+        required: true
+        description: Name of the clustering algorithm (e.g., k-means, hierarchical, DBSCAN).
+      algorithm_version:
+        range: string
+        description: Version of the algorithm implementation used.
+      run_timestamp:
+        range: datetime
+        description: Timestamp when the algorithm was executed.
+      input_dataset:
+        range: DataSet
+        description: The dataset that was clustered.
+      parameters_json:
+        range: JsonObject
+        description: Arbitrary algorithm parameters encoded as JSON object string.
+      produced_hierarchies:
+        range: ClusterHierarchy
+        multivalued: true
+        inlined: true
+      score_description:
+        range: string
+        description: Description of the scoring metric used for clusters (e.g., silhouette score).
+      distance_description:
+        range: string
+        description: Description of the distance metric used (e.g., Euclidean, cosine).
+  ClusterHierarchy:
+    description: A complete clustering result (tree or DAG) from one algorithm run.
+    slots:
+      - id
+      - name
+      - run
+      - root
+      - clusters
+    slot_usage:
+      run:
+        range: AlgorithmRun
+      clusters:
+        range: Cluster
+        multivalued: true
+        inlined: true
+      root:
+        range: Cluster
+
+  Cluster:
+    description: A node (cluster) in a hierarchical clustering structure.
+    slots:
+      - id
+      - name
+      - parent
+      - children
+      - level
+      - size
+      - score
+      - distance_to_parent
+      - members
+    slot_usage:
+      parent:
+        range: Cluster
+        slot_uri: skos:broader
+        description: Direct parent cluster (omit for root).
+      children:
+        range: Cluster
+        multivalued: true
+        slot_uri: skos:narrower
+        description: Child clusters.
+      level:
+        range: integer
+        description: Depth of the cluster in the hierarchy where 0 is the root cluster.
+      size:
+        range: integer
+        description: Number of data items in this cluster (including all subclusters).
+      distance_to_parent:
+        range: float
+        description: Distance metric to parent centroid.
+      score:
+        range: float
+        description: Cluster quality metric (e.g., silhouette score).
+      centroid_values:
+        multivalued: true
+        range: float
+        description: Numeric centroid vector (ordered feature list).
+
+  ClusterMembership:
+    description: Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
+    slots:
+      - item
+      - cluster
+      - membership_score
+      - membership_probability
+      - distance
+    slot_usage:
+      membership_probability:
+        range: Probability
+        description: Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.
+      membership_score:
+        range: float
+        description: Algorithm-defined membership strength. (Optional, does not need to be normalized)
+      distance:
+        range: float
+        description: Distance between the item and the cluster centroid. (Smaller is better).
+
+slots:
+  algorithm_name:
+    description: Name of the clustering algorithm (e.g., k-means, hierarchical, DBSCAN).
+  algorithm_version:
+    description: Version of the algorithm implementation used.
+  parameters_json:
+    description: JSON serialization of algorithm parameters.
+  run_timestamp:
+    description: Timestamp when the algorithm was executed.
+  input_dataset:
+    description: Identifier for input dataset.
+  produced_hierarchies:
+    description: Hierarchies produced in this run.
+  run:
+    description: The AlgorithmRun producing this hierarchy.
+  root:
+    description: The root cluster of the hierarchy.
+  clusters:
+    description: All clusters in the hierarchy.
+  parent:
+    description: Direct parent cluster (omit for root).
+  children:
+    description: Child clusters.
+  level:
+    description: Depth (0=root).
+  size:
+    description: Number of data items (direct members or total; clarify convention).
+  centroid_values:
+    description: Numeric centroid vector (ordered feature list).
+  score:
+    description: Cluster quality metric (e.g., silhouette).
+  distance_to_parent:
+    description: Distance metric to parent centroid.
+  members:
+    description: Membership associations.
+  item:
+    description: A DataItem that is a member of a Cluster.
+    range: DataItem
+  cluster:
+    description: Cluster referenced in a membership association.
+    range: Cluster
+  membership_score:
+    description: Algorithm-defined membership strength.
+  membership_probability:
+    description: Normalized probability of membership.
+  distance:
+    description: Distance between item and cluster centroid.
+  score_description:
+    description: Description of the scoring metric used for clusters.
+  distance_description:
+    description: Description of the distance metric used for clustering.

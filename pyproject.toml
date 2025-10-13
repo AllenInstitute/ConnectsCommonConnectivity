@@ -17,25 +17,32 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
 keywords = ["connectivity", "neuroscience", "linkml", "pydantic"]
+dependencies = [
+  "linkml>=1.7.0",
+  "pydantic>=2.6,<3",
+  "pyyaml>=6.0"
+]
 
 [project.urls]
 Homepage = "https://github.com/AllenInstitute/ConnectsCommonConnectivity"
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
+docs = [
+  # Core linkml already in main deps; include tooling extensions for docs generation
+  "mkdocs-material>=9.5.0",            # optional if you later adopt MkDocs site
+  "griffe~=0.42.0"                     # optional: API doc extraction (remove if unneeded)
+]
 
 [dependency-groups]
 # uv specific grouping (optional)
 # You can activate extras via `uv pip install -e .[dev]`
+docs = []
 
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[project.dependencies]
-linkml = ">=1.7.0"
-pydantic = ">=2.6,<3"
-pyyaml = ">=6.0"
 
 [tool.ruff]
 line-length = 100

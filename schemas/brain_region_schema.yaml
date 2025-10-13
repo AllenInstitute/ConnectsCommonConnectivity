@@ -1,0 +1,37 @@
+id: https://brain-connects.org/ic3-brain-region-schema
+name: brain_region_schema
+description: Brain region hierarchical structure.
+imports:
+  - base_schema
+
+classes:
+  BrainRegion:
+    description: A brain region (node) in the common coordinate framework hierarchy.
+    slots:
+      - id
+      - name
+      - parent_region
+      - child_regions
+      - acronym
+      - ontology_id
+    slot_usage:
+      parent_region:
+        range: BrainRegion
+        slot_uri: skos:broader
+      child_regions:
+        range: BrainRegion
+        multivalued: true
+        inlined: true
+        slot_uri: skos:narrower
+      ontology_id:
+        description: External ontology reference (e.g., UBERON or other atlas ID)
+
+slots:
+  parent_region:
+    description: Reference to broader brain region.
+  child_regions:
+    description: Narrower brain regions nested under this region.
+  acronym:
+    description: Short region acronym.
+  ontology_id:
+    description: External ontology identifier (e.g., UBERON:xxxx).

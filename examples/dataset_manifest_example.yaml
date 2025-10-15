@@ -1,0 +1,33 @@
+# Example dataset manifest tying physical data resources to LinkML classes
+# This is NOT a formal LinkML schema file; it's a convenience manifest you can version
+# alongside your data release so downstream tooling knows what files to expect.
+
+schema_version: 0.1.0
+model_schema: connectivity_schema.yaml
+
+# High-level dataset description referencing the DataSet class slots
+dataset:
+  id: ds_mouse_ccf_example
+  title: Mouse CCF Projection Connectivity Example
+  description: Example dataset packaging brain region ontology + projection measurements.
+  version: 2025-Q4-preview
+
+# Logical assets (each could map to one or more physical files)
+assets:
+  brain_regions:
+    class: BrainRegion
+    format: parquet
+    path: data/terminology.parquet
+    primary_key: identifier  # alias accepted for id
+  projection_measurements:
+    class: ProjectionMeasurementMatrix
+    format: parquet
+    path: data/projection_measurements.parquet
+  cluster_hierarchies:
+    class: ClusterHierarchy
+    format: json
+    path: data/cluster_hierarchy.json
+
+# Optional integrity hashes (sha256) could be added later
+# hashes:
+#   data/terminology.parquet: <sha256>

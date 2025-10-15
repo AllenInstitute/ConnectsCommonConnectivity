@@ -20,6 +20,10 @@ types:
     base: string
     description: Raw JSON object serialized as a string.
     pattern: '^\s*\{.*\}\s*$'
+  HexColor:
+    base: string
+    description: Hex RGB color (6 hex digits) optionally prefixed by '#'.
+    pattern: '^#?[0-9A-Fa-f]{6}$'
 
 enums:
   Modality:
@@ -59,6 +63,8 @@ slots:
     identifier: true
     description: Unique identifier within the class context.
     range: string
+    aliases:
+      - identifier
   name:
     required: true
     description: A human-readable name or title.

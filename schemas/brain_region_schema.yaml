@@ -10,28 +10,62 @@ classes:
     slots:
       - id
       - name
-      - parent_region
-      - child_regions
+      - parent_identifier
+      - child_identifiers
       - acronym
-      - ontology_id
+      - color_hex_triplet
+      - term_set_name
+      - annotation_value
+      - descendant_identifiers
+      - descendants
+      - descendant_annotation_values
     slot_usage:
-      parent_region:
+      parent_identifier:
         range: BrainRegion
         slot_uri: skos:broader
-      child_regions:
+        required: true
+      child_identifiers:
         range: BrainRegion
         multivalued: true
-        inlined: true
+        inlined: false
         slot_uri: skos:narrower
-      ontology_id:
-        description: External ontology reference (e.g., UBERON or other atlas ID)
+      color_hex_triplet:
+        description: Hex RGB color assigned to this region (from source ontology).
+      annotation_value:
+        description: Source-specific annotation value for this region. Should align to an annotation volume for a particular atlas.
+      term_set_name:
+        description: Name of the term set this row came from. Term sets are cuts across the hierachy that represent a similar level of biological detail and cover the entire tree.  
+      descendant_identifiers:
+        multivalued: true
+        inlined: false
+        description: List of identifier values for all descendant regions.
+      descendants:
+        multivalued: true
+        range: BrainRegion
+        inlined: false
+        description: Direct object references to descendant regions. Descendants meaning anything down the tree from this node.
+      descendant_annotation_values:
+        multivalued: true
+        inlined: false
+        description: Collected annotation values for descendant regions, Descendants meaning anything down the tree from this node. Useful when relabelling an annotation volume which is often labelled with the voxel farthest down the tree. 
 
 slots:
-  parent_region:
+  parent_identifier:
     description: Reference to broader brain region.
-  child_regions:
+  child_identifiers:
     description: Narrower brain regions nested under this region.
   acronym:
     description: Short region acronym.
-  ontology_id:
-    description: External ontology identifier (e.g., UBERON:xxxx).
+  color_hex_triplet:
+    description: Hex RGB color string (e.g., #FFFFFF or FFFFFF) representing display color.
+    range: HexColor
+  term_set_name:
+    description: Name/version label of the ontology or term set.
+  annotation_value:
+    description: Region-specific annotation metric or tag from source dataset.
+  descendant_identifiers:
+    description: Identifiers for descendant regions, extracted from source terminology file.
+  descendants:
+    description: References to descendant BrainRegion objects.
+  descendant_annotation_values:
+    description: Annotation values aggregated from descendant regions.

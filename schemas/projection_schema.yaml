@@ -1,5 +1,5 @@
 id: https://brain-connects.org/ic3-measurement-schema
-name: measurement_schema
+name: projection_schema
 description: Projection measurement entities and related metadata classes.
 imports:
   - base_schema

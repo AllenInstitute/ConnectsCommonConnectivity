@@ -6,6 +6,6 @@ imports:
   - core_schema
   - clustering_schema
   - brain_region_schema
-  - measurement_schema
+  - projection_schema
 default_prefix: cc
 default_range: string

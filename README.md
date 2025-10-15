@@ -57,7 +57,7 @@ schemas/
 	core_schema.yaml            # DataSet, DataItem
 	clustering_schema.yaml      # AlgorithmRun, ClusterHierarchy, Cluster, ClusterMembership
 	brain_region_schema.yaml    # BrainRegion hierarchy
-	measurement_schema.yaml     # ProjectionMeasurement* + MeasurementTypeMetadata
+	projection_schema.yaml     # ProjectionMeasurement* + MeasurementTypeMetadata
 	connectivity_schema.yaml    # aggregator (imports all above) – primary entry point
 ```
 

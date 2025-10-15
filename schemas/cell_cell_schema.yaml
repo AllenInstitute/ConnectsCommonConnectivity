@@ -1,28 +1,30 @@
-id: https://brain-connects.org/ic3-measurement-schema
-name: projection_schema
-description: Projection measurement entities and related metadata classes.
+id: https://brain-connects.org/ic3-cell-cell-schema
+name: cell_cell_schema
+description: Schema for connectivity measurements that are cell to cell.
 imports:
   - base_schema
   - core_schema
-  - brain_region_schema
 
 classes:
-  ProjectionMeasurementSet:
-    description: Set of projection measurement values for one DataItem across multiple BrainRegions for a single measurement type.
+  CellCellMeasurementSet:
+    description: Set connection measurements values between multiple DataItems for a single measurement type.
     slots:
       - id
-      - data_item
+      - presynaptic_data_item
+      - post_data_item
       - measurement_type
       - modality
       - values
-      - target_regions
       - unit
     slot_usage:
-      data_item:
+      presynaptic_data_item:
+        range: DataItem
+        required: true
+      postsynaptic_data_item:
         range: DataItem
         required: true
       measurement_type:
-        range: ProjectionMeasurementType
+        range: SynapticMeasurementType
         required: true
       modality:
         range: Modality
@@ -30,11 +32,6 @@ classes:
         multivalued: true
         range: float
         description: Numeric values aligned positionally with target_regions.
-      target_regions:
-        multivalued: true
-        range: BrainRegion
-        inlined: false
-        description: Ordered list of brain regions corresponding to the values vector.
       unit:
         range: Unit
 
@@ -70,7 +67,6 @@ classes:
         description: Flattened matrix values in row-major order (data_item_index x region_index).
       unit:
         range: Unit
-
 
 slots:
   data_item:

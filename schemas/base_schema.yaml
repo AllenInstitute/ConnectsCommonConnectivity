@@ -34,9 +34,15 @@ enums:
         description: Morphological reconstructions providing structural projection features.
       TRACER:
         description: Traditional tracer experiments.
+      ELECTRON_MICROSCOPY:
+        description: Electron microscopy based connectivity mapping.
+      XRAY_MICROSCOPY:
+        description: X-ray microscopy based connectivity mapping.
+      EXPANSION_MICROSCOPY:
+        description: Expansion microscopy based connectivity mapping.
       OTHER:
         description: Other modality.
-  MeasurementType:
+  ProjectionMeasurementType:
     description: Types of projection-related measurements. Extendable per modality.
     permissible_values:
       DETECTIONS:
@@ -47,14 +53,37 @@ enums:
         description: Microns of axon contained in a region (morphology derived metric).
       SIGNAL_INTENSITY:
         description: General normalized signal intensity (e.g., tracer fluorescence).
+  SynapticMeasurementType:
+    description: Types of synaptic connectivity-related measurements. Extendable per modality.
+    permissible_values:
+      SYNAPSE_COUNT:
+        description: Count of synapses detected between two cells.
+      SUM_ANATOMICAL_SIZE:
+        description: Anatomical size of synapse for synapses detected between two cells, summed over all synapses.
+      SUMMED_SIGNAL:
+        description: Summed signal intensity of synapses detected between two cells. For example PSD-95 or gephyrin signal.
+      SYNAPTIC_STRENGTH:
+        description: |-
+          Estimate of the synaptic strength between two cells,
+          measured or estimated from physiology.
+          For example, the size of a post-synaptic potential between two neurons (Unit here would be nA or mV)
+          or could be an estimate of the effective weight of a synapse based on a model 
+          that takes into account dendritic location, receptor density, etc.
+          (Unit would then be AU).
   Unit:
     permissible_values:
       COUNT:
         description: Plain count unit.
-      MICRONS:
+      MICRONS_LENGTH:
         description: Micrometers length measurement.
+      MICRONS_SQUARE:
+        description: Micrometers squared area measurement.
+      NANOAMPS:
+        description: Nanoamps electrical current.
+      MILLIVOLTS:
+        description: Millivolts electrical potential.
       ARBITRARY_UNIT:
-        description: Unspecified normalized unit.
+        description: Unspecified normalized unit.F
       NONE:
         description: Dimensionless.
 

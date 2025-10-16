@@ -12,6 +12,7 @@ classes:
     slots:
       - id
       - data_item
+      - cell_index
       - cell_gene_matrix
       - gene_metadata
       - cell_metadata
@@ -99,11 +100,47 @@ classes:
 slots:
   data_item:
     description: Reference to the core DataItem this expression data belongs to.
+  cell_index:
+    description: Ordered list of cells indexing the expression matrix.
+    range: DataItem
   cell_gene_matrix:
     description: Zarr array containing cell x gene expression matrix.
   gene_metadata:
     description: Zarr array containing gene-level metadata.
+  gene_id:
+    description: Unique gene identifier.
+    range: string
+  gene_symbol:
+    description: Gene symbol or name.
+    range: string
   cell_metadata:
     description: Zarr array containing cell-level metadata.
+  cell_id:
+    description: Unique cell identifier.
+    range: string
+  spatial_location:
+    description: 3D spatial coordinates of the cell.
+    range: SpatialLocation
+  quality_score:
+    description: Overall quality score for the cell.
+    range: float
+  total_counts:
+    description: Total number of counts (UMIs) for this cell.
+    range: integer
+  n_genes_detected:
+    description: Number of genes detected in this cell.
+    range: integer
   experiment_metadata:
     description: Metadata about the barcoding experiment.
+  experiment_type:
+    description: Type of barcoding experiment (e.g., 'BarSeq', 'PathSeq', 'MERFISH').
+    range: string
+  sequencing_platform:
+    description: Sequencing platform used (e.g., 'Illumina', 'PacBio').
+    range: string
+  data_processing_pipeline:
+    description: Pipeline used for data processing.
+    range: string
+  normalization_method:
+    description: Normalization method applied to the data.
+    range: string

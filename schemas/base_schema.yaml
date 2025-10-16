@@ -83,7 +83,7 @@ enums:
       MILLIVOLTS:
         description: Millivolts electrical potential.
       ARBITRARY_UNIT:
-        description: Unspecified normalized unit.F
+        description: Unspecified normalized unit.
       NONE:
         description: Dimensionless.
 
@@ -97,6 +97,9 @@ slots:
   name:
     required: true
     description: A human-readable name or title.
+  description:
+    description: Free-text human-readable description.
+    range: string
   modality:
     description: Source modality for the data item (if relevant).
   publication:
@@ -105,3 +108,6 @@ slots:
   dataset:
     description: Reference to the DataSet this item belongs to.
     range: DataSet
+  neuroglancer_link:
+    description: URL to visualize this DataItem in Neuroglancer.
+    range: string

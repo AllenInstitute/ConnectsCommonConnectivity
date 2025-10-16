@@ -193,6 +193,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "linkml" },
+    { name = "linkml-runtime" },
     { name = "pyarrow" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -214,6 +215,7 @@ docs = [
 requires-dist = [
     { name = "griffe", marker = "extra == 'docs'", specifier = "~=0.42.0" },
     { name = "linkml", specifier = ">=1.7.0" },
+    { name = "linkml-runtime", specifier = ">=1.9.5" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pyarrow", specifier = ">=21.0.0" },

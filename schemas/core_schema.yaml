@@ -54,3 +54,17 @@ classes:
         range: string
         required: true
         description: Reference space (e.g., 'CCF_v3', 'CCF_v4').
+
+slots:
+  x:
+    description: X coordinate in the reference space.
+    range: float
+  y:
+    description: Y coordinate in the reference space.
+    range: float
+  z:
+    description: Z coordinate in the reference space.
+    range: float
+  reference_space:
+    description: Name/version of the spatial reference space (e.g., CCF_v3, CCF_v4).
+    range: string

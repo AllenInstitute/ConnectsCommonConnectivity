@@ -10,6 +10,6 @@ imports:
   - cell_features_schema
   - cell_gene_schema
   - single_cell_schema
-  - projection_schema
+  - mappings_schema
 default_prefix: cc
 default_range: string

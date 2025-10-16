@@ -5,7 +5,7 @@ imports:
   - base_schema
   - core_schema
   - zarr_schema
-  - morphology_features_schema
+  - cell_features_schema
 
 classes:
   SingleCellReconstruction:

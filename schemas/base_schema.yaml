@@ -1,6 +1,8 @@
 id: https://brain-connects.org/ic3-base-schema
 name: base_schema
 description: Core shared definitions (prefixes, types, enums, global slots) for the connectivity model.
+imports:
+  - linkml:types
 prefixes:
   linkml: https://w3id.org/linkml/
   schema: http://schema.org/
@@ -96,9 +98,11 @@ slots:
     description: A human-readable name or title.
   description:
     description: Free-text human-readable description.
-    range: linkml:string
+    # Use built-in primitive 'string' (dropping the prefixed form which caused an unrecognized range error)
+    range: string
   modality:
     description: Source modality for the data item (if relevant).
+    range: Modality
   publication:
     description: Reference to publication describing the dataset.
   # Cross-cutting measurement/clustering specific slots removed to module schemas.

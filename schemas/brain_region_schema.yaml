@@ -23,7 +23,7 @@ classes:
       parent_identifier:
         range: BrainRegion
         slot_uri: skos:broader
-        required: true
+        # Not all regions have a parent (root of hierarchy), so keep optional
       child_identifiers:
         range: BrainRegion
         multivalued: true

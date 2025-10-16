@@ -1,7 +1,13 @@
 id: https://brain-connects.org/ic3-common-connectivity-schema
 name: connectivity_schema
 description: Aggregator schema that imports all modular components of the connectivity data model.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
 imports:
+  - linkml:types
   - base_schema
   - core_schema
   - clustering_schema

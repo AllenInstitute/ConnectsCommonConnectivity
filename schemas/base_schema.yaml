@@ -1,13 +1,13 @@
 id: https://brain-connects.org/ic3-base-schema
 name: base_schema
 description: Core shared definitions (prefixes, types, enums, global slots) for the connectivity model.
-imports:
-  - linkml:types
 prefixes:
   linkml: https://w3id.org/linkml/
   schema: http://schema.org/
   skos: http://www.w3.org/2004/02/skos/core#
   cc: https://brain-connects.org/cc/
+  xsd: http://www.w3.org/2001/XMLSchema#
+## Base schema defines prefixes; built-in types imported at aggregator level now.
 default_prefix: 'cc'
 default_range: string
 
@@ -16,14 +16,17 @@ types:
     base: float
     minimum_value: 0.0
     maximum_value: 1.0
+    uri: xsd:float
   JsonObject:
     base: string
     description: Raw JSON object serialized as a string.
     pattern: '^\s*\{.*\}\s*$'
+    uri: xsd:string
   HexColor:
     base: string
     description: Hex RGB color (6 hex digits) optionally prefixed by '#'.
     pattern: '^#?[0-9A-Fa-f]{6}$'
+    uri: xsd:string
 
 enums:
   Modality:

@@ -1,0 +1,160 @@
+id: https://brain-connects.org/ic3-mappings-schema
+name: mappings_schema
+description: Schema for mapping results across datasets (cell→cell, cell→cluster, cluster→cluster).
+imports:
+  - base_schema
+  - core_schema
+  - clustering_schema
+
+classes:
+  MappingSet:
+    description: A coherent set of mappings produced by a specific method between datasets.
+    slots:
+      - id
+      - name
+      - description
+      - method_name
+      - method_version
+      - author
+      - created_at
+      - source_dataset
+      - target_dataset
+      - parameters_json
+    slot_usage:
+      name:
+        range: string
+      description:
+        range: string
+      method_name:
+        range: string
+        required: true
+      method_version:
+        range: string
+      author:
+        range: string
+      created_at:
+        range: datetime
+      source_dataset:
+        range: DataSet
+        required: true
+      target_dataset:
+        range: DataSet
+        required: true
+      parameters_json:
+        range: JsonObject
+        description: Arbitrary method parameters (JSON string).
+
+  CellToCellMapping:
+    description: Mapping between a source cell and a target cell, with scores/probabilities.
+    slots:
+      - id
+      - mapping_set
+      - source_cell
+      - target_cell
+      - score
+      - probability
+      - notes
+    slot_usage:
+      mapping_set:
+        range: MappingSet
+        required: true
+      source_cell:
+        range: DataItem
+        required: true
+      target_cell:
+        range: DataItem
+        required: true
+      score:
+        range: float
+        description: Confidence or similarity score (algorithm-defined).
+      probability:
+        range: Probability
+        description: Normalized probability (0..1) when applicable.
+      notes:
+        range: string
+
+  CellToClusterMapping:
+    description: Mapping between a source cell and a target cluster, with scores/probabilities.
+    slots:
+      - id
+      - mapping_set
+      - source_cell
+      - target_cluster
+      - score
+      - probability
+      - notes
+    slot_usage:
+      mapping_set:
+        range: MappingSet
+        required: true
+      source_cell:
+        range: DataItem
+        required: true
+      target_cluster:
+        range: Cluster
+        required: true
+      score:
+        range: float
+      probability:
+        range: Probability
+      notes:
+        range: string
+
+  ClusterToClusterMapping:
+    description: Mapping between a source cluster and a target cluster, with scores/probabilities.
+    slots:
+      - id
+      - mapping_set
+      - source_cluster
+      - target_cluster
+      - score
+      - probability
+      - notes
+    slot_usage:
+      mapping_set:
+        range: MappingSet
+        required: true
+      source_cluster:
+        range: Cluster
+        required: true
+      target_cluster:
+        range: Cluster
+        required: true
+      score:
+        range: float
+      probability:
+        range: Probability
+      notes:
+        range: string
+
+slots:
+  mapping_set:
+    description: The mapping set this entry belongs to.
+  source_cell:
+    description: Source cell (DataItem) in the mapping.
+  target_cell:
+    description: Target cell (DataItem) in the mapping.
+  source_cluster:
+    description: Source cluster in the mapping.
+  target_cluster:
+    description: Target cluster in the mapping.
+  score:
+    description: Confidence or similarity score.
+  probability:
+    description: Normalized probability (0..1).
+  source_dataset:
+    description: Dataset providing the source entities.
+  target_dataset:
+    description: Dataset providing the target entities.
+  method_name:
+    description: Name of the mapping method.
+  method_version:
+    description: Version of the mapping method.
+  author:
+    description: Author or organization who produced this mapping.
+  created_at:
+    description: Timestamp when the mapping set was created.
+  parameters_json:
+    description: JSON of method parameters.
+  notes:
+    description: Free-text notes about this mapping entry.

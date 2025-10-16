@@ -15,7 +15,6 @@ classes:
       - cell_index
       - cell_gene_matrix
       - gene_metadata
-      - cell_metadata
       - experiment_metadata
     slot_usage:
       data_item:
@@ -98,11 +97,6 @@ classes:
         description: Number of genes detected in this cell.
 
 slots:
-  data_item:
-    description: Reference to the core DataItem this expression data belongs to.
-  cell_index:
-    description: Ordered list of cells indexing the expression matrix.
-    range: DataItem
   cell_gene_matrix:
     description: Zarr array containing cell x gene expression matrix.
   gene_metadata:

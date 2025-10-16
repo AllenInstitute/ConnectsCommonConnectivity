@@ -6,9 +6,7 @@ prefixes:
   schema: http://schema.org/
   skos: http://www.w3.org/2004/02/skos/core#
   cc: https://brain-connects.org/cc/
-imports:
-  - linkml:types
-default_prefix: cc
+default_prefix: 'cc'
 default_range: string
 
 types:
@@ -91,7 +89,6 @@ slots:
   id:
     identifier: true
     description: Unique identifier within the class context.
-    range: string
     aliases:
       - identifier
   name:
@@ -99,7 +96,7 @@ slots:
     description: A human-readable name or title.
   description:
     description: Free-text human-readable description.
-    range: string
+    range: linkml:string
   modality:
     description: Source modality for the data item (if relevant).
   publication:
@@ -111,3 +108,13 @@ slots:
   neuroglancer_link:
     description: URL to visualize this DataItem in Neuroglancer.
     range: string
+  unit:
+    description: Unit of measure for values.
+    range: Unit
+  cell_index:
+    range: DataItem
+    description: Ordered list of cells indexing a matrix.
+  score:
+    description: Confidence or similarity score.
+  parameters_json:
+    description: JSON serialization of algorithm parameters.

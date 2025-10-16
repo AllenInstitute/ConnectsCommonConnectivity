@@ -34,7 +34,9 @@ classes:
         description: Ordered data items defining columns of the matrix, where each column is a postsynaptic data item (cell, region, etc).
       values:
         range: ZarrArray
-        description: Zarr array containing matrix values with shape (presynaptic_index x postsynaptic_index).
+        description: |- 
+          Zarr array containing matrix values quantifying connectivity with shape (presynaptic_index x postsynaptic_index).
+          NaN values reflect 'unmeasured' connectivity.
       unit:
         range: Unit
 
@@ -43,10 +45,6 @@ slots:
     description: The DataItem for which projection measurements are reported.
   measurement_type:
     description: The specific projection measurement type (enum) for this set.
-  region_index:
-    description: Ordered list of regions indexing a matrix or values vector.
-  data_item_index:
-    description: Ordered list of data items indexing a matrix.
   values:
     description: Numeric data values; interpretation depends on measurement_type.
   zarr_array:
@@ -55,8 +53,6 @@ slots:
     description: A list of DataItems indexing the columns of the matrix.
   presynaptic_index: 
     description: A list of DataItems indexing the rows of the matrix.
-  unit:
-    description: Unit of measure for the values.
   description_text:
     description: Free-text description for measurement type metadata.
   default_unit:

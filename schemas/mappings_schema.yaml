@@ -138,8 +138,6 @@ slots:
     description: Source cluster in the mapping.
   target_cluster:
     description: Target cluster in the mapping.
-  score:
-    description: Confidence or similarity score.
   probability:
     description: Normalized probability (0..1).
   source_dataset:
@@ -154,7 +152,5 @@ slots:
     description: Author or organization who produced this mapping.
   created_at:
     description: Timestamp when the mapping set was created.
-  parameters_json:
-    description: JSON of method parameters.
   notes:
     description: Free-text notes about this mapping entry.

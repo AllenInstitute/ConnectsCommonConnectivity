@@ -56,6 +56,8 @@ classes:
         description: Reference space (e.g., 'CCF_v3', 'CCF_v4').
 
 slots:
+  data_item:
+    range: DataItem
   x:
     description: X coordinate in the reference space.
     range: float

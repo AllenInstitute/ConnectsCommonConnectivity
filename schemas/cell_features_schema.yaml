@@ -157,8 +157,6 @@ slots:
   data_type:
     description: "NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'."
     pattern: '^([<>|=])[tbiufcmMOSUV]\\d+$'
-  cell_index:
-    description: Ordered list of cells indexing a matrix.
   feature_index:
     description: Ordered list of features indexing a matrix.
   feature_values:
@@ -175,9 +173,6 @@ slots:
   range_max:
     description: Expected maximum value for this feature.
     range: float
-  unit:
-    description: Unit of measurement for feature values.
-    range: string
   value_float:
     description: Floating point value for a (cell, feature) measurement.
     range: float

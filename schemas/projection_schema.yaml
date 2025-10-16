@@ -10,7 +10,12 @@ imports:
 classes:
   ProjectionMeasurementMatrix:
     description: Aggregated projection measurements for a cohort (e.g., all cells) for a single measurement type.
-      The rows of this matrix could be a 
+      The rows of this matrix could be a set of cells, set of injections.
+      The columns will be how those cells/injections distribute themselves across brain regions. 
+      This could mean for single cell reconstructions the outputs of axons.
+      For rabies injections they could be distribution of input cells.
+      For antereograde injections they could be fluorescence intensity of outputs
+      For retrograde injections they could be cell body counts of inputs. 
     slots:
       - id
       - description
@@ -43,8 +48,6 @@ classes:
 
 
 slots:
-  data_item:
-    description: The DataItem for which projection measurements are reported.
   measurement_type:
     description: The specific projection measurement type (enum) for this set.
   region_index:
@@ -55,10 +58,6 @@ slots:
     description: Numeric data values; interpretation depends on measurement_type.
   zarr_array:
     description: Reference to a zarr array containing the matrix data.
-  target_regions:
-    description: Regions corresponding to each value in a ProjectionMeasurementSet.
-  unit:
-    description: Unit of measure for the values.
   description_text:
     description: Free-text description for measurement type metadata.
   default_unit:

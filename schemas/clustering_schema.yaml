@@ -126,8 +126,6 @@ slots:
     description: Name of the clustering algorithm (e.g., k-means, hierarchical, DBSCAN).
   algorithm_version:
     description: Version of the algorithm implementation used.
-  parameters_json:
-    description: JSON serialization of algorithm parameters.
   run_timestamp:
     description: Timestamp when the algorithm was executed.
   input_dataset:
@@ -150,8 +148,6 @@ slots:
     description: Number of data items (direct members or total; clarify convention).
   centroid_values:
     description: Numeric centroid vector (ordered feature list).
-  score:
-    description: Cluster quality metric (e.g., silhouette).
   distance_to_parent:
     description: Distance metric to parent centroid.
   members:

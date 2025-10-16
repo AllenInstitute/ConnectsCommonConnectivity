@@ -28,8 +28,6 @@ classes:
         description: 3D coordinates of the soma in CCF space.
 
 slots:
-  data_item:
-    description: Reference to the core DataItem this modality-specific data belongs to.
   ccf_registered_file:
     description: Zarr array containing CCF-registered reconstruction data.
   soma_location:

@@ -1,0 +1,55 @@
+id: https://brain-connects.org/ic3-zarr-schema
+name: zarr_schema
+description: Common zarr array reference schema for large-scale data storage.
+imports:
+  - base_schema
+
+classes:
+  ZarrArray:
+    description: Reference to a zarr array containing matrix data with associated metadata.
+    slots:
+      - id
+      - path
+    slot_usage:
+      path:
+        range: string
+        required: true
+        pattern: ^(s3://|gs://|https?://|file://).+
+        description: |-
+          Path or URL to the zarr array. Must include s3://, gs://, https://, http://, or file:// prefix
+          indicating protocol for remote or local storage. Examples:
+          - s3://my-bucket/data/connectivity.zarr
+          - gs://my-project/data/connectivity.zarr  
+          - https://example.com/data/connectivity.zarr
+          - file:///local/path/connectivity.zarr
+
+  ZarrDataset:
+    description: A collection of named zarr arrays stored under a common path (group or store).
+    slots:
+      - id
+      - path
+    slot_usage:
+      path:
+        range: string
+        required: true
+        pattern: ^(s3://|gs://|https?://|file://).+
+        description: |-
+          Path or URL to the zarr dataset root. Must include s3://, gs://, https://, http://, or file:// prefix.
+
+  ParquetDataset:
+    description: A dataset of parquet files (possibly partitioned) accessible via a URL or directory.
+    slots:
+      - id
+      - path
+    slot_usage:
+      path:
+        range: string
+        required: true
+        pattern: ^(s3://|gs://|https?://|file://).+
+        description: |-
+          Path or URL to the parquet dataset root (directory or file). Supports partitioned layouts.
+
+slots:
+  path:
+    description: Path to a URL that includes a protocol prefix.
+    pattern: ^(s3://|gs://|https?://|file://).+

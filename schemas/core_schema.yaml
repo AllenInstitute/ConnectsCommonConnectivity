@@ -18,8 +18,39 @@ classes:
       - id
       - name
       - dataset
+      - neuroglancer_link
     slot_usage:
       dataset:
+        description: The DataSet this DataItem belongs to. 
         range: DataSet
         multivalued: false
         required: true
+      neuroglancer_link:
+        description: A link that illustrates this data item visualized in a common coordinate framework in neuroglancer. 
+        range: string
+        multivalued: false
+        required: false
+  SpatialLocation:
+    description: 3D spatial coordinates in a reference space.
+    slots:
+      - x
+      - y
+      - z
+      - reference_space
+    slot_usage:
+      x:
+        range: float
+        required: true
+        description: X coordinate in the reference space.
+      y:
+        range: float
+        required: true
+        description: Y coordinate in the reference space.
+      z:
+        range: float
+        required: true
+        description: Z coordinate in the reference space.
+      reference_space:
+        range: string
+        required: true
+        description: Reference space (e.g., 'CCF_v3', 'CCF_v4').

@@ -4,67 +4,37 @@ description: Schema for connectivity measurements that are cell to cell.
 imports:
   - base_schema
   - core_schema
+  - zarr_schema
 
 classes:
-  CellCellMeasurementSet:
-    description: Set connection measurements values between multiple DataItems for a single measurement type.
-    slots:
-      - id
-      - presynaptic_data_item
-      - post_data_item
-      - measurement_type
-      - modality
-      - values
-      - unit
-    slot_usage:
-      presynaptic_data_item:
-        range: DataItem
-        required: true
-      postsynaptic_data_item:
-        range: DataItem
-        required: true
-      measurement_type:
-        range: SynapticMeasurementType
-        required: true
-      modality:
-        range: Modality
-      values:
-        multivalued: true
-        range: float
-        description: Numeric values aligned positionally with target_regions.
-      unit:
-        range: Unit
-
-  ProjectionMeasurementMatrix:
+  CellCellMeasurementMatrix:
     description: Aggregated projection measurements for a cohort (e.g., all cells) for a single measurement type.
     slots:
       - id
-      - description
+      - presynaptic_index
+      - postsynaptic_index
       - measurement_type
       - modality
-      - region_index
-      - data_item_index
       - values
       - unit
     slot_usage:
       measurement_type:
-        range: ProjectionMeasurementType
+        range: SynapticMeasurementType
       modality:
         range: Modality
-      region_index:
-        multivalued: true
-        range: BrainRegion
-        inlined: false
-        description: Ordered regions defining columns (or rows) of the matrix.
-      data_item_index:
+      presynaptic_index:
         multivalued: true
         range: DataItem
         inlined: false
-        description: Ordered data items defining rows (or columns) of the matrix.
-      values:
+        description: Ordered data items defining rows of the matrix, where each row is a presynpatic data item (cell, injection location, etc).
+      postsynaptic_index:
         multivalued: true
-        range: float
-        description: Flattened matrix values in row-major order (data_item_index x region_index).
+        range: DataItem
+        inlined: false
+        description: Ordered data items defining columns of the matrix, where each column is a postsynaptic data item (cell, region, etc).
+      values:
+        range: ZarrArray
+        description: Zarr array containing matrix values with shape (presynaptic_index x postsynaptic_index).
       unit:
         range: Unit
 
@@ -79,8 +49,12 @@ slots:
     description: Ordered list of data items indexing a matrix.
   values:
     description: Numeric data values; interpretation depends on measurement_type.
-  target_regions:
-    description: Regions corresponding to each value in a ProjectionMeasurementSet.
+  zarr_array:
+    description: Reference to a zarr array containing the matrix data.
+  postsynaptic_index:
+    description: A list of DataItems indexing the columns of the matrix.
+  presynaptic_index: 
+    description: A list of DataItems indexing the rows of the matrix.
   unit:
     description: Unit of measure for the values.
   description_text:

@@ -1,4 +1,4 @@
-# Example instance data illustrating ProjectionMeasurementSet and ProjectionMeasurementMatrix
+# Example instance data illustrating ProjectionMeasurementMatrix
 # NOTE: Simplified example with small region and data item lists.
 
 regions:
@@ -25,22 +25,6 @@ items:
     name: Cell 2
     dataset: DS1
 
-# Per-cell measurement sets (vector of values aligned with target_regions)
-projection_measurement_sets:
-  - id: PMS1
-    data_item: CELL1
-    measurement_type: DETECTIONS
-    modality: BARCODED
-    target_regions: [BR1, BR2, BR3]
-    values: [120, 45, 5]
-    unit: COUNT
-  - id: PMS2
-    data_item: CELL2
-    measurement_type: DETECTIONS
-    modality: BARCODED
-    target_regions: [BR1, BR2, BR3]
-    values: [80, 60, 10]
-    unit: COUNT
 
 # Aggregated matrix (row-major flattening rows=items, columns=regions)
 projection_measurement_matrices:

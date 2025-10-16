@@ -1,0 +1,36 @@
+id: https://brain-connects.org/ic3-single-cell-schema
+name: single_cell_schema
+description: Schema for single cell reconstruction data and related morphology features.
+imports:
+  - base_schema
+  - core_schema
+  - zarr_schema
+  - morphology_features_schema
+
+classes:
+  SingleCellReconstruction:
+    description: Single cell reconstruction data with CCF registration and morphology features.
+    slots:
+      - id
+      - data_item
+      - ccf_registered_file
+      - soma_location
+    slot_usage:
+      data_item:
+        range: DataItem
+        required: true
+        description: Reference to the core DataItem this reconstruction belongs to.
+      ccf_registered_file:
+        range: ZarrArray
+        description: Zarr array containing the CCF-registered reconstruction data.
+      soma_location:
+        range: SpatialLocation
+        description: 3D coordinates of the soma in CCF space.
+
+slots:
+  data_item:
+    description: Reference to the core DataItem this modality-specific data belongs to.
+  ccf_registered_file:
+    description: Zarr array containing CCF-registered reconstruction data.
+  soma_location:
+    description: 3D spatial location of the soma.

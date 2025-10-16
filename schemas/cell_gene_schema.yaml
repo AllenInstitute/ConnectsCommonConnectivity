@@ -1,0 +1,109 @@
+id: https://brain-connects.org/ic3-cell-gene-schema
+name: cell_gene_schema
+description: Schema for cell x gene expression data from barcoding experiments (BarSeq, PathSeq, etc.).
+imports:
+  - base_schema
+  - core_schema
+  - zarr_schema
+
+classes:
+  CellGeneData:
+    description: Cell x gene expression data from barcoding experiments.
+    slots:
+      - id
+      - data_item
+      - cell_gene_matrix
+      - gene_metadata
+      - cell_metadata
+      - experiment_metadata
+    slot_usage:
+      data_item:
+        range: DataItem
+        required: true
+        description: Reference to the core DataItem this expression data belongs to.
+      cell_gene_matrix:
+        range: ZarrArray
+        required: true
+        description: Zarr array containing the cell x gene expression matrix.
+      gene_metadata:
+        range: ZarrArray
+        description: Zarr array containing gene-level metadata (gene symbols, types, etc.).
+      cell_index:
+        range: DataItem
+        multivalued: true
+        description: index of cells.
+      experiment_metadata:
+        range: BarcodingExperimentMetadata
+        description: Metadata about the barcoding experiment.
+
+  BarcodingExperimentMetadata:
+    description: Metadata about the barcoding experiment and data processing.
+    slots:
+      - experiment_type
+      - sequencing_platform
+      - data_processing_pipeline
+      - normalization_method
+    slot_usage:
+      experiment_type:
+        range: string
+        required: true
+        description: Type of barcoding experiment (e.g., 'BarSeq', 'PathSeq', 'MERFISH').
+      sequencing_platform:
+        range: string
+        description: Sequencing platform used (e.g., 'Illumina', 'PacBio').
+      data_processing_pipeline:
+        range: string
+        description: Pipeline used for data processing.
+
+  GeneMetadata:
+    description: Metadata about genes in the expression matrix.
+    slots:
+      - gene_id
+      - gene_symbol
+    slot_usage:
+      gene_id:
+        range: string
+        required: true
+        description: Unique gene identifier.
+      gene_symbol:
+        range: string
+        description: Gene symbol or name.
+
+
+  CellMetadata:
+    description: Metadata about individual cells in the expression matrix.
+    slots:
+      - cell_id
+      - spatial_location
+      - quality_score
+      - total_counts
+      - n_genes_detected
+    slot_usage:
+      cell_id:
+        range: string
+        required: true
+        description: Unique cell identifier.
+      spatial_location:
+        range: SpatialLocation
+        description: 3D spatial coordinates of the cell.
+      quality_score:
+        range: float
+        description: Overall quality score for the cell.
+      total_counts:
+        range: integer
+        description: Total number of counts (UMIs) for this cell.
+      n_genes_detected:
+        range: integer
+        description: Number of genes detected in this cell.
+
+slots:
+  data_item:
+    description: Reference to the core DataItem this expression data belongs to.
+  cell_gene_matrix:
+    description: Zarr array containing cell x gene expression matrix.
+  gene_metadata:
+    description: Zarr array containing gene-level metadata.
+  cell_metadata:
+    description: Zarr array containing cell-level metadata.
+  experiment_metadata:
+    description: Metadata about the barcoding experiment.

@@ -1,0 +1,165 @@
+id: https://brain-connects.org/ic3-morphology-features-schema
+name: cell_features_schema
+description: Schema for extensible cell feature measurements across cells.
+imports:
+  - base_schema
+  - core_schema
+  - zarr_schema
+
+classes:
+  CellFeatureSet:
+    description: A defined set of cell features with their descriptions and metadata.
+    slots:
+      - id
+      - name
+      - description
+      - feature_definitions
+      - extraction_method
+    slot_usage:
+      name:
+        range: string
+        required: true
+        description: Human-readable short name for this feature set (e.g., 'AllenFeatureSet1', 'NeuroMorpho', 'AuthorYearSet').
+      description:
+        range: string
+        description: Longer human description of what this feature set measures and where it came from.
+      feature_definitions:
+        multivalued: true
+        range: CellFeatureDefinition
+        description: Individual feature definitions within this set.
+      extraction_method:
+        range: string
+        description: Method used to extract these features (e.g., 'L-Measure', 'NeuroMorpho', 'custom').
+
+  CellFeatureDefinition:
+    description: Definition of a single feature with metadata.
+    slots:
+      - id
+      - feature_name
+      - description
+      - unit
+      - data_type
+      - range_min
+      - range_max
+    slot_usage:
+      feature_name:
+        range: string
+        required: true
+        description: Name of the feature (e.g.,'total_synapses', 'total_length', 'branching_factor', 'soma_surface_area').
+      description:
+        range: string
+        description: Detailed description of what this feature measures.
+      unit:
+        range: string
+        description: Unit of measurement (e.g., 'micrometers', 'degrees', 'count').
+      data_type:
+        range: string
+        pattern: ^([<>|=])[tbiufcmMOSUV]\d+$
+        description: Data type as NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'.
+      range_min:
+        range: float
+        description: Expected minimum value for this feature.
+      range_max:
+        range: float
+        description: Expected maximum value for this feature.
+
+  CellFeatureMatrix:
+    description: Logical view of cell × feature measurements; may be backed by long-form records or materialized datasets.
+    slots:
+      - id
+      - description
+      - feature_set
+      - cell_index
+      - feature_index
+      - feature_values
+      - backing_store
+      - unit
+    slot_usage:
+      description:
+        range: string
+        description: Description of this specific feature matrix instance.
+      feature_set:
+        range: CellFeatureSet
+        required: true
+        description: The feature set that defines the features in this matrix.
+      cell_index:
+        multivalued: true
+        range: DataItem
+        inlined: false
+        description: Ordered list of cells (DataItems) defining rows of the matrix.
+      feature_index:
+        multivalued: true
+        range: CellFeatureDefinition
+        inlined: false
+        description: Ordered list of feature definitions defining columns of the matrix.
+      feature_values:
+        range: ZarrDataset
+        description: Optional zarr dataset, one array per feature, for fast matrix access.
+      backing_store:
+        range: ParquetDataset
+        description: Optional parquet dataset storing long-form CellFeatureMeasurement records.
+  CellFeatureMeasurement:
+    description: Long-form measurement row: one (cell, feature) value with strict dtype.
+    slots:
+      - id
+      - data_item
+      - feature
+      - feature_set
+      - dtype
+      - value_float
+      - value_int
+      - value_bool
+      - value_string
+      - value_bytes
+      - value_datetime
+    slot_usage:
+      data_item:
+        range: DataItem
+        required: true
+      feature:
+        range: CellFeatureDefinition
+        required: true
+      feature_set:
+        range: CellFeatureSet
+        description: Denormalized reference to the feature set (helps partitioning and joins).
+      dtype:
+        range: string
+        pattern: ^([<>|=])[tbiufcmMOSUV]\\d+$
+        description: NumPy typestr of the stored value (see arrays.interface).
+      value_float:
+        range: float
+      value_int:
+        range: integer
+      value_bool:
+        range: boolean
+      value_string:
+        range: string
+      value_bytes:
+        range: string
+        description: Base64-encoded bytes when binary values are needed.
+      value_datetime:
+        range: datetime
+        description: ISO 8601 timestamp when dtype corresponds to datetime.
+      unit:
+        range: string
+        description: Unit of measurement for the values in this matrix.
+
+slots:
+  feature_set:
+    description: A set of features that are a coherent feature set. 
+  feature_definitions:
+    description: Individual feature definitions within a feature set.
+  feature_name:
+    description: Name of a morphology feature.
+  cell_index:
+    description: Ordered list of cells indexing a matrix.
+  feature_index:
+    description: Ordered list of features indexing a matrix.
+  feature_values:
+    description: Zarr dataset containing per-feature arrays for matrix values.
+  backing_store:
+    description: Parquet dataset containing long-form (cell, feature, value) records.
+  dtype:
+    description: NumPy typestr (see https://numpy.org/doc/stable/reference/arrays.interface.html).
+  extraction_method:
+    description: Method used to extract morphology features.

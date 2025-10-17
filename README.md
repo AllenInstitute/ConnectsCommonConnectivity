@@ -122,7 +122,6 @@ Column auto-mapping heuristics look for common names like `structure_id`, `struc
 
 Install `pyarrow` (already in dependencies) and ensure your environment permits anonymous S3 access (e.g., set `AWS_NO_SIGN_REQUEST=YES`).
 
-```
 
 ## Evolving the Schema
 

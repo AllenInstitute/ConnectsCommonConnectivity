@@ -96,9 +96,14 @@ slots:
     description: Unique identifier within the class context.
     aliases:
       - identifier
+      - structure_id
+      - brain_region_id
   name:
     required: true
     description: A human-readable name or title.
+    aliases:
+      - structure_name
+      - region_name
   description:
     description: Free-text human-readable description.
     # Use built-in primitive 'string' (dropping the prefixed form which caused an unrecognized range error)

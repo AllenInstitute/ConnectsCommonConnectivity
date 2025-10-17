@@ -16,17 +16,19 @@ classes:
       - color_hex_triplet
       - term_set_name
       - annotation_value
-      - descendant_identifiers
       - descendants
       - descendant_annotation_values
     slot_usage:
       parent_identifier:
+        # Object reference to parent BrainRegion (embed via identifier)
         range: BrainRegion
         slot_uri: skos:broader
+        inlined: false
         # Not all regions have a parent (root of hierarchy), so keep optional
       child_identifiers:
-        range: BrainRegion
+        # Direct object references to child BrainRegion instances.
         multivalued: true
+        range: BrainRegion
         inlined: false
         slot_uri: skos:narrower
       color_hex_triplet:
@@ -35,37 +37,48 @@ classes:
         description: Source-specific annotation value for this region. Should align to an annotation volume for a particular atlas.
       term_set_name:
         description: Name of the term set this row came from. Term sets are cuts across the hierachy that represent a similar level of biological detail and cover the entire tree.  
-      descendant_identifiers:
-        multivalued: true
-        inlined: false
-        description: List of identifier values for all descendant regions.
       descendants:
         multivalued: true
         range: BrainRegion
         inlined: false
-        description: Direct object references to descendant regions. Descendants meaning anything down the tree from this node.
+        description: Direct object references to all descendant regions anywhere below this node.
       descendant_annotation_values:
-        multivalued: true
-        inlined: false
         description: Collected annotation values for descendant regions, Descendants meaning anything down the tree from this node. Useful when relabelling an annotation volume which is often labelled with the voxel farthest down the tree. 
 
 slots:
   parent_identifier:
     description: Reference to broader brain region.
+    aliases:
+      - parent_id
+      - parent_structure_id
   child_identifiers:
     description: Narrower brain regions nested under this region.
+    aliases:
+      - child_ids
+      - child_structure_ids
   acronym:
     description: Short region acronym.
+    aliases:
+      - structure_acronym
+      - region_acronym
+      - abbreviation
   color_hex_triplet:
     description: Hex RGB color string (e.g., #FFFFFF or FFFFFF) representing display color.
     range: HexColor
+    aliases:
+      - rgb_hex
+      - hex_color
   term_set_name:
     description: Name/version label of the ontology or term set.
   annotation_value:
     description: Region-specific annotation metric or tag from source dataset.
-  descendant_identifiers:
-    description: Identifiers for descendant regions, extracted from source terminology file.
+    range: integer
   descendants:
-    description: References to descendant BrainRegion objects.
+    description: Object references to descendant BrainRegion nodes.
+    range: BrainRegion
+    inlined: false
+    multivalued: true
   descendant_annotation_values:
+    multivalued: true
     description: Annotation values aggregated from descendant regions.
+    range: integer

@@ -137,6 +137,87 @@ def build_parser() -> argparse.ArgumentParser:
     val_p.add_argument("inputs", nargs="+", help="Files or directories to validate")
     val_p.set_defaults(func=cmd_validate)
 
+    # etl brain regions
+    etl_p = sub.add_parser("etl-brain-regions", help="ETL BrainRegion records from a Parquet file")
+    _add_common_args(etl_p)
+    etl_p.add_argument("parquet_path", help="Local path or s3:// URI to Parquet file")
+    etl_p.add_argument("--out", help="Output YAML file (default: print to stdout)")
+    etl_p.add_argument("--format", choices=["yaml", "jsonl"], default="yaml")
+    etl_p.add_argument("--id-col")
+    etl_p.add_argument("--name-col")
+    etl_p.add_argument("--acronym-col")
+    etl_p.add_argument("--color-col")
+    etl_p.add_argument("--parent-col")
+
+    def _cmd_etl(args: argparse.Namespace) -> int:  # pragma: no cover
+        from . import generate_pydantic_models, get_schema_path
+        try:
+            import pyarrow.parquet as pq  # type: ignore
+        except Exception as e:  # noqa: BLE001
+            print(f"pyarrow is required for ETL: {e}", file=sys.stderr)
+            return 2
+        try:
+            from linkml_runtime import SchemaView  # type: ignore
+        except Exception as e:  # noqa: BLE001
+            print(f"linkml_runtime missing: {e}", file=sys.stderr)
+            return 2
+        models = generate_pydantic_models(args.schema)
+        BrainRegion = models["BrainRegion"]
+        table = pq.read_table(args.parquet_path)
+        cols = table.schema.names
+        sv = SchemaView(get_schema_path(args.schema))
+        # Build alias list from schema
+        def _aliases(slot_name: str) -> List[str]:
+            slot = sv.get_slot(slot_name)
+            base = [slot_name]
+            if slot and getattr(slot, "aliases", None):
+                base.extend(list(slot.aliases))  # type: ignore[attr-defined]
+            return base
+        alias_map = {
+            "id": _aliases("id") + ["structure_id", "brain_region_id"],
+            "name": _aliases("name") + ["structure_name", "region_name"],
+            "acronym": _aliases("acronym"),
+            "color_hex_triplet": _aliases("color_hex_triplet"),
+            "parent_identifier": _aliases("parent_identifier"),
+        }
+        lower_cols = {c.lower(): c for c in cols}
+        mapping = {}
+        for slot, aliases in alias_map.items():
+            if getattr(args, f"{slot.replace('_hex_triplet','').replace('_identifier','')}-col", None):  # fallback; we only provided explicit args
+                override = getattr(args, f"{slot}-col")
+                mapping[slot] = override
+                continue
+            found = next((lower_cols[a.lower()] for a in aliases if a.lower() in lower_cols), None)
+            mapping[slot] = found
+        data = table.to_pydict()
+        regions = []
+        errors = 0
+        for i in range(table.num_rows):
+            row = {slot: (data[mapping[slot]][i] if mapping.get(slot) and mapping[slot] in data else None) for slot in mapping}
+            color = row.get("color_hex_triplet")
+            if isinstance(color, str) and color and not color.startswith("#"):
+                row["color_hex_triplet"] = f"#{color}"
+            try:
+                parent_id = row.get("parent_identifier")
+                # Create without parent first
+                region = BrainRegion(id=row["id"], name=row["name"], acronym=row.get("acronym"), color_hex_triplet=row.get("color_hex_triplet"))
+                region.parent_identifier = parent_id  # store raw id (simplistic)
+                regions.append(region)
+            except Exception as e:  # noqa: BLE001
+                errors += 1
+                if errors < 5:
+                    print(f"Row {i} error: {e}", file=sys.stderr)
+        import yaml  # type: ignore
+        output = yaml.safe_dump([r.model_dump() for r in regions], sort_keys=False) if args.format == "yaml" else "\n".join(r.model_dump_json() for r in regions)
+        if args.out:
+            Path(args.out).write_text(output, encoding="utf-8")
+            print(f"Wrote {args.out} ({len(regions)} regions, {errors} errors)")
+        else:
+            print(output)
+        return 0 if errors == 0 else 1
+
+    etl_p.set_defaults(func=_cmd_etl)
+
     return p
 
 

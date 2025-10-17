@@ -63,41 +63,7 @@ classes:
         range: float
         description: Expected maximum value for this feature.
 
-  CellFeatureMatrix:
-    description: Logical view of cell × feature measurements; may be backed by long-form records or materialized datasets.
-    slots:
-      - id
-      - description
-      - feature_set
-      - cell_index
-      - feature_index
-      - feature_values
-      - backing_store
-      - unit
-    slot_usage:
-      description:
-        range: string
-        description: Description of this specific feature matrix instance.
-      feature_set:
-        range: CellFeatureSet
-        required: true
-        description: The feature set that defines the features in this matrix.
-      cell_index:
-        multivalued: true
-        range: DataItem
-        inlined: false
-        description: Ordered list of cells (DataItems) defining rows of the matrix.
-      feature_index:
-        multivalued: true
-        range: CellFeatureDefinition
-        inlined: false
-        description: Ordered list of feature definitions defining columns of the matrix.
-      feature_values:
-        range: ZarrDataset
-        description: Optional zarr dataset, one array per feature, for fast matrix access.
-      backing_store:
-        range: ParquetDataset
-        description: Optional parquet dataset storing long-form CellFeatureMeasurement records.
+
   CellFeatureMeasurement:
     description: "Long-form measurement row: one (cell, feature) value with strict dtype."
     slots:

@@ -23,7 +23,7 @@ classes:
       dataset:
         description: The DataSet this DataItem belongs to. 
         range: DataSet
-        multivalued: false
+        multivalued: true
         required: true
       neuroglancer_link:
         description: A link that illustrates this data item visualized in a common coordinate framework in neuroglancer. 

@@ -18,3 +18,4 @@ imports:
   - cell_gene_schema
   - single_cell_schema
   - mappings_schema
+  - cell_cell_schema

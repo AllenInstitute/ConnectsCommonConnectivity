@@ -1,0 +1,1 @@
+uv run gen-pydantic schemas/connectivity_schema.yaml > src/connects_common_connectivity/models.py

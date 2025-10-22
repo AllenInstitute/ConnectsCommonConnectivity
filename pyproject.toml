@@ -18,8 +18,14 @@ classifiers = [
 ]
 keywords = ["connectivity", "neuroscience", "linkml", "pydantic"]
 dependencies = [
+  "caveclient>=7.11.1",
+  "deltalake>=1.2.0",
+  "jupyter>=1.1.1",
   "linkml>=1.7.0",
   "linkml-runtime>=1.9.5",
+  "linkml-store>=0.2.11",
+  "pandas>=2.3.3",
+  "polars>=1.34.0",
   "pyarrow>=21.0.0",
   "pydantic>=2.6,<3",
   "pyyaml>=6.0",

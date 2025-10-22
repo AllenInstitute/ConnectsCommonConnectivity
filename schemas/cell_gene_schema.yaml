@@ -5,19 +5,25 @@ imports:
   - base_schema
   - core_schema
   - zarr_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   CellGeneData:
     description: Cell x gene expression data from barcoding experiments.
     slots:
       - id
-      - data_item
+      - dataitem_id
       - cell_index
       - cell_gene_matrix
       - gene_metadata
       - experiment_metadata
     slot_usage:
-      data_item:
+      dataitem_id:
         range: DataItem
         required: true
         description: Reference to the core DataItem this expression data belongs to.

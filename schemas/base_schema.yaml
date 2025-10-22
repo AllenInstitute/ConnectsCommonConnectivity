@@ -11,23 +11,6 @@ prefixes:
 default_prefix: 'cc'
 default_range: string
 
-types:
-  Probability:
-    base: float
-    minimum_value: 0.0
-    maximum_value: 1.0
-    uri: xsd:float
-  JsonObject:
-    base: string
-    description: Raw JSON object serialized as a string.
-    pattern: '^\s*\{.*\}\s*$'
-    uri: xsd:string
-  HexColor:
-    base: string
-    description: Hex RGB color (6 hex digits) optionally prefixed by '#'.
-    pattern: '^#?[0-9A-Fa-f]{6}$'
-    uri: xsd:string
-
 enums:
   Modality:
     permissible_values:
@@ -81,12 +64,24 @@ enums:
         description: Micrometers length measurement.
       MICRONS_SQUARE:
         description: Micrometers squared area measurement.
+      MICRONS_CUBED:
+        description: Micrometers cubed volume measurement.
+      MICRONS_INVERSE: 
+        description: Inverse micrometers (e.g., density per micron).
+      COUNT_PER_MICRON:
+        description: Count per micrometer (e.g., linear density).
+      COUNT_PER_MICRONS_SQUARED:
+        description: Count per micrometers squared (e.g., area density).
+      COUNT_PER_MICRONS_CUBED:
+        description: Count per micrometers cubed (e.g., volume density).
+      RATIO:
+        description: Dimensionless ratio.
       NANOAMPS:
         description: Nanoamps electrical current.
       MILLIVOLTS:
         description: Millivolts electrical potential.
       ARBITRARY_UNIT:
-        description: Unspecified normalized unit.
+        description: Standardized measure with unspecified units. (e.g. summed pixel intensity). 
       NONE:
         description: Dimensionless.
 
@@ -114,9 +109,6 @@ slots:
   publication:
     description: Reference to publication describing the dataset.
   # Cross-cutting measurement/clustering specific slots removed to module schemas.
-  dataset:
-    description: Reference to the DataSet this item belongs to.
-    range: DataSet
   neuroglancer_link:
     description: URL to visualize this DataItem in Neuroglancer.
     range: string
@@ -130,3 +122,32 @@ slots:
     description: Confidence or similarity score.
   parameters_json:
     description: JSON serialization of algorithm parameters.
+  probability:
+    description: Probability value between 0 and 1.
+    range: float
+    minimum_value: 0.0
+    maximum_value: 1.0
+  json_object:
+    description: Arbitrary JSON object serialized as a string.
+    range: string
+    pattern: '^\s*\{.*\}\s*$'
+  hex_color:
+    range: string
+    description: Hex RGB color (6 hex digits) optionally prefixed by '#'.
+    pattern: '^#?[0-9A-Fa-f]{6}$'
+    aliases:
+      - rgb_hex
+      - hex_color
+  project_id:
+    description: Identifier for the project or acquisition program context for this record.
+    range: string
+    aliases:
+      - project
+      - program_id
+    required: true
+
+classes:
+  ProjectScoped:
+    description: Mixin providing project scoping to entities that belong to a specific project.
+    slots:
+      - project_id

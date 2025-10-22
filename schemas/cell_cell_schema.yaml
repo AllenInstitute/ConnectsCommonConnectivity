@@ -41,7 +41,7 @@ classes:
         range: Unit
 
 slots:
-  data_item:
+  dataitem_id:
     description: The DataItem for which projection measurements are reported.
   measurement_type:
     description: The specific projection measurement type (enum) for this set.

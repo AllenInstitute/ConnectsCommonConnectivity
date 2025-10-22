@@ -4,6 +4,12 @@ description: Classes related to clustering algorithms and their outputs.
 imports:
   - base_schema
   - core_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   AlgorithmRun:
@@ -12,7 +18,7 @@ classes:
       - id
       - algorithm_name
       - algorithm_version
-      - parameters_json
+      - json_object
       - run_timestamp
       - input_dataset
       - produced_hierarchies
@@ -32,8 +38,7 @@ classes:
       input_dataset:
         range: DataSet
         description: The dataset that was clustered.
-      parameters_json:
-        range: JsonObject
+      json_object:
         description: Arbitrary algorithm parameters encoded as JSON object string.
       produced_hierarchies:
         range: ClusterHierarchy
@@ -49,7 +54,6 @@ classes:
     description: A complete clustering result (tree or DAG) from one algorithm run.
     slots:
       - id
-      - name
       - run
       - root
       - clusters
@@ -59,7 +63,7 @@ classes:
       clusters:
         range: Cluster
         multivalued: true
-        inlined: true
+        inlined: false
       root:
         range: Cluster
 
@@ -67,14 +71,13 @@ classes:
     description: A node (cluster) in a hierarchical clustering structure.
     slots:
       - id
-      - name
       - parent
       - children
       - level
-      - size
       - score
       - distance_to_parent
-      - members
+    mixins:
+      - ProjectScoped
     slot_usage:
       parent:
         range: Cluster
@@ -88,9 +91,6 @@ classes:
       level:
         range: integer
         description: Depth of the cluster in the hierarchy where 0 is the root cluster.
-      size:
-        range: integer
-        description: Number of data items in this cluster (including all subclusters).
       distance_to_parent:
         range: float
         description: Distance metric to parent centroid.
@@ -104,15 +104,16 @@ classes:
 
   ClusterMembership:
     description: Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
+    mixins:
+      - ProjectScoped
     slots:
       - item
       - cluster
       - membership_score
-      - membership_probability
+      - probability
       - distance
     slot_usage:
-      membership_probability:
-        range: Probability
+      probability:
         description: Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.
       membership_score:
         range: float
@@ -120,7 +121,8 @@ classes:
       distance:
         range: float
         description: Distance between the item and the cluster centroid. (Smaller is better).
-
+      cluster:
+        inlined: false
 slots:
   algorithm_name:
     description: Name of the clustering algorithm (e.g., k-means, hierarchical, DBSCAN).
@@ -155,6 +157,7 @@ slots:
   item:
     description: A DataItem that is a member of a Cluster.
     range: DataItem
+    inlined: false
   cluster:
     description: Cluster referenced in a membership association.
     range: Cluster

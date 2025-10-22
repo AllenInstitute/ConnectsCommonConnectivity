@@ -3,6 +3,12 @@ name: zarr_schema
 description: Common zarr array reference schema for large-scale data storage.
 imports:
   - base_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   ZarrArray:

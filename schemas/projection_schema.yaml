@@ -6,6 +6,12 @@ imports:
   - core_schema
   - brain_region_schema
   - zarr_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   ProjectionMeasurementMatrix:

@@ -3,6 +3,12 @@ name: core_schema
 description: Core data entities (datasets and items).
 imports:
   - base_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   DataSet:
@@ -12,24 +18,39 @@ classes:
       - name
       - publication
       - modality
+    mixins:
+      - ProjectScoped
   DataItem:
     description: An individual datum (e.g., neuron reconstruction, barcoded detection, injection experiment).
     slots:
       - id
       - name
-      - dataset
       - neuroglancer_link
+    mixins:
+      - ProjectScoped
     slot_usage:
-      dataset:
-        description: The DataSet this DataItem belongs to. 
-        range: DataSet
-        multivalued: true
-        required: true
       neuroglancer_link:
         description: A link that illustrates this data item visualized in a common coordinate framework in neuroglancer. 
         range: string
         multivalued: false
         required: false
+  DataItemDataSetAssociation:
+    description: Many-to-many link between DataItem and DataSet.
+    mixins:
+      - ProjectScoped
+    slots:
+      - dataitem_id  
+      - dataset_id
+    slot_usage:
+      dataitem_id:
+        range: DataItem  # store identifier value
+        required: true
+        description: Identifier of the DataItem you are linking
+      dataset_id:
+        range: DataSet  # store identifier value
+        required: true
+        description: Identifier of the DataSet you are linking
+    
   SpatialLocation:
     description: 3D spatial coordinates in a reference space.
     slots:
@@ -37,6 +58,7 @@ classes:
       - y
       - z
       - reference_space
+    # Typically global reference spaces; omit project scoping here.
     slot_usage:
       x:
         range: float
@@ -56,7 +78,7 @@ classes:
         description: Reference space (e.g., 'CCF_v3', 'CCF_v4').
 
 slots:
-  data_item:
+  dataitem_id:
     range: DataItem
   x:
     description: X coordinate in the reference space.
@@ -69,4 +91,8 @@ slots:
     range: float
   reference_space:
     description: Name/version of the spatial reference space (e.g., CCF_v3, CCF_v4).
-    range: string
+    range: string  
+  dataset_id:
+    description: Identifier of the DataSet (string key). If a DataSet class is referenced this slot holds its id.
+    range: DataSet
+    required: true

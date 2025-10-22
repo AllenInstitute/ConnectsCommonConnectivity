@@ -1,6 +1,13 @@
 id: https://brain-connects.org/ic3-brain-region-schema
 name: brain_region_schema
 description: Brain region hierarchical structure.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+default_range: string
 imports:
   - base_schema
 
@@ -13,11 +20,15 @@ classes:
       - parent_identifier
       - child_identifiers
       - acronym
-      - color_hex_triplet
+      - hex_color
       - term_set_name
       - annotation_value
       - descendants
       - descendant_annotation_values
+    # BrainRegion may often be global; include ProjectScoped only if some regions are project-specific.
+    # Commented out by default to keep ontology global.
+    # mixins:
+    #   - ProjectScoped
     slot_usage:
       parent_identifier:
         # Object reference to parent BrainRegion (embed via identifier)
@@ -31,7 +42,7 @@ classes:
         range: BrainRegion
         inlined: false
         slot_uri: skos:narrower
-      color_hex_triplet:
+      hex_color:
         description: Hex RGB color assigned to this region (from source ontology).
       annotation_value:
         description: Source-specific annotation value for this region. Should align to an annotation volume for a particular atlas.
@@ -62,12 +73,6 @@ slots:
       - structure_acronym
       - region_acronym
       - abbreviation
-  color_hex_triplet:
-    description: Hex RGB color string (e.g., #FFFFFF or FFFFFF) representing display color.
-    range: HexColor
-    aliases:
-      - rgb_hex
-      - hex_color
   term_set_name:
     description: Name/version label of the ontology or term set.
   annotation_value:

@@ -1,6 +1,13 @@
 id: https://brain-connects.org/ic3-morphology-features-schema
 name: cell_features_schema
 description: Schema for extensible cell feature measurements across cells.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+default_range: string
 imports:
   - base_schema
   - core_schema
@@ -11,19 +18,18 @@ classes:
     description: A defined set of cell features with their descriptions and metadata.
     slots:
       - id
-      - name
       - description
-      - feature_definitions
+      - feature_definition_ids
       - extraction_method
     slot_usage:
-      name:
+      id:
         range: string
         required: true
         description: Human-readable short name for this feature set (e.g., 'AllenFeatureSet1', 'NeuroMorpho', 'AuthorYearSet').
       description:
         range: string
         description: Longer human description of what this feature set measures and where it came from.
-      feature_definitions:
+      feature_definition_ids:
         multivalued: true
         range: CellFeatureDefinition
         description: Individual feature definitions within this set.
@@ -35,17 +41,12 @@ classes:
     description: Definition of a single feature with metadata.
     slots:
       - id
-      - feature_name
       - description
       - unit
       - data_type
       - range_min
       - range_max
     slot_usage:
-      feature_name:
-        range: string
-        required: true
-        description: Name of the feature (e.g.,'total_synapses', 'total_length', 'branching_factor', 'soma_surface_area').
       description:
         range: string
         description: Detailed description of what this feature measures.
@@ -54,7 +55,7 @@ classes:
         description: Unit of measurement (e.g., 'micrometers', 'degrees', 'count').
       data_type:
         range: string
-        pattern: '^([<>|=])[tbiufcmMOSUV]\\d+$'
+        pattern: '^([<>|=])[tbiufcmMOSUV]\d+$'
         description: "Data type as NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'."
       range_min:
         range: float
@@ -63,14 +64,35 @@ classes:
         range: float
         description: Expected maximum value for this feature.
 
+  CellFeatureMatrix:
+    description: |- 
+       Pointer to a Wide form measurement matrix of feature values for a particular FeatureSet in Parquet format.
+       One column (cell_index_column) should be the DataItemId and the rest of columns of this matrix should be named according to the CellFeatureDefinition in the CellFeatureSet.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - feature_set_id
+      - parquet_path
+      - cell_index_column
+    slot_usage:
+      feature_set_id:
+        range: CellFeatureSet
+        required: true
+        description: Reference to the CellFeatureSet that defines the features in this matrix.
+      parquet_path:
+        range: ParquetDataset
+        description: Path to parquet dataset containing wide-form data. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.
+      cell_index_column:
+        range: string
+        description: Column of the parquet which corresponds to the DataItem
 
   CellFeatureMeasurement:
     description: "Long-form measurement row: one (cell, feature) value with strict dtype."
     slots:
       - id
-      - data_item
-      - feature
-      - feature_set
+      - dataitem_id
+      - feature_id
       - dtype
       - value_float
       - value_int
@@ -79,13 +101,13 @@ classes:
       - value_bytes
       - value_datetime
     slot_usage:
-      data_item:
+      dataitem_id:
         range: DataItem
         required: true
-      feature:
+      feature_id:
         range: CellFeatureDefinition
         required: true
-      feature_set:
+      feature_set_id:
         range: CellFeatureSet
         description: Denormalized reference to the feature set (helps partitioning and joins).
       dtype:
@@ -107,17 +129,17 @@ classes:
         range: datetime
         description: ISO 8601 timestamp when dtype corresponds to datetime.
       unit:
-        range: string
+        range: Unit
         description: Unit of measurement for the values in this matrix.
 
 slots:
-  feature_set:
+  feature_set_id:
     description: A set of features that are a coherent feature set. 
-  feature_definitions:
+  feature_definition_ids:
     description: Individual feature definitions within a feature set.
   feature_name:
     description: Name of a morphology feature.
-  feature:
+  feature_id:
     description: Reference to a feature definition used for a measurement.
     range: CellFeatureDefinition
   data_type:
@@ -157,3 +179,10 @@ slots:
   value_datetime:
     description: Datetime value (ISO 8601) for a (cell, feature) measurement.
     range: datetime
+  parquet_path:
+    description: "path to a parquet file where the features are stored. i.e. s3://my_bucket/my_path. file:// for files, gs:// for google cloud storage, https:// for http"
+    pattern: ^(s3://|gs://|https?://|file://).+ 
+    range: string
+  cell_index_column:
+    description: "name of column in parquet file that contains the DataItem identifier"
+    range: string

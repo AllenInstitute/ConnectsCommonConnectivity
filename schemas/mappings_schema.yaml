@@ -5,6 +5,12 @@ imports:
   - base_schema
   - core_schema
   - clustering_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   MappingSet:
@@ -19,7 +25,9 @@ classes:
       - created_at
       - source_dataset
       - target_dataset
-      - parameters_json
+      - json_object
+    mixins:
+      - ProjectScoped
     slot_usage:
       name:
         range: string
@@ -40,8 +48,7 @@ classes:
       target_dataset:
         range: DataSet
         required: true
-      parameters_json:
-        range: JsonObject
+      json_object:
         description: Arbitrary method parameters (JSON string).
 
   CellToCellMapping:
@@ -54,6 +61,8 @@ classes:
       - score
       - probability
       - notes
+    mixins:
+      - ProjectScoped
     slot_usage:
       mapping_set:
         range: MappingSet
@@ -68,7 +77,6 @@ classes:
         range: float
         description: Confidence or similarity score (algorithm-defined).
       probability:
-        range: Probability
         description: Normalized probability (0..1) when applicable.
       notes:
         range: string
@@ -83,6 +91,8 @@ classes:
       - score
       - probability
       - notes
+    mixins:
+      - ProjectScoped
     slot_usage:
       mapping_set:
         range: MappingSet
@@ -95,8 +105,6 @@ classes:
         required: true
       score:
         range: float
-      probability:
-        range: Probability
       notes:
         range: string
 
@@ -110,6 +118,8 @@ classes:
       - score
       - probability
       - notes
+    mixins:
+      - ProjectScoped
     slot_usage:
       mapping_set:
         range: MappingSet
@@ -122,8 +132,6 @@ classes:
         required: true
       score:
         range: float
-      probability:
-        range: Probability
       notes:
         range: string
 
@@ -138,8 +146,6 @@ slots:
     description: Source cluster in the mapping.
   target_cluster:
     description: Target cluster in the mapping.
-  probability:
-    description: Normalized probability (0..1).
   source_dataset:
     description: Dataset providing the source entities.
   target_dataset:

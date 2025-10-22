@@ -6,17 +6,23 @@ imports:
   - core_schema
   - zarr_schema
   - cell_features_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
 
 classes:
   SingleCellReconstruction:
     description: Single cell reconstruction data with CCF registration and morphology features.
     slots:
       - id
-      - data_item
+      - dataitem_id
       - ccf_registered_file
       - soma_location
     slot_usage:
-      data_item:
+      dataitem_id:
         range: DataItem
         required: true
         description: Reference to the core DataItem this reconstruction belongs to.

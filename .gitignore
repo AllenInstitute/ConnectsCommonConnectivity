@@ -209,3 +209,5 @@ __marimo__/
 .DS_Store
 data/
 datalake/
+results/
+figures/

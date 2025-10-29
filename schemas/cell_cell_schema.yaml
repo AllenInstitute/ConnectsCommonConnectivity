@@ -7,6 +7,39 @@ imports:
   - zarr_schema
 
 classes:
+  CellCellConnectivityLong:
+    description: Long-form connectivity measurements between pairs of cells.
+    slots:
+      - id
+      - description
+      - presynaptic_cell
+      - postsynaptic_cell
+      - measurement_type
+      - modality
+      - value
+      - unit
+    mixins:
+      - ProjectScoped
+    slot_usage:
+      measurement_type:
+        range: SynapticMeasurementType
+      modality:
+        range: Modality
+      presynaptic_cell:
+        range: DataItem
+        inlined: false
+        description: The presynaptic cell for this measurement.
+      postsynaptic_cell:
+        range: DataItem
+        inlined: false
+        description: The postsynaptic cell for this measurement.
+      value:
+        required: true
+        range: float
+        description: Numeric value quantifying connectivity between the presynaptic and postsynaptic cell.
+      unit:
+        required: true
+        range: Unit
   CellCellMeasurementMatrix:
     description: Aggregated projection measurements for a cohort (e.g., all cells) for a single measurement type.
     slots:
@@ -55,12 +88,18 @@ slots:
     description: The specific projection measurement type (enum) for this set.
   values:
     description: Numeric data values; interpretation depends on measurement_type.
+  value:
+    description: Numeric data value; interpretation depends on measurement_type.
   zarr_array:
     description: Reference to a zarr array containing the matrix data.
   postsynaptic_index:
     description: A list of DataItems indexing the columns of the matrix.
   presynaptic_index: 
     description: A list of DataItems indexing the rows of the matrix.
+  presynaptic_cell:
+    description: The presynaptic cell for this measurement.
+  postsynaptic_cell:
+    description: The postsynaptic cell for this measurement.
   description_text:
     description: Free-text description for measurement type metadata.
   default_unit:

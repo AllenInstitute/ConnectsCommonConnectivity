@@ -42,6 +42,8 @@ enums:
   SynapticMeasurementType:
     description: Types of synaptic connectivity-related measurements. Extendable per modality.
     permissible_values:
+      EXISTENCE:
+        description: Binary existence of a synaptic connection between two cells, with no additional information about weight.
       SYNAPSE_COUNT:
         description: Count of synapses detected between two cells.
       SUM_ANATOMICAL_SIZE:
@@ -82,6 +84,8 @@ enums:
         description: Millivolts electrical potential.
       ARBITRARY_UNIT:
         description: Standardized measure with unspecified units. (e.g. summed pixel intensity). 
+      BINARY: 
+        description: Binary unit (0 or 1).
       NONE:
         description: Dimensionless.
 

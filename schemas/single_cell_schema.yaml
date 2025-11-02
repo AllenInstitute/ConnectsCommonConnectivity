@@ -18,23 +18,29 @@ classes:
     description: Single cell reconstruction data with CCF registration and morphology features.
     slots:
       - id
-      - dataitem_id
       - ccf_registered_file
       - soma_location
     slot_usage:
-      dataitem_id:
+      id:
         range: DataItem
         required: true
         description: Reference to the core DataItem this reconstruction belongs to.
-      ccf_registered_file:
-        range: ZarrArray
-        description: Zarr array containing the CCF-registered reconstruction data.
       soma_location:
         range: SpatialLocation
         description: 3D coordinates of the soma in CCF space.
 
 slots:
-  ccf_registered_file:
-    description: Zarr array containing CCF-registered reconstruction data.
+  ccf_registered_skeleton:
+    range: string
+    description: |-
+      protocol/path string containing the CCF-registered reconstruction data. 
+      for example: swc://s3://my_bucket/53434.swc
+      or: precomputed://gs://my_bucket/precomputed/skeletons/53434
+  image_space_skeleton:
+    range: string
+    description: |-
+      protocol+path string containing the image-space reconstruction data. 
+      for example: swc://s3://my_bucket/53434.swc
+      or: precomputed://gs://my_bucket/precomputed/skeletons/53434
   soma_location:
     description: 3D spatial location of the soma.

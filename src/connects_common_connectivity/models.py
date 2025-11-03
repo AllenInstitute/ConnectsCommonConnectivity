@@ -509,6 +509,20 @@ class BrainRegion(ConfiguredBaseModel):
         return v
 
 
+class BrainRegionAssociation(ConfiguredBaseModel):
+    """
+    An association between a DataItem and a BrainRegion
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-brain-region-schema'})
+
+    brainregion_id: Optional[str] = Field(default=None, description="""what brain region an item is associated with""", json_schema_extra = { "linkml_meta": {'alias': 'brainregion_id', 'domain_of': ['BrainRegionAssociation']} })
+    dataitem_id: Optional[str] = Field(default=None, description="""The DataItem for which projection measurements are reported.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
+         'domain_of': ['DataItemDataSetAssociation',
+                       'BrainRegionAssociation',
+                       'CellFeatureMeasurement',
+                       'CellGeneData']} })
+
+
 class ProjectScoped(ConfiguredBaseModel):
     """
     Mixin providing project scoping to entities that belong to a specific project.
@@ -633,9 +647,9 @@ class DataItemDataSetAssociation(ProjectScoped):
 
     dataitem_id: str = Field(default=..., description="""Identifier of the DataItem you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'BrainRegionAssociation',
                        'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction']} })
+                       'CellGeneData']} })
     dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
@@ -1292,9 +1306,9 @@ class CellFeatureMeasurement(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
     dataitem_id: str = Field(default=..., description="""The DataItem for which projection measurements are reported.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'BrainRegionAssociation',
                        'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction']} })
+                       'CellGeneData']} })
     feature_id: str = Field(default=..., description="""Reference to a feature definition used for a measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_id', 'domain_of': ['CellFeatureMeasurement']} })
     dtype: Optional[str] = Field(default=None, description="""NumPy typestr of the stored value (see arrays.interface).""", json_schema_extra = { "linkml_meta": {'alias': 'dtype', 'domain_of': ['CellFeatureMeasurement']} })
     value_float: Optional[float] = Field(default=None, description="""Floating point value for a (cell, feature) measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'value_float', 'domain_of': ['CellFeatureMeasurement']} })
@@ -1375,9 +1389,9 @@ class CellGeneData(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
     dataitem_id: str = Field(default=..., description="""Reference to the core DataItem this expression data belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'BrainRegionAssociation',
                        'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction']} })
+                       'CellGeneData']} })
     cell_index: Optional[list[str]] = Field(default=None, description="""index of cells.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index', 'domain_of': ['CellGeneData']} })
     cell_gene_matrix: str = Field(default=..., description="""Zarr array containing the cell x gene expression matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_gene_matrix', 'domain_of': ['CellGeneData']} })
     gene_metadata: Optional[str] = Field(default=None, description="""Zarr array containing gene-level metadata (gene symbols, types, etc.).""", json_schema_extra = { "linkml_meta": {'alias': 'gene_metadata', 'domain_of': ['CellGeneData']} })
@@ -1468,23 +1482,17 @@ class SingleCellReconstruction(ConfiguredBaseModel):
     Single cell reconstruction data with CCF registration and morphology features.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-single-cell-schema',
-         'slot_usage': {'ccf_registered_file': {'description': 'Zarr array containing '
-                                                               'the CCF-registered '
-                                                               'reconstruction data.',
-                                                'name': 'ccf_registered_file',
-                                                'range': 'ZarrArray'},
-                        'dataitem_id': {'description': 'Reference to the core DataItem '
-                                                       'this reconstruction belongs '
-                                                       'to.',
-                                        'name': 'dataitem_id',
-                                        'range': 'DataItem',
-                                        'required': True},
+         'slot_usage': {'id': {'description': 'Reference to the core DataItem this '
+                                              'reconstruction belongs to.',
+                               'name': 'id',
+                               'range': 'DataItem',
+                               'required': True},
                         'soma_location': {'description': '3D coordinates of the soma '
                                                          'in CCF space.',
                                           'name': 'soma_location',
                                           'range': 'SpatialLocation'}}})
 
-    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+    id: str = Field(default=..., description="""Reference to the core DataItem this reconstruction belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
@@ -1508,12 +1516,9 @@ class SingleCellReconstruction(ConfiguredBaseModel):
                        'ClusterToClusterMapping',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
-    dataitem_id: str = Field(default=..., description="""Reference to the core DataItem this reconstruction belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
-         'domain_of': ['DataItemDataSetAssociation',
-                       'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction']} })
-    ccf_registered_file: Optional[str] = Field(default=None, description="""Zarr array containing the CCF-registered reconstruction data.""", json_schema_extra = { "linkml_meta": {'alias': 'ccf_registered_file', 'domain_of': ['SingleCellReconstruction']} })
+    ccf_registered_file: Optional[str] = Field(default=None, description="""protocol/path string containing the CCF-registered reconstruction data. 
+for example: swc://s3://my_bucket/53434.swc
+or: precomputed://gs://my_bucket/precomputed/skeletons/53434""", json_schema_extra = { "linkml_meta": {'alias': 'ccf_registered_file', 'domain_of': ['SingleCellReconstruction']} })
     soma_location: Optional[SpatialLocation] = Field(default=None, description="""3D coordinates of the soma in CCF space.""", json_schema_extra = { "linkml_meta": {'alias': 'soma_location', 'domain_of': ['SingleCellReconstruction']} })
 
 
@@ -1997,6 +2002,7 @@ SpatialLocation.model_rebuild()
 AlgorithmRun.model_rebuild()
 ClusterHierarchy.model_rebuild()
 BrainRegion.model_rebuild()
+BrainRegionAssociation.model_rebuild()
 ProjectScoped.model_rebuild()
 DataSet.model_rebuild()
 DataItem.model_rebuild()

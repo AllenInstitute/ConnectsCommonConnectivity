@@ -173,6 +173,7 @@ slots:
     range: Cluster
   heirachy_category:
     range: HierachyCategory
+    inlined: false
     description: This name for the level of detail this Cluster represents in the heirachy
   membership_score:
     description: Algorithm-defined membership strength.

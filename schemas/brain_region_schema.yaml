@@ -55,8 +55,18 @@ classes:
         description: Direct object references to all descendant regions anywhere below this node.
       descendant_annotation_values:
         description: Collected annotation values for descendant regions, Descendants meaning anything down the tree from this node. Useful when relabelling an annotation volume which is often labelled with the voxel farthest down the tree. 
+  BrainRegionAssociation:
+    description: "An association between a DataItem and a BrainRegion"
+    slots:
+      - brainregion_id
+      - dataitem_id
+
 
 slots:
+  brainregion_id:
+    description: "what brain region an item is associated with"
+    range: BrainRegion
+    inlined: false
   parent_identifier:
     description: Reference to broader brain region.
     aliases:

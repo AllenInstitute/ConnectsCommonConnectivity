@@ -30,7 +30,7 @@ classes:
         description: 3D coordinates of the soma in CCF space.
 
 slots:
-  ccf_registered_skeleton:
+  ccf_registered_file:
     range: string
     description: |-
       protocol/path string containing the CCF-registered reconstruction data. 

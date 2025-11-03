@@ -19,7 +19,8 @@
 		"pip": {
 			"packages": [
 				{
-					"name": "caveclient"
+					"name": "caveclient",
+					"version": "8.0.0"
 				},
 				{
 					"name": "deltalake",

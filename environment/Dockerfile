@@ -1,4 +1,4 @@
-# hash:sha256:bef56f91513e59baf20b5ef5712df484107a25a2465882a8ab05d9c47a0afeb8
+# hash:sha256:c3feb56b545d0024c83bef392f8403ad9d77eaa40de1333e49bcb4692cd92560
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/mambaforge3:24.5.0-0-python3.12.4-ubuntu22.04
 
@@ -11,7 +11,7 @@ RUN conda install -y \
     && conda clean -ya
 
 RUN pip install -U --no-cache-dir \
-    caveclient \
+    caveclient==8.0.0 \
     deltalake==1.2.1 \
     ipywidgets==8.1.8 \
     linkml==1.9.5 \

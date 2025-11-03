@@ -75,6 +75,8 @@ classes:
       - children
       - level
       - score
+      - hex_color
+      - heirachy_category
       - distance_to_parent
     mixins:
       - ProjectScoped
@@ -91,16 +93,14 @@ classes:
       level:
         range: integer
         description: Depth of the cluster in the hierarchy where 0 is the root cluster.
+      hex_color:
+        description: Suggested color to use when plotting this cluster
       distance_to_parent:
         range: float
         description: Distance metric to parent centroid.
       score:
         range: float
         description: Cluster quality metric (e.g., silhouette score).
-      centroid_values:
-        multivalued: true
-        range: float
-        description: Numeric centroid vector (ordered feature list).
 
   ClusterMembership:
     description: Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
@@ -123,6 +123,16 @@ classes:
         description: Distance between the item and the cluster centroid. (Smaller is better).
       cluster:
         inlined: false
+  HierachyCategory:
+    description: A set of names to give to different levels of resolution within a hierachical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
+    slots:
+      - id
+      - description
+      - level
+    slot_usage:
+      level:
+        description: "this is to order the categories, where 0 is the lowest in the heirachy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be acheived with uniformity across the taxonomy, and some clusters may not receive HierachyCategory tags"
+    
 slots:
   algorithm_name:
     description: Name of the clustering algorithm (e.g., k-means, hierarchical, DBSCAN).
@@ -161,6 +171,9 @@ slots:
   cluster:
     description: Cluster referenced in a membership association.
     range: Cluster
+  heirachy_category:
+    range: HierachyCategory
+    description: This name for the level of detail this Cluster represents in the heirachy
   membership_score:
     description: Algorithm-defined membership strength.
   membership_probability:

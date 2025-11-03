@@ -310,6 +310,7 @@ class AlgorithmRun(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -369,6 +370,7 @@ class ClusterHierarchy(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -389,6 +391,58 @@ class ClusterHierarchy(ConfiguredBaseModel):
     run: Optional[str] = Field(default=None, description="""The AlgorithmRun producing this hierarchy.""", json_schema_extra = { "linkml_meta": {'alias': 'run', 'domain_of': ['ClusterHierarchy']} })
     root: Optional[str] = Field(default=None, description="""The root cluster of the hierarchy.""", json_schema_extra = { "linkml_meta": {'alias': 'root', 'domain_of': ['ClusterHierarchy']} })
     clusters: Optional[list[str]] = Field(default=None, description="""All clusters in the hierarchy.""", json_schema_extra = { "linkml_meta": {'alias': 'clusters', 'domain_of': ['ClusterHierarchy']} })
+
+
+class HierachyCategory(ConfiguredBaseModel):
+    """
+    A set of names to give to different levels of resolution within a hierachical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
+         'slot_usage': {'level': {'description': 'this is to order the categories, '
+                                                 'where 0 is the lowest in the '
+                                                 'heirachy. Note this does not need to '
+                                                 'have consistency with the level of '
+                                                 'the cluster, as equivalent levels of '
+                                                 'detail might not be acheived with '
+                                                 'uniformity across the taxonomy, and '
+                                                 'some clusters may not receive '
+                                                 'HierachyCategory tags',
+                                  'name': 'level'}}})
+
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierachyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'MappingSet',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    level: Optional[str] = Field(default=None, description="""this is to order the categories, where 0 is the lowest in the heirachy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be acheived with uniformity across the taxonomy, and some clusters may not receive HierachyCategory tags""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierachyCategory']} })
 
 
 class BrainRegion(ConfiguredBaseModel):
@@ -456,6 +510,7 @@ class BrainRegion(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -489,7 +544,7 @@ class BrainRegion(ConfiguredBaseModel):
          'domain_of': ['BrainRegion']} })
     hex_color: Optional[str] = Field(default=None, description="""Hex RGB color assigned to this region (from source ontology).""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
          'aliases': ['rgb_hex', 'hex_color'],
-         'domain_of': ['BrainRegion']} })
+         'domain_of': ['Cluster', 'BrainRegion']} })
     term_set_name: Optional[str] = Field(default=None, description="""Name of the term set this row came from. Term sets are cuts across the hierachy that represent a similar level of biological detail and cover the entire tree.""", json_schema_extra = { "linkml_meta": {'alias': 'term_set_name', 'domain_of': ['BrainRegion']} })
     annotation_value: Optional[int] = Field(default=None, description="""Source-specific annotation value for this region. Should align to an annotation volume for a particular atlas.""", json_schema_extra = { "linkml_meta": {'alias': 'annotation_value', 'domain_of': ['BrainRegion']} })
     descendants: Optional[list[str]] = Field(default=None, description="""Direct object references to all descendant regions anywhere below this node.""", json_schema_extra = { "linkml_meta": {'alias': 'descendants', 'domain_of': ['BrainRegion']} })
@@ -548,6 +603,7 @@ class DataSet(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -602,6 +658,7 @@ class DataItem(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -662,12 +719,7 @@ class Cluster(ProjectScoped):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
          'mixins': ['ProjectScoped'],
-         'slot_usage': {'centroid_values': {'description': 'Numeric centroid vector '
-                                                           '(ordered feature list).',
-                                            'multivalued': True,
-                                            'name': 'centroid_values',
-                                            'range': 'float'},
-                        'children': {'description': 'Child clusters.',
+         'slot_usage': {'children': {'description': 'Child clusters.',
                                      'multivalued': True,
                                      'name': 'children',
                                      'range': 'Cluster',
@@ -676,6 +728,9 @@ class Cluster(ProjectScoped):
                                                               'parent centroid.',
                                                'name': 'distance_to_parent',
                                                'range': 'float'},
+                        'hex_color': {'description': 'Suggested color to use when '
+                                                     'plotting this cluster',
+                                      'name': 'hex_color'},
                         'level': {'description': 'Depth of the cluster in the '
                                                  'hierarchy where 0 is the root '
                                                  'cluster.',
@@ -698,6 +753,7 @@ class Cluster(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -717,16 +773,33 @@ class Cluster(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
     children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
-    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster']} })
+    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierachyCategory']} })
     score: Optional[float] = Field(default=None, description="""Cluster quality metric (e.g., silhouette score).""", json_schema_extra = { "linkml_meta": {'alias': 'score',
          'domain_of': ['Cluster',
                        'CellToCellMapping',
                        'CellToClusterMapping',
                        'ClusterToClusterMapping']} })
+    hex_color: Optional[str] = Field(default=None, description="""Suggested color to use when plotting this cluster""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
+         'aliases': ['rgb_hex', 'hex_color'],
+         'domain_of': ['Cluster', 'BrainRegion']} })
+    heirachy_category: Optional[str] = Field(default=None, description="""This name for the level of detail this Cluster represents in the heirachy""", json_schema_extra = { "linkml_meta": {'alias': 'heirachy_category', 'domain_of': ['Cluster']} })
     distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped']} })
+
+    @field_validator('hex_color')
+    def pattern_hex_color(cls, v):
+        pattern=re.compile(r"^#?[0-9A-Fa-f]{6}$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid hex_color format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid hex_color format: {v}"
+            raise ValueError(err_msg)
+        return v
 
 
 class ClusterMembership(ProjectScoped):
@@ -798,6 +871,7 @@ class ZarrArray(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -856,6 +930,7 @@ class ZarrDataset(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -909,6 +984,7 @@ class ParquetDataset(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -978,6 +1054,7 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -996,7 +1073,8 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -1059,6 +1137,7 @@ class CellFeatureSet(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1077,7 +1156,8 @@ class CellFeatureSet(ConfiguredBaseModel):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
     description: Optional[str] = Field(default=None, description="""Longer human description of what this feature set measures and where it came from.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -1122,6 +1202,7 @@ class CellFeatureDefinition(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1140,7 +1221,8 @@ class CellFeatureDefinition(ConfiguredBaseModel):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
     description: Optional[str] = Field(default=None, description="""Detailed description of what this feature measures.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -1203,6 +1285,7 @@ class CellFeatureMatrix(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1287,6 +1370,7 @@ class CellFeatureMeasurement(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1370,6 +1454,7 @@ class CellGeneData(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1499,6 +1584,7 @@ class SingleCellReconstruction(ConfiguredBaseModel):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1553,6 +1639,7 @@ class MappingSet(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1574,7 +1661,8 @@ class MappingSet(ProjectScoped):
          'aliases': ['structure_name', 'region_name'],
          'domain_of': ['DataSet', 'DataItem', 'BrainRegion', 'MappingSet']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -1636,6 +1724,7 @@ class CellToCellMapping(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1704,6 +1793,7 @@ class CellToClusterMapping(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1773,6 +1863,7 @@ class ClusterToClusterMapping(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1850,6 +1941,7 @@ class CellCellConnectivityLong(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1868,7 +1960,8 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -1948,6 +2041,7 @@ class CellCellMeasurementMatrix(ProjectScoped):
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
+                       'HierachyCategory',
                        'BrainRegion',
                        'ZarrArray',
                        'ZarrDataset',
@@ -1966,7 +2060,8 @@ class CellCellMeasurementMatrix(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text description of what this measurement matrix represents.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['HierachyCategory',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
                        'MappingSet',
@@ -2001,6 +2096,7 @@ NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_
 SpatialLocation.model_rebuild()
 AlgorithmRun.model_rebuild()
 ClusterHierarchy.model_rebuild()
+HierachyCategory.model_rebuild()
 BrainRegion.model_rebuild()
 BrainRegionAssociation.model_rebuild()
 ProjectScoped.model_rebuild()

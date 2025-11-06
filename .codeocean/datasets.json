@@ -2,12 +2,12 @@
 	"version": 1,
 	"attached_datasets": [
 		{
-			"id": "41587f2a-912d-44d7-b31a-2381c40c8333",
-			"mount": "microns1412"
-		},
-		{
 			"id": "709549ed-cd74-43b7-8a49-ef47299569e6",
 			"mount": "minnie1412"
+		},
+		{
+			"id": "78a80081-c645-4e38-beb7-b9d9308a35d9",
+			"mount": "microns1412"
 		}
 	]
 }

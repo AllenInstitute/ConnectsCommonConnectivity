@@ -47,7 +47,7 @@ classes:
       annotation_value:
         description: Source-specific annotation value for this region. Should align to an annotation volume for a particular atlas.
       term_set_name:
-        description: Name of the term set this row came from. Term sets are cuts across the hierachy that represent a similar level of biological detail and cover the entire tree.  
+        description: Name of the term set this row came from. Term sets are cuts across the hierarchy that represent a similar level of biological detail and cover the entire tree.  
       descendants:
         multivalued: true
         range: BrainRegion

@@ -71,3 +71,4 @@ where = ["src"]
 
 [tool.uv]
 managed = true
+exclude-newer = "7 days"

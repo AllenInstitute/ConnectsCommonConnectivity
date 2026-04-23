@@ -76,7 +76,7 @@ classes:
       - level
       - score
       - hex_color
-      - heirachy_category
+      - hierarchy_category
       - distance_to_parent
     mixins:
       - ProjectScoped
@@ -123,15 +123,15 @@ classes:
         description: Distance between the item and the cluster centroid. (Smaller is better).
       cluster:
         inlined: false
-  HierachyCategory:
-    description: A set of names to give to different levels of resolution within a hierachical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
+  HierarchyCategory:
+    description: A set of names to give to different levels of resolution within a hierarchical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
     slots:
       - id
       - description
       - level
     slot_usage:
       level:
-        description: "this is to order the categories, where 0 is the lowest in the heirachy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be acheived with uniformity across the taxonomy, and some clusters may not receive HierachyCategory tags"
+        description: "this is to order the categories, where 0 is the lowest in the hierarchy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be achieved with uniformity across the taxonomy, and some clusters may not receive HierarchyCategory tags"
     
 slots:
   algorithm_name:
@@ -171,10 +171,10 @@ slots:
   cluster:
     description: Cluster referenced in a membership association.
     range: Cluster
-  heirachy_category:
-    range: HierachyCategory
+  hierarchy_category:
+    range: HierarchyCategory
     inlined: false
-    description: This name for the level of detail this Cluster represents in the heirachy
+    description: This name for the level of detail this Cluster represents in the hierarchy
   membership_score:
     description: Algorithm-defined membership strength.
   membership_probability:

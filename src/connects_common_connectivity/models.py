@@ -230,6 +230,28 @@ class Unit(str, Enum):
     """
 
 
+class Laterality(str, Enum):
+    """
+    Hemisphere laterality relative to the injection or soma site.
+    """
+    IPSILATERAL = "IPSILATERAL"
+    """
+    Projection is on the same side as the injection/soma.
+    """
+    CONTRALATERAL = "CONTRALATERAL"
+    """
+    Projection is on the opposite side from the injection/soma.
+    """
+    BILATERAL = "BILATERAL"
+    """
+    Projection spans both hemispheres.
+    """
+    UNKNOWN = "UNKNOWN"
+    """
+    Laterality is not known or not applicable.
+    """
+
+
 
 class SpatialLocation(ConfiguredBaseModel):
     """
@@ -1030,6 +1052,13 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                                             'multivalued': True,
                                             'name': 'data_item_index',
                                             'range': 'DataItem'},
+                        'laterality': {'description': 'Whether this matrix represents '
+                                                      'ipsilateral, contralateral, '
+                                                      'bilateral, or unknown '
+                                                      'projections.',
+                                       'name': 'laterality',
+                                       'range': 'Laterality',
+                                       'required': True},
                         'measurement_type': {'name': 'measurement_type',
                                              'range': 'ProjectionMeasurementType'},
                         'modality': {'name': 'modality', 'range': 'Modality'},
@@ -1089,6 +1118,7 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'ProjectionMeasurementMatrix',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
+    laterality: Laterality = Field(default=..., description="""Whether this matrix represents ipsilateral, contralateral, bilateral, or unknown projections.""", json_schema_extra = { "linkml_meta": {'alias': 'laterality', 'domain_of': ['ProjectionMeasurementMatrix']} })
     region_index: Optional[list[str]] = Field(default=None, description="""Ordered regions defining columns (or rows) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'region_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
     data_item_index: Optional[list[str]] = Field(default=None, description="""Ordered data items defining rows (or columns) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'data_item_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
     values: Optional[str] = Field(default=None, description="""Zarr array containing matrix values with shape (data_item_index x region_index).""", json_schema_extra = { "linkml_meta": {'alias': 'values',

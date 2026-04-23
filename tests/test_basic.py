@@ -69,3 +69,34 @@ def test_probability_bounds_and_pattern():
     with pytest.raises(Exception):
         CellToCellMapping(id="M2", mapping_set=ms.id, source_cell=cell1.id, target_cell=cell2.id, probability=1.5, project_id="P1")
 
+
+def test_laterality_enum():
+    import connects_common_connectivity as ccc
+    models = ccc.generate_pydantic_models()
+    Laterality = models["Laterality"]
+    assert Laterality.IPSILATERAL.name == "IPSILATERAL"
+    assert Laterality.CONTRALATERAL.name == "CONTRALATERAL"
+    assert Laterality.BILATERAL.name == "BILATERAL"
+    assert Laterality.UNKNOWN.name == "UNKNOWN"
+
+
+def test_projection_measurement_matrix_laterality():
+    import pytest
+    import connects_common_connectivity as ccc
+    models = ccc.generate_pydantic_models()
+    PMM = models["ProjectionMeasurementMatrix"]
+    Laterality = models["Laterality"]
+    Modality = models["Modality"]
+    PMType = models["ProjectionMeasurementType"]
+    # laterality is required; omitting it should raise
+    with pytest.raises(Exception):
+        PMM(id="P1", measurement_type=PMType.NUMBER_OF_TIPS, modality=Modality.MORPHOLOGY)
+    # Valid laterality values accepted
+    pmm = PMM(id="P1", measurement_type=PMType.NUMBER_OF_TIPS,
+              modality=Modality.MORPHOLOGY, laterality=Laterality.IPSILATERAL)
+    assert str(pmm.laterality) in {Laterality.IPSILATERAL.value, Laterality.IPSILATERAL.name, str(Laterality.IPSILATERAL)}
+    # Invalid laterality should raise
+    with pytest.raises(Exception):
+        PMM(id="P2", measurement_type=PMType.NUMBER_OF_TIPS,
+            modality=Modality.MORPHOLOGY, laterality="NOT_VALID")
+

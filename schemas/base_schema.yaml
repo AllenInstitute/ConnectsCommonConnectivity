@@ -88,6 +88,17 @@ enums:
         description: Binary unit (0 or 1).
       NONE:
         description: Dimensionless.
+  Laterality:
+    description: Hemisphere laterality relative to the injection or soma site.
+    permissible_values:
+      IPSILATERAL:
+        description: Projection is on the same side as the injection/soma.
+      CONTRALATERAL:
+        description: Projection is on the opposite side from the injection/soma.
+      BILATERAL:
+        description: Projection spans both hemispheres.
+      UNKNOWN:
+        description: Laterality is not known or not applicable.
 
 slots:
   id:
@@ -119,6 +130,9 @@ slots:
   unit:
     description: Unit of measure for values.
     range: Unit
+  laterality:
+    description: Laterality of the measurement (ipsilateral or contralateral).
+    range: Laterality
   cell_index:
     range: DataItem
     description: Ordered list of cells indexing a matrix.

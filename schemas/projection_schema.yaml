@@ -27,6 +27,7 @@ classes:
       - description
       - measurement_type
       - modality
+      - laterality
       - region_index
       - data_item_index
       - values
@@ -51,6 +52,10 @@ classes:
         description: Zarr array containing matrix values with shape (data_item_index x region_index).
       unit:
         range: Unit
+      laterality:
+        range: Laterality
+        required: true
+        description: Whether this matrix represents ipsilateral, contralateral, bilateral, or unknown projections.
 
 
 slots:

@@ -1062,6 +1062,18 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                         'measurement_type': {'name': 'measurement_type',
                                              'range': 'ProjectionMeasurementType'},
                         'modality': {'name': 'modality', 'range': 'Modality'},
+                        'region_coverage': {'description': 'Precomputed subset of '
+                                                           'region_index where at '
+                                                           'least one data item has a '
+                                                           'non-zero value. Enables '
+                                                           'fast lookup of which '
+                                                           'regions have projection '
+                                                           'data without loading the '
+                                                           'full matrix.',
+                                            'inlined': False,
+                                            'multivalued': True,
+                                            'name': 'region_coverage',
+                                            'range': 'BrainRegion'},
                         'region_index': {'description': 'Ordered regions defining '
                                                         'columns (or rows) of the '
                                                         'matrix.',
@@ -1120,6 +1132,7 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
     laterality: Laterality = Field(default=..., description="""Whether this matrix represents ipsilateral, contralateral, bilateral, or unknown projections.""", json_schema_extra = { "linkml_meta": {'alias': 'laterality', 'domain_of': ['ProjectionMeasurementMatrix']} })
     region_index: Optional[list[str]] = Field(default=None, description="""Ordered regions defining columns (or rows) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'region_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
+    region_coverage: Optional[list[str]] = Field(default=None, description="""Precomputed subset of region_index where at least one data item has a non-zero value. Enables fast lookup of which regions have projection data without loading the full matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'region_coverage', 'domain_of': ['ProjectionMeasurementMatrix']} })
     data_item_index: Optional[list[str]] = Field(default=None, description="""Ordered data items defining rows (or columns) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'data_item_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
     values: Optional[str] = Field(default=None, description="""Zarr array containing matrix values with shape (data_item_index x region_index).""", json_schema_extra = { "linkml_meta": {'alias': 'values',
          'domain_of': ['ProjectionMeasurementMatrix', 'CellCellMeasurementMatrix']} })

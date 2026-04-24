@@ -9,10 +9,14 @@
     "source=${localWorkspaceFolder}/results,target=/results,type=bind"
   ],
   "postStartCommand": "pip install -e /workspaces/ConnectsCommonConnectivity",
+  "postCreateCommand": "sed -i '/bash_completion/s/^#//' ~/.bashrc && sed -i 's/^#fi$/fi/' ~/.bashrc && grep -q 'completions/git' ~/.bashrc || echo 'source /usr/share/bash-completion/completions/git 2>/dev/null' >> ~/.bashrc",
   "runArgs": ["--env-file", "${localWorkspaceFolder}/.env"],
   "customizations": {
     "vscode": {
-      "extensions": ["ms-python.python", "ms-toolsai.jupyter"]
+      "extensions": ["ms-python.python", "ms-toolsai.jupyter"],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python"
+      }
     }
   }
 }

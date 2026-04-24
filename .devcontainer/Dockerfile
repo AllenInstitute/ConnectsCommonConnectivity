@@ -2,6 +2,8 @@ FROM condaforge/miniforge3:26.1.1-2
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+RUN apt-get update && apt-get install -y bash-completion && rm -rf /var/lib/apt/lists/*
+
 RUN conda install -y \
         jupyterlab==4.4.10 \
     && conda clean -ya
@@ -22,3 +24,5 @@ RUN pip install -U --no-cache-dir \
     seaborn==0.13.2 \
     standard-transform==1.4.1 \
     umap-learn==0.5.9.post2
+
+RUN pip install -U --no-cache-dir uv

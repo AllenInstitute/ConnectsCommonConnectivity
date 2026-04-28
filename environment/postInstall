@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 set -e
-pip install -e /root/capsule
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv pip install --system "connects-common-connectivity[dev]@git+https://github.com/AllenInstitute/ConnectsCommonConnectivity.git@main"

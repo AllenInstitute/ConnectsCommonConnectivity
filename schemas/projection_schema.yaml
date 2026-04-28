@@ -27,7 +27,9 @@ classes:
       - description
       - measurement_type
       - modality
+      - laterality
       - region_index
+      - region_coverage
       - data_item_index
       - values
       - unit
@@ -41,6 +43,11 @@ classes:
         range: BrainRegion
         inlined: false
         description: Ordered regions defining columns (or rows) of the matrix.
+      region_coverage:
+        multivalued: true
+        range: BrainRegion
+        inlined: false
+        description: Precomputed subset of region_index where at least one data item has a non-zero value. Enables fast lookup of which regions have projection data without loading the full matrix.
       data_item_index:
         multivalued: true
         range: DataItem
@@ -51,6 +58,10 @@ classes:
         description: Zarr array containing matrix values with shape (data_item_index x region_index).
       unit:
         range: Unit
+      laterality:
+        range: Laterality
+        required: true
+        description: Whether this matrix represents ipsilateral, contralateral, bilateral, or unknown projections.
 
 
 slots:
@@ -58,6 +69,10 @@ slots:
     description: The specific projection measurement type (enum) for this set.
   region_index:
     description: Ordered list of regions indexing a matrix or values vector.
+  region_coverage:
+    description: Subset of region_index with non-zero projection data for at least one data item.
+    range: BrainRegion
+    multivalued: true
   data_item_index:
     description: Ordered list of data items indexing a matrix.
   values:

@@ -69,3 +69,6 @@ def test_probability_bounds_and_pattern():
     with pytest.raises(Exception):
         CellToCellMapping(id="M2", mapping_set=ms.id, source_cell=cell1.id, target_cell=cell2.id, probability=1.5, project_id="P1")
 
+
+
+

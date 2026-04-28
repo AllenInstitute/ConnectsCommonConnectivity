@@ -2,12 +2,24 @@
 	"version": 1,
 	"attached_datasets": [
 		{
+			"id": "2c3075b7-e980-48cc-9461-c2f0bc2b4281",
+			"mount": "visp-features-and-mapping"
+		},
+		{
+			"id": "2ea3218f-80b0-4888-971f-61ec4494a70d",
+			"mount": "exc_vis_manuscript_wnm_axon_projection"
+		},
+		{
 			"id": "709549ed-cd74-43b7-8a49-ef47299569e6",
 			"mount": "minnie1412"
 		},
 		{
 			"id": "78a80081-c645-4e38-beb7-b9d9308a35d9",
 			"mount": "microns1412"
+		},
+		{
+			"id": "aff09b9b-5cdc-49ef-8e39-358a8ead98d8",
+			"mount": "visp-patchseq-taxonomy-info"
 		}
 	]
 }

@@ -608,7 +608,7 @@ class ProjectScoped(ConfiguredBaseModel):
 
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataSet(ProjectScoped):
@@ -654,7 +654,7 @@ class DataSet(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataItem(ProjectScoped):
@@ -704,7 +704,7 @@ class DataItem(ProjectScoped):
     neuroglancer_link: Optional[str] = Field(default=None, description="""A link that illustrates this data item visualized in a common coordinate framework in neuroglancer.""", json_schema_extra = { "linkml_meta": {'alias': 'neuroglancer_link', 'domain_of': ['DataItem']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataItemDataSetAssociation(ProjectScoped):
@@ -732,7 +732,7 @@ class DataItemDataSetAssociation(ProjectScoped):
     dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class Cluster(ProjectScoped):
@@ -808,7 +808,7 @@ class Cluster(ProjectScoped):
     distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
     @field_validator('hex_color')
     def pattern_hex_color(cls, v):
@@ -860,7 +860,7 @@ class ClusterMembership(ProjectScoped):
     distance: Optional[float] = Field(default=None, description="""Distance between the item and the cluster centroid. (Smaller is better).""", json_schema_extra = { "linkml_meta": {'alias': 'distance', 'domain_of': ['ClusterMembership']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class ZarrArray(ConfiguredBaseModel):
@@ -1143,11 +1143,12 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
 
 
-class CellFeatureSet(ConfiguredBaseModel):
+class CellFeatureSet(ProjectScoped):
     """
     A defined set of cell features with their descriptions and metadata.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-morphology-features-schema',
+         'mixins': ['ProjectScoped'],
          'slot_usage': {'description': {'description': 'Longer human description of '
                                                        'what this feature set measures '
                                                        'and where it came from.',
@@ -1208,13 +1209,17 @@ class CellFeatureSet(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
     feature_definition_ids: Optional[list[str]] = Field(default=None, description="""Individual feature definitions within this set.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_definition_ids', 'domain_of': ['CellFeatureSet']} })
     extraction_method: Optional[str] = Field(default=None, description="""Method used to extract these features (e.g., 'L-Measure', 'NeuroMorpho', 'custom').""", json_schema_extra = { "linkml_meta": {'alias': 'extraction_method', 'domain_of': ['CellFeatureSet']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
-class CellFeatureDefinition(ConfiguredBaseModel):
+class CellFeatureDefinition(ProjectScoped):
     """
     Definition of a single feature with metadata.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-morphology-features-schema',
+         'mixins': ['ProjectScoped'],
          'slot_usage': {'data_type': {'description': 'Data type as NumPy typestr '
                                                      '(byteorder + code + bytes), '
                                                      "e.g., '<i2', '<f4', '|u1'.",
@@ -1225,6 +1230,10 @@ class CellFeatureDefinition(ConfiguredBaseModel):
                                                        'this feature measures.',
                                         'name': 'description',
                                         'range': 'string'},
+                        'feature_set_id': {'description': 'Feature set this definition '
+                                                          'belongs to.',
+                                           'name': 'feature_set_id',
+                                           'range': 'CellFeatureSet'},
                         'range_max': {'description': 'Expected maximum value for this '
                                                      'feature.',
                                       'name': 'range_max',
@@ -1279,6 +1288,11 @@ class CellFeatureDefinition(ConfiguredBaseModel):
     data_type: Optional[str] = Field(default=None, description="""Data type as NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'.""", json_schema_extra = { "linkml_meta": {'alias': 'data_type', 'domain_of': ['CellFeatureDefinition']} })
     range_min: Optional[float] = Field(default=None, description="""Expected minimum value for this feature.""", json_schema_extra = { "linkml_meta": {'alias': 'range_min', 'domain_of': ['CellFeatureDefinition']} })
     range_max: Optional[float] = Field(default=None, description="""Expected maximum value for this feature.""", json_schema_extra = { "linkml_meta": {'alias': 'range_max', 'domain_of': ['CellFeatureDefinition']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+    feature_set_id: Optional[str] = Field(default=None, description="""Feature set this definition belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id',
+         'domain_of': ['CellFeatureDefinition', 'CellFeatureMatrix']} })
 
     @field_validator('data_type')
     def pattern_data_type(cls, v):
@@ -1346,12 +1360,13 @@ class CellFeatureMatrix(ProjectScoped):
                        'ClusterToClusterMapping',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
-    feature_set_id: str = Field(default=..., description="""Reference to the CellFeatureSet that defines the features in this matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id', 'domain_of': ['CellFeatureMatrix']} })
+    feature_set_id: str = Field(default=..., description="""Reference to the CellFeatureSet that defines the features in this matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id',
+         'domain_of': ['CellFeatureDefinition', 'CellFeatureMatrix']} })
     parquet_path: Optional[str] = Field(default=None, description="""Path to parquet dataset containing wide-form data. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path', 'domain_of': ['CellFeatureMatrix']} })
     cell_index_column: Optional[str] = Field(default=None, description="""Column of the parquet which corresponds to the DataItem""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index_column', 'domain_of': ['CellFeatureMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
     @field_validator('parquet_path')
     def pattern_parquet_path(cls, v):
@@ -1720,7 +1735,7 @@ class MappingSet(ProjectScoped):
     json_object: Optional[str] = Field(default=None, description="""Arbitrary method parameters (JSON string).""", json_schema_extra = { "linkml_meta": {'alias': 'json_object', 'domain_of': ['AlgorithmRun', 'MappingSet']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
     @field_validator('json_object')
     def pattern_json_object(cls, v):
@@ -1808,7 +1823,7 @@ class CellToCellMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellToClusterMapping(ProjectScoped):
@@ -1878,7 +1893,7 @@ class CellToClusterMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class ClusterToClusterMapping(ProjectScoped):
@@ -1947,7 +1962,7 @@ class ClusterToClusterMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellCellConnectivityLong(ProjectScoped):
@@ -2029,7 +2044,7 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellCellMeasurementMatrix(ProjectScoped):
@@ -2131,7 +2146,7 @@ NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 # Model rebuild

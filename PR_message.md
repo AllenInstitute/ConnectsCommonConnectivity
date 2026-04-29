@@ -97,4 +97,47 @@ Added `tests/test_cell_features_schema.py` with 10 tests covering:
 - Optional `range_min` / `range_max` fields
 - `feature_set_id` is optional on `CellFeatureDefinition` and can be set when provided
 
-All 19 tests pass (`uv run pytest -q`).
+---
+
+## `write_utils.py`: idempotent DataItem registration across shared `project_id`
+
+### The problem
+
+Two `_01` notebooks can share the same `project_id`: both `etl_visp_inh_patchseq_01` and `etl_visp_exc_patchseq_01` use `project_id="visp_patchseq"`. Previously both wrote `dataitem/` with:
+
+```python
+write_deltalake(OUTPUT_ROOT + "dataitem/", table_di,
+                mode="overwrite", predicate=f"project_id = '{PROJECT_ID}'", ...)
+```
+
+A predicate-scoped overwrite on `project_id='visp_patchseq'` wipes **all** rows for that partition — so whichever notebook ran second silently deleted the first's cells. `etl_visp_inh_patchseq_02` saw "Already in DataItem: 0" even after `_01` had registered 2,759 cells, because `exc_01` overwrote the partition.
+
+The `dataitem_dataset_association/` predicate also only scoped to `project_id`, making it equally fragile when a second dataset shares the project.
+
+### The fix
+
+**`src/connects_common_connectivity/write_utils.py`** introduces `append_new_dataitems`:
+
+```python
+def append_new_dataitems(output_path, table, *, project_id, id_column="id") -> int:
+    """Append only rows whose id is not already present for this project.
+    Idempotent: re-running appends nothing. Handles missing table gracefully."""
+```
+
+It reads existing `(project_id, id)` pairs, filters the incoming table to only new rows, and appends with `mode="append"`. Re-running returns 0 and writes nothing. Two notebooks sharing `project_id` each only add their own cells without touching the other's.
+
+All four `_01` notebooks now import and use `append_new_dataitems` for the `dataitem/` write, and their `dataitem_dataset_association/` predicates are narrowed to `project_id = '...' AND dataset_id = '...'` so each dataset's association rows are independently idempotent.
+
+`etl_visp_inh_patchseq_02` is updated to use `append_new_dataitems` for the 120 new-cell registrations, replacing the previous read-union-write pattern.
+
+### Tests
+
+Added `tests/test_write_utils.py` with 6 tests covering:
+- First write (table does not exist): all rows appended
+- Empty table: 0 rows appended
+- Idempotent re-run: 0 rows appended on second call
+- Partial re-run: only new rows appended
+- Different `project_id` values don't interfere
+- Two sources sharing `project_id` accumulate without conflict
+
+All 22 tests pass (`uv run pytest -q`).

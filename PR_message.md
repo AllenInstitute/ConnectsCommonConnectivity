@@ -1,8 +1,8 @@
-# Add ETL notebooks for VISp Patch-seq, WNM, and Minnie65 datasets
+# Add ETL notebooks for VISp Patch-seq, WNM, and Minnie65 datasets (complete `_01`/`_02` notebooks)
 
 ## Summary
 
-This PR adds a set of ETL Jupyter notebooks that register neuroscience datasets into the shared Delta Lake store, along with a schema fix required to make cell feature tables project-scoped.
+This PR adds a complete set of ETL Jupyter notebooks that register neuroscience datasets into the shared Delta Lake store, along with schema fixes required to make cell feature tables project-scoped and idempotent.
 
 ---
 
@@ -10,7 +10,8 @@ This PR adds a set of ETL Jupyter notebooks that register neuroscience datasets 
 
 All notebooks follow the same conventions:
 - Inputs are loaded (CSV or CAVE query), printed with shape and `head(3)`.
-- Outputs are written with `mode="overwrite"` and `predicate=f"project_id = '{PROJECT_ID}'"` so re-runs are idempotent and other projects' rows in shared Delta tables are never touched.
+- Outputs use `mode="overwrite"` with two-level predicates (`project_id AND <discriminator>`) so re-runs are idempotent and other projects' rows in shared Delta tables are never touched.
+- `dataitem/` uses `append_new_dataitems` (see below) instead of predicate-overwrite.
 - Every write step is followed by a verification cell (`pl.read_delta`, shape check, `assert`).
 
 ### `_01` Dataset + DataItem notebooks
@@ -24,23 +25,68 @@ All notebooks follow the same conventions:
 
 Each notebook writes exactly three tables: `DataSet`, `DataItem`, and `DataItemDataSetAssociation`.
 
-### `etl_minnie_02_cell_features.ipynb`
+### `_02` Cell feature notebooks
 
-Writes cell features for the Minnie65 dataset. Requires `etl_minnie_01` to have been run first.
+#### `etl_minnie_02_cell_features.ipynb`
 
-Outputs:
+Writes cell features for the Minnie65 dataset. Requires `etl_minnie_01`.
 
 | Path | Class | Rows |
 |---|---|---|
 | `dataset/` | `DataSet` | +1 (`minnie65_v1412_csm_cluster` cohort) |
 | `dataitem_dataset_association/` | `DataItemDataSetAssociation` | one per cell in `minnie_features.parquet` |
-| `cellfeaturedefinition/` | `CellFeatureDefinition` | 82 CSM features (from CSV) + 3 standard_transform coordinates |
+| `cellfeaturedefinition/` | `CellFeatureDefinition` | 82 CSM features + 3 std-transform coordinates |
 | `cellfeatureset/` | `CellFeatureSet` | 2 (`csm_cluster_features`, `minnie65_std_transform_coordinates`) |
 | `cellfeatures/csm_cluster_features/` | wide parquet | per-cell × 82 features |
-| `cellfeatures/minnie65_std_transform_coordinates/` | wide parquet | per-cell x/y/z in microns |
+| `cellfeatures/minnie65_std_transform_coordinates/` | wide parquet | per-cell x/y/z in µm |
 | `cellfeaturematrix/` | `CellFeatureMatrix` | 2 pointer rows |
 
-Soma coordinates are computed by applying `standard_transform.minnie_transform_vx()` to `pt_position` from the CAVE nucleus view, then dividing nm → µm and casting to `float32`.
+Soma coordinates are computed by applying `standard_transform.minnie_transform_vx()` to `pt_position`, then dividing nm → µm and casting to `float32`.
+
+#### `etl_visp_inh_patchseq_02_cell_features.ipynb`
+
+Writes inhibitory VISp Patch-seq morphology features. Requires `etl_visp_inh_patchseq_01`. Also registers 120 cells present in the wide CSV but not in the `_01` source.
+
+| Path | Class | Rows |
+|---|---|---|
+| `cellfeaturedefinition/` | `CellFeatureDefinition` | 46 (`inh_visp_morph_features`) |
+| `cellfeatureset/` | `CellFeatureSet` | 1 |
+| `cellfeatures/inh_visp_morph_features/` | wide parquet | 520 cells × 46 features |
+| `cellfeaturematrix/` | `CellFeatureMatrix` | 1 pointer row |
+| `dataitem/` | `DataItem` | +120 new cells (via `append_new_dataitems`) |
+| `dataitem_dataset_association/` | `DataItemDataSetAssociation` | +120 new associations |
+
+#### `etl_visp_exc_patchseq_02_cell_features.ipynb`
+
+Writes excitatory VISp Patch-seq morphology features. Requires `etl_visp_exc_patchseq_01`. All 389 cells were already registered by `_01`.
+
+| Path | Class | Rows |
+|---|---|---|
+| `cellfeaturedefinition/` | `CellFeatureDefinition` | 50 (`exc_visp_morph_features`) |
+| `cellfeatureset/` | `CellFeatureSet` | 1 |
+| `cellfeatures/exc_visp_morph_features/` | wide parquet | 389 cells × 50 features |
+| `cellfeaturematrix/` | `CellFeatureMatrix` | 1 pointer row |
+
+#### `etl_wnm_exc_02_cell_features.ipynb`
+
+Writes WNM excitatory neuron features across three feature sets. Requires `etl_wnm_exc_01` and `etl_visp_exc_patchseq_02` (shared defs for Set 1). Also registers 4 cells present in the Set 1 CSV but not in `_01`.
+
+| Path | Class | Rows | Notes |
+|---|---|---|---|
+| `cellfeatures/exc_visp_morph_features/` | wide parquet | 345 WNM rows | Set 1; defs/set owned by exc patchseq `_02` |
+| `cellfeaturematrix/` | `CellFeatureMatrix` | 1 | Set 1 pointer |
+| `cellfeaturedefinition/` | `CellFeatureDefinition` | 51 (`wnm_exc_local_axon_features`) | Set 2 |
+| `cellfeatureset/` | `CellFeatureSet` | 1 | Set 2 |
+| `cellfeatures/wnm_exc_local_axon_features/` | wide parquet | 345 cells × 51 features | Set 2 |
+| `cellfeaturematrix/` | `CellFeatureMatrix` | 1 | Set 2 pointer |
+| `cellfeaturedefinition/` | `CellFeatureDefinition` | 18 (`wnm_exc_complete_axon_features`) | Set 3 (fMOST) |
+| `cellfeatureset/` | `CellFeatureSet` | 1 | Set 3 |
+| `cellfeatures/wnm_exc_complete_axon_features/` | wide parquet | 341 cells × 18 features | Set 3 |
+| `cellfeaturematrix/` | `CellFeatureMatrix` | 1 | Set 3 pointer |
+| `dataitem/` | `DataItem` | +4 new cells | via `append_new_dataitems` |
+| `dataitem_dataset_association/` | `DataItemDataSetAssociation` | +4 new associations | |
+
+For Set 1, the shared feature definitions (owned by `etl_visp_exc_patchseq_02`) are read back from `cellfeaturedefinition/` to build the wide-form arrow schema. Six columns present in the exc patchseq defs but absent from `RawFeaturesWide_ChamferCorr.csv` are NaN-filled with an explicit warning. Set 2 and Set 3 build `CellFeatureDefinition` rows directly from column names with `data_type="<f8"`.
 
 ---
 
@@ -140,4 +186,27 @@ Added `tests/test_write_utils.py` with 6 tests covering:
 - Different `project_id` values don't interfere
 - Two sources sharing `project_id` accumulate without conflict
 
-All 22 tests pass (`uv run pytest -q`).
+All 25 tests pass (`uv run pytest -q`).
+
+---
+
+## Documentation added
+
+### `code/etl_examples_readme.ipynb`
+
+A markdown-only notebook (no code cells) providing a skimmable overview of all registered datasets and feature sets. Covers:
+- What a DataItem is and how it links to datasets
+- Minnie65: why there are two datasets (all nuclei vs. CSM-classified subset)
+- VISp Patch-seq: shared `project_id`, why inh (2,759 T-type) ≠ exc (1,528 MET-type), the 120/4 extra cells registered by `_02` notebooks
+- Feature set ownership, the shared `exc_visp_morph_features` split between patchseq and WNM, and WNM-only sets
+
+### `etl_example_prompt.md`
+
+A prompt guide for AI assistants creating new ETL notebooks. Includes:
+- Which files to read first (schemas, src utils, example notebooks)
+- Hard rules: never edit `src/` or `models.py`, schemas are the source of truth, no id casting
+- Canonical notebook structure (cell order)
+- Write pattern reference per table type with correct predicate shapes
+- Common mistakes table (10 failure modes with correct remedies)
+
+Both files are linked from `README.md`.

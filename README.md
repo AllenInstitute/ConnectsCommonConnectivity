@@ -145,6 +145,14 @@ After editing, re-run any code using `generate_pydantic_models()`. Because resul
 For production / performance you may eventually wish to use LinkML's code generation to create static
 Pydantic models; this repository currently favors agility for early design.
 
+## ETL Notebooks
+
+A set of ETL Jupyter notebooks in `code/` registers real datasets into the shared Delta Lake store under `results/em_patchseq_wnm_v1/`. These serve as concrete working examples for every schema class.
+
+- **`code/etl_examples_readme.ipynb`** — markdown-only overview of all registered datasets and feature sets: what each dataset contains, why cell counts differ between sources, and how shared feature sets work across projects. Start here if you're new to the data.
+
+- **`etl_example_prompt.md`** (repo root) — prompt guide for AI assistants creating new ETL notebooks. Covers which files to read first, hard rules (never edit `models.py`, schemas are truth, no id casting), the canonical notebook structure, the idempotent write pattern for each table type, and a common-mistakes reference table.
+
 ## License
 
 MIT License. See `LICENSE`.

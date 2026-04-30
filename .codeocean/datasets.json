@@ -2,12 +2,12 @@
 	"version": 1,
 	"attached_datasets": [
 		{
-			"id": "2c3075b7-e980-48cc-9461-c2f0bc2b4281",
-			"mount": "visp-features-and-mapping"
+			"id": "1783edfe-7772-4f72-8ed5-dc60824be655",
+			"mount": "exc_vis_manuscript_wnm_axon_projection"
 		},
 		{
-			"id": "2ea3218f-80b0-4888-971f-61ec4494a70d",
-			"mount": "exc_vis_manuscript_wnm_axon_projection"
+			"id": "2c3075b7-e980-48cc-9461-c2f0bc2b4281",
+			"mount": "visp-features-and-mapping"
 		},
 		{
 			"id": "709549ed-cd74-43b7-8a49-ef47299569e6",

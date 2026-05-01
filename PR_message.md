@@ -213,6 +213,29 @@ Long-term, it may be preferable to store all `CellCellConnectivityLong` rows in 
 
 ---
 
+## `etl_wnm_exc_04_projection_matrix.ipynb`
+
+Writes the WNM excitatory projection matrices (one ipsilateral + one contralateral) for `project_id="visp_wnm"`, `dataset_id="visp_exc_wnm"`. Source: `ProjectionMatrix_tip_and_branch_roll_up.csv` (345 cells × 152 `ipsi_<ACRONYM>` + 68 `contra_<ACRONYM>`). Cell ids are the SWC filename with `.swc` stripped, matching `_01`.
+
+| Path | Class / shape | Rows | Write |
+|---|---|---|---|
+| `dataitem/` | `DataItem` | +4 new cells | `append_new_dataitems` (`_01` registered 341 of 345) |
+| `dataitem_dataset_association/` | `DataItemDataSetAssociation` | 345 | overwrite, predicate `project_id AND dataset_id` |
+| `projectionmeasurementmatrix/wnm_exc_proj_ipsi/` | wide parquet | 345 × (3 id cols + 152 acronyms) | overwrite, predicate `project_id`, `partition_by=["project_id"]` |
+| `projectionmeasurementmatrix/wnm_exc_proj_contra/` | wide parquet | 345 × (3 id cols + 68 acronyms) | overwrite, predicate `project_id`, `partition_by=["project_id"]` |
+| `projectionmeasurementmatrix/` | `ProjectionMeasurementMatrix` | 2 | overwrite, predicate `id IN (...)` |
+
+`region_coverage` = acronyms with any non-zero value across the 345 cells (152/152 ipsi, 66/68 contra). `values=` is a `file://` URI to the per-laterality wide-parquet directory. `data_item_index` is the cell-id list in wide-parquet row order.
+
+### Open questions
+
+- `measurement_type=MICRONS_OF_AXON` is inferred from value magnitudes (~10⁴, max ≈ 22,700). Filename suggests tip counts. Confirm with data owner.
+- `ProjectionMeasurementMatrix` is not `ProjectScoped`; metadata predicate is `id IN (...)` only. Recommend adding `mixins: [ProjectScoped]` (same gap on `BrainRegionAssociation`, `SingleCellReconstruction` — see `_05` below).
+- `region_index` stores raw acronyms instead of `BrainRegion.id`s; `brainregion/` not yet populated. Re-run after that bootstrap.
+- `values` is typed `ZarrArray` but stored as a delta-path string (mirrors `CellFeatureMatrix.parquet_path`). Either add a `parquet_path` slot or commit to zarr.
+
+---
+
 ## Not written: `etl_wnm_exc_05_single_cell_recon_and_brain_region_assoc.ipynb`
 
 The WNM single-cell-reconstruction and brain-region-association ETL was scoped but not written in this PR. Open questions to resolve before writing it:

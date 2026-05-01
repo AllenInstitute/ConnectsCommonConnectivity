@@ -99,3 +99,46 @@ def test_cluster_still_has_no_project_id_after_hierarchy_id_added():
     assert "project_id" not in Cluster.model_fields
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Extra inputs are not permitted"):
         Cluster(id="c1", project_id="visp_patchseq")
+
+
+# ---------------------------------------------------------------------------
+# ClusterHierarchy / AlgorithmRun / HierarchyCategory (Tasic 01 notebook)
+# ---------------------------------------------------------------------------
+
+
+def test_cluster_hierarchy_constructs_with_id_run_root_clusters():
+    ClusterHierarchy = _models()["ClusterHierarchy"]
+    h = ClusterHierarchy(id="h1", run="run1", root="root", clusters=["root", "c1"])
+    assert h.id == "h1"
+    assert h.root == "root"
+    assert h.clusters == ["root", "c1"]
+
+
+def test_cluster_hierarchy_requires_id():
+    ClusterHierarchy = _models()["ClusterHierarchy"]
+    with pytest.raises(ValidationError, match=r"(?s)id.*Field required"):
+        ClusterHierarchy(run="run1", root="root", clusters=["root"])
+
+
+def test_algorithm_run_requires_algorithm_name():
+    AlgorithmRun = _models()["AlgorithmRun"]
+    with pytest.raises(ValidationError, match=r"(?s)algorithm_name.*Field required"):
+        AlgorithmRun(id="run1")
+
+
+def test_algorithm_run_constructs_without_input_dataset():
+    AlgorithmRun = _models()["AlgorithmRun"]
+    run = AlgorithmRun(id="run1", algorithm_name="hierarchical")
+    assert run.input_dataset is None
+
+
+def test_hierarchy_category_requires_id():
+    HierarchyCategory = _models()["HierarchyCategory"]
+    with pytest.raises(ValidationError, match=r"(?s)id.*Field required"):
+        HierarchyCategory(description="leaf")
+
+
+def test_hierarchy_category_level_optional():
+    HierarchyCategory = _models()["HierarchyCategory"]
+    cat = HierarchyCategory(id="cluster")
+    assert cat.level is None

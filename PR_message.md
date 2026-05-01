@@ -190,6 +190,29 @@ All 25 tests pass (`uv run pytest -q`).
 
 ---
 
+## `etl_minnie_04_cell_cell.ipynb`
+
+Writes `CellCellConnectivityLong` synapse data for Minnie65 v1412. Creates the `minnie65_v1412_proofread` cohort DataSet (proofread ∩ CSM cells) and demonstrates two filtering patterns on the same precomputed `minnie_soma_soma_connectivity.parquet`:
+
+| Path | Class | Rows | Filter |
+|---|---|---|---|
+| `dataset/` | `DataSet` | +1 (`minnie65_v1412_proofread`) | — |
+| `dataitem_dataset_association/` | `DataItemDataSetAssociation` | one per proofread ∩ CSM cell | — |
+| `cellcellconnectivitylong_proofread_pre_to_csm_post/` | `CellCellConnectivityLong` | 2 per pair | (proofread ∩ CSM)-pre × CSM-post; `SYNAPSE_COUNT` + `SUM_ANATOMICAL_SIZE` |
+| `cellcellconnectivitylong_proofread_to_proofread/` | `CellCellConnectivityLong` | 1 per pair | (proofread ∩ CSM) × (proofread ∩ CSM); `SYNAPSE_COUNT` only |
+
+The proofread cohort is built by querying CAVE `proofreading_status_and_strategy` (filter `status_axon`), joining to `nucleus_detection_lookup_v1`, then intersecting with the CSM cohort.
+
+### Current design: two separate output folders
+
+Each example writes to its own Delta Lake path (`cellcellconnectivitylong_proofread_pre_to_csm_post/` and `cellcellconnectivitylong_proofread_to_proofread/`). This avoids overwrite collisions — since both examples share `project_id` and the `SYNAPSE_COUNT` measurement type, a single-folder predicate overwrite scoped to `project_id` would wipe one example's rows when the other runs.
+
+### Open question: connectome version discriminator
+
+Long-term, it may be preferable to store all `CellCellConnectivityLong` rows in a single `cellcellconnectivitylong/` table, distinguished by an identifier field (e.g. a `connectome_id` or `cohort_description`) that separates different versions or subsets of connectivity data for the same `project_id` or `dataset_id`. This would align with how `cellfeatureset/` holds multiple feature sets in one table. A schema addition would be needed to support this cleanly.
+
+---
+
 ## Documentation added
 
 ### `code/etl_examples_readme.ipynb`

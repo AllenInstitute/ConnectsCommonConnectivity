@@ -213,6 +213,37 @@ Long-term, it may be preferable to store all `CellCellConnectivityLong` rows in 
 
 ---
 
+## Schema fix: cluster classes — global taxonomies, project-scoped memberships
+
+### The problem
+
+Cluster ETL (next set of notebooks) needs taxonomies (`ClusterHierarchy`, `Cluster`, `AlgorithmRun`) to be **global reference artifacts** — owned by their authoring ETL but consumable across projects (e.g. VISp MET types written by `etl_visp_met_types_01` and consumed by both `etl_visp_exc_patchseq_03` and `etl_wnm_exc_03`). Per-cell tables (`ClusterMembership`, `CellToClusterMapping`) remain project-scoped because they belong to the project whose cells are being labelled.
+
+Two inconsistencies broke this model:
+
+1. `Cluster` had `mixins: [ProjectScoped]`. A `Cluster` belongs to a `ClusterHierarchy`, not a project — and forcing a `project_id` makes cross-project consumption awkward (WNM cells mapping to VISp MET clusters would need to query a different `project_id` than their own).
+2. `ClusterMembership` had no taxonomy discriminator. A single project can label its cells against multiple taxonomies (e.g. `visp_patchseq` mapping cells to both Tasic and VISp MET); without a `hierarchy_id` slot, the standard `predicate=project_id AND <discriminator>` write pattern can't isolate one taxonomy's memberships from another's.
+
+`CellToClusterMapping` already has `mapping_set` (required) + `ProjectScoped`, so its scoping was already correct — no change needed there.
+
+### The fix
+
+In `schemas/clustering_schema.yaml`:
+- Removed `mixins: [ProjectScoped]` from `Cluster`. Taxonomies are now global; `Cluster` no longer carries a `project_id` field.
+- Added an optional `hierarchy_id` slot (range: `string`, references `ClusterHierarchy.id`, not inlined) and added it to `ClusterMembership.slots`. Mirrors the `feature_set_id` pattern on `CellFeatureDefinition`.
+
+Models regenerated via `bash scripts/generate_models.sh`. After regeneration, `class Cluster(ConfiguredBaseModel)` (no longer `ProjectScoped`) and `class ClusterMembership(ProjectScoped)` gains `hierarchy_id: Optional[str]`.
+
+### Tests
+
+Added `tests/test_clustering_schema.py` with 7 tests:
+- `Cluster` has no `project_id` field; constructs without it; rejects `project_id` with `Extra inputs are not permitted` (pydantic config is `extra='forbid'`).
+- `ClusterMembership` still requires `project_id`; `hierarchy_id` is optional, round-trips when set, and is type-checked (rejects non-string).
+
+All 32 tests pass (`uv run pytest -q`).
+
+---
+
 ## `etl_wnm_exc_04_projection_matrix.ipynb`
 
 Writes the WNM excitatory projection matrices (one ipsilateral + one contralateral) for `project_id="visp_wnm"`, `dataset_id="visp_exc_wnm"`. Source: `ProjectionMatrix_tip_and_branch_roll_up.csv` (345 cells × 152 `ipsi_<ACRONYM>` + 68 `contra_<ACRONYM>`). Cell ids are the SWC filename with `.swc` stripped, matching `_01`.

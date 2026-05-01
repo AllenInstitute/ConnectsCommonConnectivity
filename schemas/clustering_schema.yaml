@@ -78,8 +78,6 @@ classes:
       - hex_color
       - hierarchy_category
       - distance_to_parent
-    mixins:
-      - ProjectScoped
     slot_usage:
       parent:
         range: Cluster
@@ -109,6 +107,7 @@ classes:
     slots:
       - item
       - cluster
+      - hierarchy_id
       - membership_score
       - probability
       - distance
@@ -171,6 +170,9 @@ slots:
   cluster:
     description: Cluster referenced in a membership association.
     range: Cluster
+  hierarchy_id:
+    description: Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.
+    range: string
   hierarchy_category:
     range: HierarchyCategory
     inlined: false

@@ -415,6 +415,91 @@ class ClusterHierarchy(ConfiguredBaseModel):
     clusters: Optional[list[str]] = Field(default=None, description="""All clusters in the hierarchy.""", json_schema_extra = { "linkml_meta": {'alias': 'clusters', 'domain_of': ['ClusterHierarchy']} })
 
 
+class Cluster(ConfiguredBaseModel):
+    """
+    A node (cluster) in a hierarchical clustering structure.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
+         'slot_usage': {'children': {'description': 'Child clusters.',
+                                     'multivalued': True,
+                                     'name': 'children',
+                                     'range': 'Cluster',
+                                     'slot_uri': 'skos:narrower'},
+                        'distance_to_parent': {'description': 'Distance metric to '
+                                                              'parent centroid.',
+                                               'name': 'distance_to_parent',
+                                               'range': 'float'},
+                        'hex_color': {'description': 'Suggested color to use when '
+                                                     'plotting this cluster',
+                                      'name': 'hex_color'},
+                        'level': {'description': 'Depth of the cluster in the '
+                                                 'hierarchy where 0 is the root '
+                                                 'cluster.',
+                                  'name': 'level',
+                                  'range': 'integer'},
+                        'parent': {'description': 'Direct parent cluster (omit for '
+                                                  'root).',
+                                   'name': 'parent',
+                                   'range': 'Cluster',
+                                   'slot_uri': 'skos:broader'},
+                        'score': {'description': 'Cluster quality metric (e.g., '
+                                                 'silhouette score).',
+                                  'name': 'score',
+                                  'range': 'float'}}})
+
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierarchyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
+    children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
+    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
+    score: Optional[float] = Field(default=None, description="""Cluster quality metric (e.g., silhouette score).""", json_schema_extra = { "linkml_meta": {'alias': 'score',
+         'domain_of': ['Cluster',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping']} })
+    hex_color: Optional[str] = Field(default=None, description="""Suggested color to use when plotting this cluster""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
+         'aliases': ['rgb_hex', 'hex_color'],
+         'domain_of': ['Cluster', 'BrainRegion']} })
+    hierarchy_category: Optional[str] = Field(default=None, description="""This name for the level of detail this Cluster represents in the hierarchy""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_category', 'domain_of': ['Cluster']} })
+    distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
+
+    @field_validator('hex_color')
+    def pattern_hex_color(cls, v):
+        pattern=re.compile(r"^#?[0-9A-Fa-f]{6}$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid hex_color format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid hex_color format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
 class HierarchyCategory(ConfiguredBaseModel):
     """
     A set of names to give to different levels of resolution within a hierarchical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
@@ -735,95 +820,6 @@ class DataItemDataSetAssociation(ProjectScoped):
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
-class Cluster(ProjectScoped):
-    """
-    A node (cluster) in a hierarchical clustering structure.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
-         'mixins': ['ProjectScoped'],
-         'slot_usage': {'children': {'description': 'Child clusters.',
-                                     'multivalued': True,
-                                     'name': 'children',
-                                     'range': 'Cluster',
-                                     'slot_uri': 'skos:narrower'},
-                        'distance_to_parent': {'description': 'Distance metric to '
-                                                              'parent centroid.',
-                                               'name': 'distance_to_parent',
-                                               'range': 'float'},
-                        'hex_color': {'description': 'Suggested color to use when '
-                                                     'plotting this cluster',
-                                      'name': 'hex_color'},
-                        'level': {'description': 'Depth of the cluster in the '
-                                                 'hierarchy where 0 is the root '
-                                                 'cluster.',
-                                  'name': 'level',
-                                  'range': 'integer'},
-                        'parent': {'description': 'Direct parent cluster (omit for '
-                                                  'root).',
-                                   'name': 'parent',
-                                   'range': 'Cluster',
-                                   'slot_uri': 'skos:broader'},
-                        'score': {'description': 'Cluster quality metric (e.g., '
-                                                 'silhouette score).',
-                                  'name': 'score',
-                                  'range': 'float'}}})
-
-    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
-         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
-         'domain_of': ['DataSet',
-                       'DataItem',
-                       'AlgorithmRun',
-                       'ClusterHierarchy',
-                       'Cluster',
-                       'HierarchyCategory',
-                       'BrainRegion',
-                       'ZarrArray',
-                       'ZarrDataset',
-                       'ParquetDataset',
-                       'ProjectionMeasurementMatrix',
-                       'CellFeatureSet',
-                       'CellFeatureDefinition',
-                       'CellFeatureMatrix',
-                       'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction',
-                       'MappingSet',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping',
-                       'CellCellConnectivityLong',
-                       'CellCellMeasurementMatrix']} })
-    parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
-    children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
-    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
-    score: Optional[float] = Field(default=None, description="""Cluster quality metric (e.g., silhouette score).""", json_schema_extra = { "linkml_meta": {'alias': 'score',
-         'domain_of': ['Cluster',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping']} })
-    hex_color: Optional[str] = Field(default=None, description="""Suggested color to use when plotting this cluster""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
-         'aliases': ['rgb_hex', 'hex_color'],
-         'domain_of': ['Cluster', 'BrainRegion']} })
-    hierarchy_category: Optional[str] = Field(default=None, description="""This name for the level of detail this Cluster represents in the hierarchy""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_category', 'domain_of': ['Cluster']} })
-    distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-    @field_validator('hex_color')
-    def pattern_hex_color(cls, v):
-        pattern=re.compile(r"^#?[0-9A-Fa-f]{6}$")
-        if isinstance(v, list):
-            for element in v:
-                if isinstance(element, str) and not pattern.match(element):
-                    err_msg = f"Invalid hex_color format: {element}"
-                    raise ValueError(err_msg)
-        elif isinstance(v, str) and not pattern.match(v):
-            err_msg = f"Invalid hex_color format: {v}"
-            raise ValueError(err_msg)
-        return v
-
-
 class ClusterMembership(ProjectScoped):
     """
     Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
@@ -851,6 +847,7 @@ class ClusterMembership(ProjectScoped):
 
     item: Optional[str] = Field(default=None, description="""A DataItem that is a member of a Cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'item', 'domain_of': ['ClusterMembership']} })
     cluster: Optional[str] = Field(default=None, description="""Cluster referenced in a membership association.""", json_schema_extra = { "linkml_meta": {'alias': 'cluster', 'domain_of': ['ClusterMembership']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['ClusterMembership']} })
     membership_score: Optional[float] = Field(default=None, description="""Algorithm-defined membership strength. (Optional, does not need to be normalized)""", json_schema_extra = { "linkml_meta": {'alias': 'membership_score', 'domain_of': ['ClusterMembership']} })
     probability: Optional[float] = Field(default=None, description="""Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.""", ge=0.0, le=1.0, json_schema_extra = { "linkml_meta": {'alias': 'probability',
          'domain_of': ['ClusterMembership',
@@ -2154,6 +2151,7 @@ NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_
 SpatialLocation.model_rebuild()
 AlgorithmRun.model_rebuild()
 ClusterHierarchy.model_rebuild()
+Cluster.model_rebuild()
 HierarchyCategory.model_rebuild()
 BrainRegion.model_rebuild()
 BrainRegionAssociation.model_rebuild()
@@ -2161,7 +2159,6 @@ ProjectScoped.model_rebuild()
 DataSet.model_rebuild()
 DataItem.model_rebuild()
 DataItemDataSetAssociation.model_rebuild()
-Cluster.model_rebuild()
 ClusterMembership.model_rebuild()
 ZarrArray.model_rebuild()
 ZarrDataset.model_rebuild()

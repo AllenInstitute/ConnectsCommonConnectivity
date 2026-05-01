@@ -213,6 +213,17 @@ Long-term, it may be preferable to store all `CellCellConnectivityLong` rows in 
 
 ---
 
+## Not written: `etl_wnm_exc_05_single_cell_recon_and_brain_region_assoc.ipynb`
+
+The WNM single-cell-reconstruction and brain-region-association ETL was scoped but not written in this PR. Open questions to resolve before writing it:
+
+- **`BrainRegionAssociation` and `SingleCellReconstruction` are not `ProjectScoped`** and have no natural unique key (assoc) / no project partition (recon). Should these classes get `ProjectScoped`, an explicit `id`, or both? Or is "global, deduplicated by `(region_id, dataitem_id)`" the intended semantics?
+- **`brainregion/` is not populated** in the current Delta Lake. `examples/etl_brain_regions.py` exists but isn't in the run order. WNM ETL needs `BrainRegion.id` lookup by acronym; the bootstrap step needs to be wired in first.
+- **`ccf_registered_file` URI convention undefined.** Schema example uses `swc://s3://...`. WNM swc file public location is not confirmed.
+- **Cells with NaN `ccf_soma_*` coordinates** — write the `SingleCellReconstruction`/`BrainRegionAssociation` rows with NaN values, or skip those cells (still keeping them in `dataitem/`)?
+
+---
+
 ## Documentation added
 
 ### `code/etl_examples_readme.ipynb`

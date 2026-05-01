@@ -71,6 +71,7 @@ classes:
     description: A node (cluster) in a hierarchical clustering structure.
     slots:
       - id
+      - hierarchy_id
       - parent
       - children
       - level

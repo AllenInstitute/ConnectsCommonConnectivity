@@ -221,7 +221,7 @@ Cluster ETL (next set of notebooks) needs taxonomies (`ClusterHierarchy`, `Clust
 
 Two inconsistencies broke this model:
 
-1. `Cluster` had `mixins: [ProjectScoped]`. A `Cluster` belongs to a `ClusterHierarchy`, not a project — and forcing a `project_id` makes cross-project consumption awkward (WNM cells mapping to VISp MET clusters would need to query a different `project_id` than their own).
+1. `Cluster` had `mixins: [ProjectScoped]`. A `Cluster` belongs to a `ClusterHierarchy`, not a project — and forcing a `project_id` makes cross-project consumption awkward (WNM cells mapping to VISp MET clusters would need to query a different `project_id` than their own). Compounding this, `Cluster` had **no taxonomy discriminator at all**, so multiple taxonomies coexisting in the same `cluster/` Delta table couldn't be overwritten independently.
 2. `ClusterMembership` had no taxonomy discriminator. A single project can label its cells against multiple taxonomies (e.g. `visp_patchseq` mapping cells to both Tasic and VISp MET); without a `hierarchy_id` slot, the standard `predicate=project_id AND <discriminator>` write pattern can't isolate one taxonomy's memberships from another's.
 
 `CellToClusterMapping` already has `mapping_set` (required) + `ProjectScoped`, so its scoping was already correct — no change needed there.
@@ -230,17 +230,18 @@ Two inconsistencies broke this model:
 
 In `schemas/clustering_schema.yaml`:
 - Removed `mixins: [ProjectScoped]` from `Cluster`. Taxonomies are now global; `Cluster` no longer carries a `project_id` field.
-- Added an optional `hierarchy_id` slot (range: `string`, references `ClusterHierarchy.id`, not inlined) and added it to `ClusterMembership.slots`. Mirrors the `feature_set_id` pattern on `CellFeatureDefinition`.
+- Added an optional top-level `hierarchy_id` slot (range: `string`, references `ClusterHierarchy.id`, not inlined) and added it to both `ClusterMembership.slots` and `Cluster.slots`. Same slot is reused on both classes; mirrors the `feature_set_id` pattern on `CellFeatureDefinition`. Not added to `HierarchyCategory` (rows like `class`, `subclass`, `cluster` are reused across taxonomies) or `AlgorithmRun` (its own `id` is the discriminator and one run produces one or more hierarchies).
 
-Models regenerated via `bash scripts/generate_models.sh`. After regeneration, `class Cluster(ConfiguredBaseModel)` (no longer `ProjectScoped`) and `class ClusterMembership(ProjectScoped)` gains `hierarchy_id: Optional[str]`.
+Models regenerated via `bash scripts/generate_models.sh`. After regeneration, `class Cluster(ConfiguredBaseModel)` (no longer `ProjectScoped`) gains `hierarchy_id: Optional[str]`, and `class ClusterMembership(ProjectScoped)` gains `hierarchy_id: Optional[str]`.
 
 ### Tests
 
-Added `tests/test_clustering_schema.py` with 7 tests:
+Added `tests/test_clustering_schema.py` with 11 tests:
 - `Cluster` has no `project_id` field; constructs without it; rejects `project_id` with `Extra inputs are not permitted` (pydantic config is `extra='forbid'`).
+- `Cluster.hierarchy_id` is optional, round-trips when set, and is type-checked (rejects non-string). Regression guard: adding `hierarchy_id` did not re-introduce `ProjectScoped` on `Cluster`.
 - `ClusterMembership` still requires `project_id`; `hierarchy_id` is optional, round-trips when set, and is type-checked (rejects non-string).
 
-All 32 tests pass (`uv run pytest -q`).
+All 45 tests pass (`uv run pytest -q`).
 
 ---
 

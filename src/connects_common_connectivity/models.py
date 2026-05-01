@@ -472,6 +472,7 @@ class Cluster(ConfiguredBaseModel):
                        'ClusterToClusterMapping',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['Cluster', 'ClusterMembership']} })
     parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
     children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
     level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
@@ -847,7 +848,7 @@ class ClusterMembership(ProjectScoped):
 
     item: Optional[str] = Field(default=None, description="""A DataItem that is a member of a Cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'item', 'domain_of': ['ClusterMembership']} })
     cluster: Optional[str] = Field(default=None, description="""Cluster referenced in a membership association.""", json_schema_extra = { "linkml_meta": {'alias': 'cluster', 'domain_of': ['ClusterMembership']} })
-    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['ClusterMembership']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['Cluster', 'ClusterMembership']} })
     membership_score: Optional[float] = Field(default=None, description="""Algorithm-defined membership strength. (Optional, does not need to be normalized)""", json_schema_extra = { "linkml_meta": {'alias': 'membership_score', 'domain_of': ['ClusterMembership']} })
     probability: Optional[float] = Field(default=None, description="""Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.""", ge=0.0, le=1.0, json_schema_extra = { "linkml_meta": {'alias': 'probability',
          'domain_of': ['ClusterMembership',
@@ -1670,9 +1671,9 @@ class MappingSet(ProjectScoped):
     ClusterHierarchy (a global taxonomy), depending on the mapping kind.
     LinkML cannot enforce \"exactly one of {source_dataset, source_hierarchy}\" or the
     same for target, so the choice is left to per-mapping conventions:
-      - CellToCellMapping     : source_dataset    + target_dataset    populated.
-      - CellToClusterMapping  : source_dataset    + target_hierarchy  populated.
-      - ClusterToClusterMapping: source_hierarchy + target_hierarchy  populated.
+      - CellToCellMapping     : source_dataset    + target_dataset
+      - CellToClusterMapping  : source_dataset    + target_hierarchy
+      - ClusterToClusterMapping: source_hierarchy + target_hierarchy
     At least one source field and one target field must be populated; consumers should
     fail loudly if both source fields (or both target fields) are populated or empty.
     """

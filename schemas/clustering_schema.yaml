@@ -172,7 +172,7 @@ slots:
     description: Cluster referenced in a membership association.
     range: Cluster
   hierarchy_id:
-    description: Identifier of the ClusterHierarchy this membership belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Optional, but required to disambiguate when memberships against multiple taxonomies coexist for the same project.
+    description: Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.
     range: string
   hierarchy_category:
     range: HierarchyCategory

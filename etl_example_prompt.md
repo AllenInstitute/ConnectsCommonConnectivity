@@ -28,16 +28,21 @@ src/connects_common_connectivity/models.py      # Pydantic models — read to un
 src/connects_common_connectivity/arrow_utils.py # build_arrow_schema, models_to_table,
                                                  # attach_linkml_metadata,
                                                  # build_cell_feature_matrix_schema
-src/connects_common_connectivity/write_utils.py # append_new_dataitems
+src/connects_common_connectivity/write_utils.py # append_new_dataitems, walk_ancestors
 ```
 
 ### Example notebooks (read for patterns)
 ```
-code/etl_visp_inh_patchseq_01_dataset_dataitem.ipynb  # canonical _01 pattern
-code/etl_visp_inh_patchseq_02_cell_features.ipynb     # _02 with new-cell registration
-code/etl_visp_exc_patchseq_02_cell_features.ipynb     # _02 without new-cell registration
-code/etl_wnm_exc_02_cell_features.ipynb               # _02 with three feature sets, shared defs
-code/etl_minnie_02_cell_features.ipynb                # _02 with CAVE query + two feature sets
+code/etl_visp_inh_patchseq_01_dataset_dataitem.ipynb            # canonical _01 pattern
+code/etl_visp_inh_patchseq_02_cell_features.ipynb               # _02 with new-cell registration
+code/etl_visp_exc_patchseq_02_cell_features.ipynb               # _02 without new-cell registration
+code/etl_wnm_exc_02_cell_features.ipynb                         # _02 with three feature sets, shared defs
+code/etl_minnie_02_cell_features.ipynb                          # _02 with CAVE query + two feature sets
+code/etl_tasic_01_cluster.ipynb                                 # _01 that owns a global cluster taxonomy (no project_id)
+code/etl_visp_exc_patchseq_03_cluster_membership_and_mapping.ipynb  # canonical _03 — both membership and mapping
+code/etl_minnie_03_cluster_and_cluster_membership.ipynb         # _03 that owns its own taxonomy (one notebook, both ends)
+code/etl_minnie_04_cell_cell.ipynb                              # _04 cell-cell connectivity, two-folder example pattern
+code/etl_wnm_exc_04_projection_matrix.ipynb                     # _04 projection matrix + new-cell registration
 ```
 
 Also read `code/etl_examples_readme.ipynb` for a plain-language summary of existing datasets and feature sets.
@@ -62,6 +67,14 @@ Also read `code/etl_examples_readme.ipynb` for a plain-language summary of exist
 
 6. **Markdown cells: 1–3 sentences.** No prose dumps. The title cell states what is written and lists identifiers. The summary cell lists every output path with its row count.
 
+7. **Scoping rules differ by table family.**
+   - **Project-scoped** (most tables): scoped by `project_id`, plus a discriminator second level (see §5b).
+   - **Global cluster taxonomy** (`Cluster`, `ClusterHierarchy`, `AlgorithmRun`): no `project_id`. Scoped by `hierarchy_id` (or `id` for the hierarchy/run rows themselves) so multiple taxonomies share one table.
+   - **Global category vocabulary** (`HierarchyCategory`): no `project_id`, no `hierarchy_id`. Category ids (`class`, `subclass`, `cluster`) are intentionally shared across taxonomies — see §11.
+   - **Project-scoped *and* taxonomy-scoped**: `ClusterMembership` (project + `hierarchy_id`), `CellToClusterMapping` (project + `mapping_set`).
+
+8. **Output root.** All notebooks write to `OUTPUT_ROOT = "../scratch/em_patchseq_wnm_v1/"`. Define this as a constant in cell 3.
+
 ---
 
 ## 3. Notebook naming convention
@@ -75,7 +88,7 @@ etl_<dataset>_<NN>_<schemas>.ipynb
 - `<schemas>`: snake_case names joined by `_and_`
   - Allowed values: `dataset_dataitem`, `cluster`, `cluster_membership`, `cell_features`, `projection_matrix`, `cell_cell`, `single_cell_recon`, `brain_region_assoc`, `cell_to_cluster_mapping`, `mapping`
 
-Examples: `etl_visp_inh_patchseq_01_dataset_dataitem.ipynb`, `etl_wnm_exc_02_cell_features.ipynb`
+Examples: `etl_visp_inh_patchseq_01_dataset_dataitem.ipynb`, `etl_wnm_exc_02_cell_features.ipynb`, `etl_visp_exc_patchseq_03_cluster_membership_and_mapping.ipynb`, `etl_minnie_04_cell_cell.ipynb`, `etl_wnm_exc_04_projection_matrix.ipynb`.
 
 ---
 
@@ -130,6 +143,10 @@ A **two-level predicate** is required. One level (`project_id`) is not enough wh
 | `cellfeaturedefinition/` | `feature_set_id` | `feature_set_id = 'inh_visp_morph_features'` |
 | `cellfeatureset/` | `id` | `id = 'inh_visp_morph_features'` |
 | `cellfeaturematrix/` | `feature_set_id` | `feature_set_id = 'inh_visp_morph_features'` |
+| `clustermembership/` | `hierarchy_id` | `hierarchy_id = 'visp_met_types_taxonomy'` |
+| `celltoclustermapping/` | `mapping_set` | `mapping_set = 'visp_exc_wnm_mettype_mapping'` |
+| `projectionmeasurementmatrix/` | `id` | `id = 'wnm_exc_proj_ipsi'` |
+| `cellcellconnectivitylong/<example_id>/` | (folder scopes the example) | — |
 
 `cellfeaturedefinition/` should also use `partition_by=["project_id", "feature_set_id"]` for query performance.
 
@@ -163,6 +180,66 @@ If a feature CSV contains cell ids not present in the `_01` DataItems, register 
        write_deltalake(..., mode="append", ...)
    ```
 
+### 5e. Cluster taxonomy tables (global)
+
+`cluster/`, `clusterhierarchy/`, `algorithmrun/` have **no `project_id`**. Multiple taxonomies coexist in the same Delta table; scope by `hierarchy_id` (or `id` for the hierarchy/run rows themselves).
+
+```python
+write_deltalake(
+    OUTPUT_ROOT + "cluster/", arrow_table,
+    mode="overwrite",
+    predicate=f"hierarchy_id = '{HIERARCHY_ID}'",
+    partition_by=["hierarchy_id"],
+)
+```
+
+Use `predicate=f"id = '{HIERARCHY_ID}'"` for the single `clusterhierarchy/` row and `predicate=f"id = '{RUN_ID}'"` for the single `algorithmrun/` row. See `etl_tasic_01_cluster.ipynb` and `etl_visp_met_types_01_cluster.ipynb`.
+
+### 5f. Membership and mapping (project-scoped, per-hierarchy)
+
+- `clustermembership/` — predicate `project_id AND hierarchy_id`, `partition_by=["project_id", "hierarchy_id"]`.
+- `celltoclustermapping/` — predicate `project_id AND mapping_set`, `partition_by=["project_id", "mapping_set"]`.
+- `mappingset/` — predicate by `id` (one row per named mapping).
+
+When two notebooks merge into the same `(project_id, hierarchy_id)` slice (e.g. exc + inh patch-seq both writing memberships into `(visp_patchseq, visp_met_types_taxonomy)`), each must read the existing slice back, union with the new rows, then overwrite. Re-running either notebook is then idempotent.
+
+### 5g. Cell-cell connectivity (`cellcellconnectivitylong/`)
+
+`CellCellConnectivityLong` rows have no per-example discriminator yet (no `connectome_id` slot). Two examples for the same project would overwrite each other if written into the same folder. **Workaround until the schema adds a discriminator:** write each example to its own subdirectory, e.g.
+
+```
+cellcellconnectivitylong_proofread_pre_to_csm_post/
+cellcellconnectivitylong_proofread_to_proofread/
+```
+
+Predicate `project_id` only; the folder scopes the example. See `etl_minnie_04_cell_cell.ipynb`.
+
+### 5h. Projection matrix (`projectionmeasurementmatrix/` + wide-form parquet)
+
+One Delta row per matrix; underlying wide table in `projection_<matrix_id>/`. Predicate `project_id AND id` for the registry row; predicate `project_id` for the wide-form folder (the folder already scopes to one matrix). See `etl_wnm_exc_04_projection_matrix.ipynb`.
+
+### 5i. Membership vs mapping
+
+Same shape (cell → cluster), different meaning:
+
+- **`ClusterMembership`** — the cell *belongs to* this cluster by definition. Use when the cell was part of the cohort that **defined** the taxonomy (e.g. inhibitory and excitatory Patch-seq cells get memberships in the VISp MET-types taxonomy they helped define).
+- **`CellToClusterMapping`** + a `MappingSet` row — the cell was *assigned* to this cluster after the fact by some named classifier (e.g. WNM cells get mappings into VISp MET-types via random forest, with `probability` per call).
+
+If the cells were not in the cohort that defined the taxonomy, write `CellToClusterMapping`, not `ClusterMembership`.
+
+### 5j. Parent propagation (`walk_ancestors`)
+
+Every membership and mapping is parent-propagated: one row per (cell × ancestor) all the way up to the root. Use `walk_ancestors` from `write_utils.py`:
+
+```python
+from connects_common_connectivity.write_utils import walk_ancestors
+
+for ancestor_id, is_leaf in walk_ancestors(leaf_id, parent_by_child):
+    ...  # build one row, set probability/membership_score on the leaf only
+```
+
+`probability` (mapping) and `membership_score`/`distance` (membership) are set on the leaf row only; null on parents.
+
 ---
 
 ## 6. Building arrow tables
@@ -194,6 +271,8 @@ arrow_table = pa.Table.from_pandas(wide_df, schema=schema)
 ```
 
 Column order in the wide DataFrame must match the order of `feature_def_objs`. Build defs and the wide table from the same source to guarantee alignment.
+
+**Both `models_to_table` and `attach_linkml_metadata` are kwarg-only.** Positional calls (`models_to_table(rows, MyModelClass)`, `attach_linkml_metadata(table, "MyModelClass")`) fail with confusing schema-construction errors. Always pass `schema=` and `linkml_class=` explicitly.
 
 ---
 
@@ -247,3 +326,14 @@ When two projects (different `project_id`) share a feature set (same `feature_se
 | Editing `models.py` directly | Changes lost on next schema regen | Edit the schema YAML, then regenerate |
 | Inventing a field not in the schema | Pydantic validation error | Check the schema YAML first; extend if needed |
 | Verifying with `project_id` filter only on a shared table | Asserts pass but row count is wrong (includes other dataset) | Always filter by both `project_id` and `dataset_id` (or `feature_set_id`) |
+| Positional `models_to_table(rows, ModelClass)` or `attach_linkml_metadata(table, "Cluster")` | Silent schema-construction error, opaque message | Use `schema=` and `linkml_class=` kwargs |
+| Setting `AlgorithmRun.produced_hierarchies = [hierarchy]` | Pydantic expects an inlined dict, not a list — validation error | Omit it; `ClusterHierarchy.run` carries the inverse link |
+| `mode="overwrite"` on `clustermembership/` with predicate on `project_id` only | Wipes other hierarchies' rows for the same project | Use two-level predicate: `project_id AND hierarchy_id` |
+| Writing `ClusterMembership` for cells not in the cohort that defined the taxonomy | Misrepresents provenance — they were classified, not members | Use `CellToClusterMapping` + a `MappingSet` row instead |
+
+---
+
+## 11. Known limitations
+
+- **`HierarchyCategory` has no safe global write pattern today.** The table has no `project_id` and no `hierarchy_id` discriminator, and category ids (`class`, `subclass`, `cluster`) are intentionally shared across taxonomies. Predicate-scoped overwrite would clobber sibling taxonomies' rows; plain append collides on `id`. Current `_03` notebooks (`etl_minnie_03`, `etl_visp_met_types_01_cluster`) skip this write and flag a TODO. A global-dedup append helper is the planned fix.
+- **`CellCellConnectivityLong` has no `connectome_id` discriminator.** Two example connectomes for the same project must live in separate folders (see §5g). Schema addition would let them share a folder.

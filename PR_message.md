@@ -244,6 +244,37 @@ All 32 tests pass (`uv run pytest -q`).
 
 ---
 
+## Schema fix: `MappingSet` endpoints — DataSet or ClusterHierarchy
+
+### The problem
+
+`MappingSet` required both `source_dataset: DataSet` and `target_dataset: DataSet`. Under the just-completed cluster-schema change, `Cluster` and `ClusterHierarchy` are global reference artifacts — not linked to any `DataSet`. So for `CellToClusterMapping` the target is a hierarchy (no honest `target_dataset`), and `ClusterToClusterMapping` has the same problem on both ends. Only `CellToCellMapping` fits the original schema.
+
+### The fix
+
+In `schemas/mappings_schema.yaml`:
+- Added top-level slots `source_hierarchy` and `target_hierarchy` (range `ClusterHierarchy`, `inlined: false`).
+- Added both to `MappingSet.slots`.
+- Dropped `required: true` from `MappingSet.source_dataset` and `MappingSet.target_dataset`; both are now optional. LinkML can't enforce "exactly one of {dataset, hierarchy}" per side, so the convention is documented in `MappingSet.description` and the per-mapping class descriptions:
+  - `CellToCellMapping`     → `MappingSet` populates `source_dataset`    + `target_dataset`.
+  - `CellToClusterMapping`  → `MappingSet` populates `source_dataset`    + `target_hierarchy`.
+  - `ClusterToClusterMapping` → `MappingSet` populates `source_hierarchy` + `target_hierarchy`.
+
+Models regenerated via `bash scripts/generate_models.sh`. `MappingSet` now exposes all four endpoint slots, all optional.
+
+### Tests
+
+Added `tests/test_mappings_schema.py` with 9 tests:
+- All three endpoint shapes round-trip (dataset→dataset, dataset→hierarchy, hierarchy→hierarchy).
+- All four endpoint slots are optional at the schema level.
+- `method_name` and `project_id` are still required.
+- `target_hierarchy` is type-checked as a string (rejects non-string input).
+- `CellToClusterMapping` round-trips with the cell-to-cluster `MappingSet`; `target_cluster` still required.
+
+All 41 tests pass (`uv run pytest -q`).
+
+---
+
 ## `etl_wnm_exc_04_projection_matrix.ipynb`
 
 Writes the WNM excitatory projection matrices (one ipsilateral + one contralateral) for `project_id="visp_wnm"`, `dataset_id="visp_exc_wnm"`. Source: `ProjectionMatrix_tip_and_branch_roll_up.csv` (345 cells × 152 `ipsi_<ACRONYM>` + 68 `contra_<ACRONYM>`). Cell ids are the SWC filename with `.swc` stripped, matching `_01`.

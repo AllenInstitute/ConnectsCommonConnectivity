@@ -1665,7 +1665,16 @@ or: precomputed://gs://my_bucket/precomputed/skeletons/53434""", json_schema_ext
 
 class MappingSet(ProjectScoped):
     """
-    A coherent set of mappings produced by a specific method between datasets.
+    A coherent set of mappings produced by a specific method.
+    The source and target endpoints can be either a DataSet (a cohort of cells) or a
+    ClusterHierarchy (a global taxonomy), depending on the mapping kind.
+    LinkML cannot enforce \"exactly one of {source_dataset, source_hierarchy}\" or the
+    same for target, so the choice is left to per-mapping conventions:
+      - CellToCellMapping     : source_dataset    + target_dataset    populated.
+      - CellToClusterMapping  : source_dataset    + target_hierarchy  populated.
+      - ClusterToClusterMapping: source_hierarchy + target_hierarchy  populated.
+    At least one source field and one target field must be populated; consumers should
+    fail loudly if both source fields (or both target fields) are populated or empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],
@@ -1680,12 +1689,34 @@ class MappingSet(ProjectScoped):
                                         'required': True},
                         'method_version': {'name': 'method_version', 'range': 'string'},
                         'name': {'name': 'name', 'range': 'string'},
-                        'source_dataset': {'name': 'source_dataset',
-                                           'range': 'DataSet',
-                                           'required': True},
-                        'target_dataset': {'name': 'target_dataset',
-                                           'range': 'DataSet',
-                                           'required': True}}})
+                        'source_dataset': {'description': 'Dataset providing the '
+                                                          'source entities. Populate '
+                                                          'for CellToCellMapping and '
+                                                          'CellToClusterMapping.',
+                                           'inlined': False,
+                                           'name': 'source_dataset',
+                                           'range': 'DataSet'},
+                        'source_hierarchy': {'description': 'ClusterHierarchy '
+                                                            'providing the source '
+                                                            'entities. Populate for '
+                                                            'ClusterToClusterMapping.',
+                                             'inlined': False,
+                                             'name': 'source_hierarchy',
+                                             'range': 'ClusterHierarchy'},
+                        'target_dataset': {'description': 'Dataset providing the '
+                                                          'target entities. Populate '
+                                                          'for CellToCellMapping.',
+                                           'inlined': False,
+                                           'name': 'target_dataset',
+                                           'range': 'DataSet'},
+                        'target_hierarchy': {'description': 'ClusterHierarchy '
+                                                            'providing the target '
+                                                            'entities. Populate for '
+                                                            'CellToClusterMapping and '
+                                                            'ClusterToClusterMapping.',
+                                             'inlined': False,
+                                             'name': 'target_hierarchy',
+                                             'range': 'ClusterHierarchy'}}})
 
     id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
@@ -1727,8 +1758,10 @@ class MappingSet(ProjectScoped):
     method_version: Optional[str] = Field(default=None, description="""Version of the mapping method.""", json_schema_extra = { "linkml_meta": {'alias': 'method_version', 'domain_of': ['MappingSet']} })
     author: Optional[str] = Field(default=None, description="""Author or organization who produced this mapping.""", json_schema_extra = { "linkml_meta": {'alias': 'author', 'domain_of': ['MappingSet']} })
     created_at: Optional[datetime ] = Field(default=None, description="""Timestamp when the mapping set was created.""", json_schema_extra = { "linkml_meta": {'alias': 'created_at', 'domain_of': ['MappingSet']} })
-    source_dataset: str = Field(default=..., description="""Dataset providing the source entities.""", json_schema_extra = { "linkml_meta": {'alias': 'source_dataset', 'domain_of': ['MappingSet']} })
-    target_dataset: str = Field(default=..., description="""Dataset providing the target entities.""", json_schema_extra = { "linkml_meta": {'alias': 'target_dataset', 'domain_of': ['MappingSet']} })
+    source_dataset: Optional[str] = Field(default=None, description="""Dataset providing the source entities. Populate for CellToCellMapping and CellToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'source_dataset', 'domain_of': ['MappingSet']} })
+    target_dataset: Optional[str] = Field(default=None, description="""Dataset providing the target entities. Populate for CellToCellMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'target_dataset', 'domain_of': ['MappingSet']} })
+    source_hierarchy: Optional[str] = Field(default=None, description="""ClusterHierarchy providing the source entities. Populate for ClusterToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'source_hierarchy', 'domain_of': ['MappingSet']} })
+    target_hierarchy: Optional[str] = Field(default=None, description="""ClusterHierarchy providing the target entities. Populate for CellToClusterMapping and ClusterToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'target_hierarchy', 'domain_of': ['MappingSet']} })
     json_object: Optional[str] = Field(default=None, description="""Arbitrary method parameters (JSON string).""", json_schema_extra = { "linkml_meta": {'alias': 'json_object', 'domain_of': ['AlgorithmRun', 'MappingSet']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
@@ -1826,6 +1859,9 @@ class CellToCellMapping(ProjectScoped):
 class CellToClusterMapping(ProjectScoped):
     """
     Mapping between a source cell and a target cluster, with scores/probabilities.
+    The associated MappingSet should have source_dataset (cohort of source cells) and
+    target_hierarchy (taxonomy whose clusters are mapped to) populated; target_dataset
+    and source_hierarchy should be left empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],
@@ -1896,6 +1932,8 @@ class CellToClusterMapping(ProjectScoped):
 class ClusterToClusterMapping(ProjectScoped):
     """
     Mapping between a source cluster and a target cluster, with scores/probabilities.
+    The associated MappingSet should have source_hierarchy and target_hierarchy
+    populated; source_dataset and target_dataset should be left empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],

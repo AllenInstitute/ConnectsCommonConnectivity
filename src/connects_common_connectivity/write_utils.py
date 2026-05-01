@@ -1,9 +1,56 @@
 """Idempotent write helpers for Delta Lake tables shared across notebooks."""
 from __future__ import annotations
 
+from typing import Iterator, Mapping, Optional, Tuple
+
 import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import write_deltalake
+
+
+def walk_ancestors(
+    leaf_id: str,
+    parent_of: Mapping[str, Optional[str]],
+) -> Iterator[Tuple[str, bool]]:
+    """Yield ``(cluster_id, is_leaf)`` from a leaf cluster up to the root.
+
+    Used by cluster-membership / cell-to-cluster-mapping notebooks to
+    denormalize the hierarchy into the membership/mapping table so that
+    consumers can filter at any level without a recursive cluster join.
+    The first yielded tuple has ``is_leaf=True``; all ancestors yield
+    ``is_leaf=False``. The walk terminates when ``parent_of[current]`` is
+    ``None`` (the root).
+
+    Parameters
+    ----------
+    leaf_id:
+        Cluster id to start from. Must be a key in ``parent_of``.
+    parent_of:
+        Mapping from cluster id to parent id, with ``None`` for the
+        root. Typically built as
+        ``dict(zip(cluster_df["id"], cluster_df["parent"]))`` filtered to
+        a single ``hierarchy_id``.
+
+    Yields
+    ------
+    tuple[str, bool]
+        ``(cluster_id, is_leaf)`` pairs from leaf to root, inclusive.
+
+    Raises
+    ------
+    KeyError
+        If ``leaf_id`` is not a key in ``parent_of`` (the caller should
+        validate cluster ids against the registered taxonomy first and
+        fail loudly on unknowns).
+    """
+    if leaf_id not in parent_of:
+        raise KeyError(leaf_id)
+    cur: Optional[str] = leaf_id
+    is_leaf = True
+    while cur is not None:
+        yield cur, is_leaf
+        is_leaf = False
+        cur = parent_of.get(cur)
 
 
 def append_new_dataitems(

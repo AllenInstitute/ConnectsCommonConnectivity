@@ -1,0 +1,121 @@
+id: https://brain-connects.org/ic3-hmba-embedding-schema
+name: hmba_embedding_schema
+description: |-
+  Schema for 2D embedding coordinates from dimensionality reduction techniques
+  (UMAP, t-SNE, PCA, etc.). Used for visualization and exploration of high-dimensional
+  single-cell data in low-dimensional space.
+imports:
+  - base_schema
+  - core_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+enums:
+  EmbeddingMethod:
+    description: Dimensionality reduction method used to generate the embedding.
+    permissible_values:
+      UMAP:
+        description: Uniform Manifold Approximation and Projection.
+      TSNE:
+        description: t-Distributed Stochastic Neighbor Embedding.
+      PCA:
+        description: Principal Component Analysis.
+      MDS:
+        description: Multidimensional Scaling.
+      OTHER:
+        description: Other dimensionality reduction method.
+
+classes:
+  EmbeddingSet:
+    description: |-
+      A complete set of 2D embedding coordinates for a collection of cells or data items.
+      Represents the output of a single dimensionality reduction run with specific parameters.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - name
+      - embedding_method
+      - description
+      - parameters_json
+      - input_features_description
+      - creation_date
+    slot_usage:
+      id:
+        description: Unique identifier for this embedding set (e.g., "HMBA_BG_UMAP_2D").
+        identifier: true
+      name:
+        range: string
+        required: true
+        description: Human-readable name for the embedding.
+      embedding_method:
+        range: EmbeddingMethod
+        required: true
+        description: Method used to generate the embedding.
+      description:
+        range: string
+        description: Description of the embedding, including purpose and context.
+      parameters_json:
+        description: |-
+          JSON-encoded parameters used for the embedding algorithm (e.g., UMAP n_neighbors,
+          min_dist, metric; or t-SNE perplexity, learning_rate).
+      input_features_description:
+        range: string
+        description: |-
+          Description of the input features used (e.g., "top 3000 highly variable genes",
+          "PCA components 1-50").
+      creation_date:
+        range: date
+        description: Date the embedding was created.
+
+  Cell2DEmbeddingCoordinates:
+    description: |-
+      2D coordinates for a single cell or data item within an embedding space.
+      Links cells to their positions in the reduced-dimension visualization.
+    mixins:
+      - ProjectScoped
+    slots:
+      - cell_id
+      - embedding_set_id
+      - x
+      - y
+    slot_usage:
+      cell_id:
+        range: DataItem
+        required: true
+        description: |-
+          Reference to the cell (DataItem) these coordinates represent
+          (e.g., cell_label like "AAACAGCCAAATGCCC-2362_A05").
+      embedding_set_id:
+        range: EmbeddingSet
+        required: true
+        description: Reference to the embedding set these coordinates belong to.
+      x:
+        range: float
+        required: true
+        description: X coordinate in the 2D embedding space.
+      y:
+        range: float
+        required: true
+        description: Y coordinate in the 2D embedding space.
+
+slots:
+  cell_id:
+    description: Reference to a cell DataItem.
+    range: DataItem
+  embedding_method:
+    description: Dimensionality reduction method used.
+    range: EmbeddingMethod
+  embedding_set_id:
+    description: Reference to an embedding set.
+    range: EmbeddingSet
+  input_features_description:
+    description: Description of input features for the embedding.
+    range: string
+  creation_date:
+    description: Date of creation.
+    range: date

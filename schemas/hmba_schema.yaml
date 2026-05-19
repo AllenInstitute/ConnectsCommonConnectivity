@@ -1,0 +1,29 @@
+id: https://brain-connects.org/ic3-hmba-schema
+name: hmba_schema
+description: |-
+  Aggregator schema for the Human and Macaque Brain Atlas (HMBA) data model.
+  Imports all HMBA-specific schemas along with core connectivity schemas to provide
+  a complete data model for HMBA 10xMultiome single-cell data, including:
+  - Donor, library, and cell metadata
+  - Taxonomy and clustering with annotation term hierarchies
+  - 2D embedding coordinates for visualization
+  - Controlled vocabulary and value sets
+  - Gene expression data structures
+
+  This schema provides a unified entry point for working with HMBA data and can be
+  used to generate Pydantic models, validate data, and document the complete data structure.
+imports:
+  - base_schema
+  - core_schema
+  - clustering_schema
+  - cell_gene_schema
+  - hmba_metadata_schema
+  - hmba_taxonomy_annotation_schema
+  - value_sets_schema
+  - hmba_embedding_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc

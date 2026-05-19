@@ -1,0 +1,346 @@
+id: https://brain-connects.org/ic3-hmba-metadata-schema
+name: hmba_metadata_schema
+description: Schema for HMBA (Human and Macaque Brain Atlas) cell, library, and donor metadata from 10xMultiome experiments.
+imports:
+  - base_schema
+  - core_schema
+  - cell_gene_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+enums:
+  CellSpecimenType:
+    description: Type of biological specimen used for sequencing.
+    permissible_values:
+      NUCLEI:
+        description: Isolated nuclei.
+      CELLS:
+        description: Whole cells.
+      OTHER:
+        description: Other specimen type.
+
+  DonorSex:
+    description: Biological sex of the donor.
+    permissible_values:
+      MALE:
+        description: Male donor.
+      FEMALE:
+        description: Female donor.
+      UNKNOWN:
+        description: Sex unknown or not reported.
+
+  AgeUnit:
+    description: Unit of measurement for donor age.
+    permissible_values:
+      YEARS:
+        description: Age in years.
+      MONTHS:
+        description: Age in months.
+      DAYS:
+        description: Age in days.
+      WEEKS:
+        description: Age in weeks.
+
+classes:
+  Donor:
+    description: A biological donor that contributed tissue samples.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - name
+      - species_scientific_name
+      - species_genus
+      - donor_sex
+      - donor_age
+      - donor_age_value
+      - donor_age_unit
+      - nhash_id
+      - species_ncbi_taxon
+    slot_usage:
+      id:
+        description: Unique donor identifier (e.g., H24.30.001, QM23.50.003).
+        identifier: true
+      name:
+        description: Human-readable donor name or label.
+        required: false
+      species_scientific_name:
+        range: string
+        required: true
+        description: Scientific species name (e.g., Homo sapiens, Macaca mulatta).
+      species_genus:
+        range: string
+        required: true
+        description: Genus name (e.g., Human, Macaque).
+      donor_sex:
+        range: DonorSex
+        required: true
+        description: Biological sex of the donor.
+      donor_age:
+        range: string
+        description: Age as a formatted string (e.g., "18 yrs", "6 yrs").
+      donor_age_value:
+        range: float
+        description: Numeric age value.
+      donor_age_unit:
+        range: AgeUnit
+        description: Unit of the age value.
+      nhash_id:
+        range: string
+        description: Anonymized hash ID for the donor.
+      species_ncbi_taxon:
+        range: string
+        description: NCBI Taxonomy identifier for the species (e.g., NCBITaxon:9606).
+
+  Library:
+    description: A sequencing library prepared from a biological sample.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - library_method
+      - library_nhash_id
+      - barcoded_cell_sample_label
+      - enrichment_population
+      - cell_specimen_type
+      - parcellation_term_identifier
+      - region_of_interest_name
+      - region_of_interest_label
+      - anatomical_division_label
+      - donor_id
+      - specimen_dissected_roi_label
+      - specimen_dissected_roi_nhash_id
+      - slab_label
+      - slab_nhash_id
+    slot_usage:
+      id:
+        description: Unique library identifier (e.g., L8XR_240808_01_E02).
+        identifier: true
+      library_method:
+        range: string
+        required: true
+        description: Library preparation method (e.g., "10xMultiome;GEX").
+      library_nhash_id:
+        range: string
+        description: Anonymized hash ID for the library.
+      barcoded_cell_sample_label:
+        range: string
+        description: Label for the barcoded cell sample.
+      enrichment_population:
+        range: string
+        description: Description of enrichment populations (e.g., "50% NeuN+, 35% OLIG2-").
+      cell_specimen_type:
+        range: CellSpecimenType
+        required: true
+        description: Type of specimen (Nuclei or Cells).
+      parcellation_term_identifier:
+        range: string
+        description: Ontology identifier for the brain region (e.g., DHBA:11538).
+      region_of_interest_name:
+        range: string
+        description: Full name of the brain region (e.g., "caudal putamen").
+      region_of_interest_label:
+        range: string
+        description: Abbreviated label for the region (e.g., "PuC").
+      anatomical_division_label:
+        range: string
+        description: Higher-level anatomical division (e.g., "Basal ganglia").
+      donor_id:
+        range: Donor
+        required: true
+        description: Reference to the Donor.
+      specimen_dissected_roi_label:
+        range: string
+        description: Label for the dissected region of interest specimen.
+      specimen_dissected_roi_nhash_id:
+        range: string
+        description: Hash ID for the dissected ROI.
+      slab_label:
+        range: string
+        description: Label for the tissue slab.
+      slab_nhash_id:
+        range: string
+        description: Hash ID for the slab.
+
+  CellMetadata:
+    description: Metadata for an individual cell from single-cell sequencing.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - cell_barcode
+      - donor_id
+      - barcoded_cell_sample_label
+      - library_id
+      - alignment_job_id
+      - doublet_score
+      - umi_count
+      - feature_matrix_label
+      - dataset_label
+      - abc_sample_id
+    slot_usage:
+      id:
+        description: Unique cell identifier (cell_label, e.g., AAACAGCCAAATGCCC-2362_A05).
+        identifier: true
+      cell_barcode:
+        range: string
+        required: true
+        description: Cell barcode sequence (e.g., AAACAGCCAAATGCCC).
+      donor_id:
+        range: Donor
+        required: true
+        description: Reference to the Donor.
+      barcoded_cell_sample_label:
+        range: string
+        description: Label for the barcoded sample.
+      library_id:
+        range: Library
+        required: true
+        description: Reference to the Library.
+      alignment_job_id:
+        range: string
+        description: Identifier for the alignment job.
+      doublet_score:
+        range: float
+        description: Quality metric indicating doublet probability (0-1).
+      umi_count:
+        range: float
+        description: Total unique molecular identifier (UMI) count for the cell.
+      feature_matrix_label:
+        range: string
+        description: Label for the feature matrix dataset.
+      dataset_label:
+        range: string
+        description: Label for the overall dataset.
+      abc_sample_id:
+        range: string
+        description: ABC sample identifier (UUID).
+
+  Gene:
+    description: Gene metadata including identifier, symbol, and description.
+    slots:
+      - gene_identifier
+      - gene_symbol
+      - gene_description
+      - molecular_type
+    slot_usage:
+      gene_identifier:
+        identifier: true
+        range: string
+        required: true
+        description: Unique gene identifier (e.g., NCBIGene:9380).
+      gene_symbol:
+        range: string
+        required: true
+        description: Standard gene symbol (e.g., GRHPR).
+      gene_description:
+        range: string
+        description: Full description of the gene.
+      molecular_type:
+        range: string
+        description: Type of molecule (e.g., protein-coding, lncRNA).
+
+slots:
+  donor_sex:
+    description: Biological sex of the donor.
+    range: DonorSex
+  donor_age:
+    description: Age formatted as a string with units.
+    range: string
+  donor_age_value:
+    description: Numeric age value.
+    range: float
+  donor_age_unit:
+    description: Unit of the age value.
+    range: AgeUnit
+  species_scientific_name:
+    description: Scientific species name.
+    range: string
+  species_genus:
+    description: Genus name.
+    range: string
+  species_ncbi_taxon:
+    description: NCBI Taxonomy identifier.
+    range: string
+  nhash_id:
+    description: Anonymized hash identifier.
+    range: string
+  library_method:
+    description: Library preparation method.
+    range: string
+  library_nhash_id:
+    description: Library hash identifier.
+    range: string
+  barcoded_cell_sample_label:
+    description: Barcoded cell sample label.
+    range: string
+  enrichment_population:
+    description: Description of cell enrichment populations.
+    range: string
+  cell_specimen_type:
+    description: Type of cell specimen.
+    range: CellSpecimenType
+  parcellation_term_identifier:
+    description: Ontology identifier for brain parcellation.
+    range: string
+  region_of_interest_name:
+    description: Name of the brain region of interest.
+    range: string
+  region_of_interest_label:
+    description: Abbreviated label for the region of interest.
+    range: string
+  anatomical_division_label:
+    description: Higher-level anatomical division label.
+    range: string
+  donor_id:
+    description: Reference to a Donor.
+    range: Donor
+  specimen_dissected_roi_label:
+    description: Label for the dissected region of interest.
+    range: string
+  specimen_dissected_roi_nhash_id:
+    description: Hash ID for the dissected ROI.
+    range: string
+  slab_label:
+    description: Tissue slab label.
+    range: string
+  slab_nhash_id:
+    description: Hash ID for the slab.
+    range: string
+  cell_barcode:
+    description: Cell barcode sequence.
+    range: string
+  library_id:
+    description: Reference to a Library.
+    range: Library
+  alignment_job_id:
+    description: Alignment job identifier.
+    range: string
+  doublet_score:
+    description: Doublet detection score.
+    range: float
+  umi_count:
+    description: UMI count for the cell.
+    range: float
+  feature_matrix_label:
+    description: Feature matrix dataset label.
+    range: string
+  dataset_label:
+    description: Overall dataset label.
+    range: string
+  abc_sample_id:
+    description: ABC sample identifier.
+    range: string
+  gene_identifier:
+    description: Unique gene identifier.
+    range: string
+  gene_description:
+    description: Gene description.
+    range: string
+  molecular_type:
+    description: Molecular type of the gene.
+    range: string

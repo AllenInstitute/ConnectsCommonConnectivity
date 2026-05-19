@@ -1,0 +1,203 @@
+id: https://brain-connects.org/ic3-hmba-taxonomy-annotation-schema
+name: hmba_taxonomy_annotation_schema
+description: |-
+  Schema for HMBA taxonomy annotation system. This provides a parallel hierarchical annotation system
+  on top of the cluster structure, allowing multiple named levels (Neighborhood, Class, Subclass, etc.)
+  to be assigned to clusters. This is distinct from but complementary to the HierarchyCategory system.
+imports:
+  - base_schema
+  - clustering_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+classes:
+  ClusterAnnotationTermSet:
+    description: |-
+      Defines a level in the annotation hierarchy (e.g., Neighborhood, Class, Subclass, Group, Cluster).
+      Each term set represents one resolution level in the taxonomic annotation system.
+    slots:
+      - id
+      - name
+      - description
+      - order
+    slot_usage:
+      id:
+        description: Unique identifier for the term set (e.g., CCN20250428_LEVEL_0).
+        identifier: true
+      name:
+        range: string
+        required: true
+        description: Human-readable name of the level (e.g., "Neighborhood", "Class").
+      description:
+        range: string
+        description: Description of what this level represents in the taxonomy.
+      order:
+        range: integer
+        required: true
+        description: Ordering of levels in the hierarchy (0 is highest/broadest level).
+
+  ClusterAnnotationTerm:
+    description: |-
+      A specific annotation term at a particular level in the taxonomy hierarchy.
+      Terms can have parent-child relationships forming a hierarchical structure parallel
+      to the cluster tree but with named categorical levels.
+    slots:
+      - id
+      - name
+      - cluster_annotation_term_set_id
+      - cluster_annotation_term_set_name
+      - hex_color
+      - term_order
+      - term_set_order
+      - parent_term_id
+      - parent_term_name
+      - parent_term_set_id
+    slot_usage:
+      id:
+        description: Unique identifier for the annotation term (e.g., CS20250428_NEIGH_0001).
+        identifier: true
+      name:
+        range: string
+        required: true
+        description: Human-readable name of the term (e.g., "Nonneuron", "Astro-Epen").
+      cluster_annotation_term_set_id:
+        range: ClusterAnnotationTermSet
+        required: true
+        description: Reference to the term set (level) this term belongs to.
+      cluster_annotation_term_set_name:
+        range: string
+        description: Name of the term set (denormalized for convenience).
+      hex_color:
+        description: Color for visualization (6-digit hex, optionally prefixed with #).
+      term_order:
+        range: integer
+        description: Ordering of this term within its term set.
+      term_set_order:
+        range: integer
+        description: Order of the term set this term belongs to (denormalized).
+      parent_term_id:
+        range: ClusterAnnotationTerm
+        description: Parent term at the next higher level (null for root level).
+      parent_term_name:
+        range: string
+        description: Name of the parent term (denormalized).
+      parent_term_set_id:
+        range: ClusterAnnotationTermSet
+        description: Term set ID of the parent term.
+
+  ClusterToClusterAnnotationMembership:
+    description: |-
+      Links a Cluster to one or more ClusterAnnotationTerms, allowing clusters to be
+      categorized at multiple levels of the annotation hierarchy simultaneously.
+    slots:
+      - cluster_id
+      - cluster_alias
+      - cluster_annotation_term_id
+      - cluster_annotation_term_set_id
+      - cluster_annotation_term_name
+      - cluster_annotation_term_set_name
+    slot_usage:
+      cluster_id:
+        range: Cluster
+        required: true
+        description: Reference to the Cluster being annotated (e.g., CS20250428_CLUST_0161).
+      cluster_alias:
+        range: string
+        description: Human-readable alias for the cluster (e.g., "Human-143").
+      cluster_annotation_term_id:
+        range: ClusterAnnotationTerm
+        required: true
+        description: Reference to the annotation term assigned to this cluster.
+      cluster_annotation_term_set_id:
+        range: ClusterAnnotationTermSet
+        required: true
+        description: Reference to the term set (level) of this annotation.
+      cluster_annotation_term_name:
+        range: string
+        description: Name of the annotation term (denormalized).
+      cluster_annotation_term_set_name:
+        range: string
+        description: Name of the term set (denormalized).
+
+  AbbreviationTerm:
+    description: |-
+      Abbreviations for annotation terms, used for compact display and labeling.
+    slots:
+      - id
+      - abbreviation_text
+      - description
+    slot_usage:
+      id:
+        description: Unique identifier for the abbreviation.
+        identifier: true
+      abbreviation_text:
+        range: string
+        required: true
+        description: The abbreviated text.
+      description:
+        range: string
+        description: Explanation of what the abbreviation represents.
+
+  ClusterAnnotationToAbbreviationMap:
+    description: |-
+      Maps cluster annotation terms to their abbreviated forms for display purposes.
+    slots:
+      - cluster_annotation_term_id
+      - abbreviation_term_id
+    slot_usage:
+      cluster_annotation_term_id:
+        range: ClusterAnnotationTerm
+        required: true
+        description: Reference to the annotation term.
+      abbreviation_term_id:
+        range: AbbreviationTerm
+        required: true
+        description: Reference to the abbreviation.
+
+slots:
+  order:
+    description: Ordering value for sorting.
+    range: integer
+  cluster_annotation_term_set_id:
+    description: Reference to a ClusterAnnotationTermSet.
+    range: ClusterAnnotationTermSet
+  cluster_annotation_term_set_name:
+    description: Name of the annotation term set.
+    range: string
+  term_order:
+    description: Order of a term within its set.
+    range: integer
+  term_set_order:
+    description: Order of the term set.
+    range: integer
+  parent_term_id:
+    description: Reference to a parent annotation term.
+    range: ClusterAnnotationTerm
+  parent_term_name:
+    description: Name of the parent term.
+    range: string
+  parent_term_set_id:
+    description: Term set of the parent term.
+    range: ClusterAnnotationTermSet
+  cluster_annotation_term_id:
+    description: Reference to a cluster annotation term.
+    range: ClusterAnnotationTerm
+  cluster_annotation_term_name:
+    description: Name of the annotation term.
+    range: string
+  cluster_alias:
+    description: Human-readable alias for a cluster.
+    range: string
+  abbreviation_text:
+    description: Abbreviated text.
+    range: string
+  abbreviation_term_id:
+    description: Reference to an abbreviation term.
+    range: AbbreviationTerm
+  cluster_id:
+    description: Reference to a Cluster.
+    range: Cluster

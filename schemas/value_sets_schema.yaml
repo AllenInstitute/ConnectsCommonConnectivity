@@ -1,0 +1,121 @@
+id: https://brain-connects.org/ic3-value-sets-schema
+name: value_sets_schema
+description: |-
+  Schema for controlled vocabulary terms and value sets. Provides a unified system
+  for defining categorical values, ontology terms, and their relationships across
+  different tables and fields in the data model. Includes support for hierarchical
+  vocabularies, external ontology references, and visualization colors.
+imports:
+  - base_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+classes:
+  ValueSet:
+    description: |-
+      A controlled vocabulary term used as a permissible value for a specific field
+      in a specific table. Supports hierarchical relationships, external ontology
+      mappings, and visualization properties.
+    slots:
+      - id
+      - table_name
+      - field_name
+      - description
+      - order
+      - external_identifier
+      - parent_label
+      - hex_color
+    slot_usage:
+      id:
+        description: |-
+          The value itself (label) used as the identifier (e.g., "Female", "Homo sapiens").
+        identifier: true
+      table_name:
+        range: string
+        required: true
+        description: Name of the table this value set applies to (e.g., "donor", "library").
+      field_name:
+        range: string
+        required: true
+        description: Name of the field this value set constrains (e.g., "donor_sex", "species_genus").
+      description:
+        range: string
+        description: Human-readable description of this value.
+      order:
+        range: integer
+        description: Sort order for this value within its value set.
+      external_identifier:
+        range: string
+        description: |-
+          External ontology or taxonomy identifier (e.g., "NCBITaxon:9606", "DHBA:10332").
+          Used to link to standard vocabularies.
+      parent_label:
+        range: string
+        description: |-
+          Label of the parent value in a hierarchical vocabulary. Creates parent-child
+          relationships within the value set (e.g., "Ca" is parent of "CaH").
+      hex_color:
+        description: |-
+          Suggested visualization color for this value (6-digit hex, optionally with #).
+          Used for consistent coloring in plots and displays.
+
+  ValueSetHierarchy:
+    description: |-
+      Explicitly represents parent-child relationships between ValueSet entries,
+      useful for querying hierarchical vocabularies.
+    slots:
+      - child_value
+      - parent_value
+      - table_name
+      - field_name
+      - depth
+    slot_usage:
+      child_value:
+        range: ValueSet
+        required: true
+        description: The child value in the hierarchy.
+      parent_value:
+        range: ValueSet
+        required: true
+        description: The parent value in the hierarchy.
+      table_name:
+        range: string
+        required: true
+        description: Table the hierarchy applies to.
+      field_name:
+        range: string
+        required: true
+        description: Field the hierarchy applies to.
+      depth:
+        range: integer
+        description: Depth difference between child and parent (1 = immediate parent).
+
+slots:
+  order:
+    description: Sort order value.
+    range: integer
+  table_name:
+    description: Name of a database table.
+    range: string
+  field_name:
+    description: Name of a field/column in a table.
+    range: string
+  external_identifier:
+    description: External ontology or taxonomy identifier.
+    range: string
+  parent_label:
+    description: Label of a parent value in a hierarchy.
+    range: string
+  child_value:
+    description: Child value in a hierarchical relationship.
+    range: ValueSet
+  parent_value:
+    description: Parent value in a hierarchical relationship.
+    range: ValueSet
+  depth:
+    description: Depth in a hierarchy.
+    range: integer

@@ -16,11 +16,14 @@ imports:
 classes:
   CellFeatureSet:
     description: A defined set of cell features with their descriptions and metadata.
+    mixins:
+      - ProjectScoped
     slots:
       - id
       - description
       - feature_definition_ids
       - extraction_method
+      - project_id
     slot_usage:
       id:
         range: string
@@ -39,6 +42,8 @@ classes:
 
   CellFeatureDefinition:
     description: Definition of a single feature with metadata.
+    mixins:
+      - ProjectScoped
     slots:
       - id
       - description
@@ -46,7 +51,12 @@ classes:
       - data_type
       - range_min
       - range_max
+      - project_id
+      - feature_set_id
     slot_usage:
+      feature_set_id:
+        range: CellFeatureSet
+        description: Feature set this definition belongs to.
       description:
         range: string
         description: Detailed description of what this feature measures.

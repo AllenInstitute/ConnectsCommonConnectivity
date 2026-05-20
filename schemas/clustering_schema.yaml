@@ -71,6 +71,7 @@ classes:
     description: A node (cluster) in a hierarchical clustering structure.
     slots:
       - id
+      - hierarchy_id
       - parent
       - children
       - level
@@ -78,8 +79,6 @@ classes:
       - hex_color
       - hierarchy_category
       - distance_to_parent
-    mixins:
-      - ProjectScoped
     slot_usage:
       parent:
         range: Cluster
@@ -109,6 +108,7 @@ classes:
     slots:
       - item
       - cluster
+      - hierarchy_id
       - membership_score
       - probability
       - distance
@@ -171,6 +171,9 @@ slots:
   cluster:
     description: Cluster referenced in a membership association.
     range: Cluster
+  hierarchy_id:
+    description: Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.
+    range: string
   hierarchy_category:
     range: HierarchyCategory
     inlined: false

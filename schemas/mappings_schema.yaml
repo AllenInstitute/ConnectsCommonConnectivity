@@ -14,7 +14,17 @@ default_prefix: cc
 
 classes:
   MappingSet:
-    description: A coherent set of mappings produced by a specific method between datasets.
+    description: |-
+      A coherent set of mappings produced by a specific method.
+      The source and target endpoints can be either a DataSet (a cohort of cells) or a
+      ClusterHierarchy (a global taxonomy), depending on the mapping kind.
+      LinkML cannot enforce "exactly one of {source_dataset, source_hierarchy}" or the
+      same for target, so the choice is left to per-mapping conventions:
+        - CellToCellMapping     : source_dataset    + target_dataset
+        - CellToClusterMapping  : source_dataset    + target_hierarchy
+        - ClusterToClusterMapping: source_hierarchy + target_hierarchy
+      At least one source field and one target field must be populated; consumers should
+      fail loudly if both source fields (or both target fields) are populated or empty.
     slots:
       - id
       - name
@@ -25,6 +35,8 @@ classes:
       - created_at
       - source_dataset
       - target_dataset
+      - source_hierarchy
+      - target_hierarchy
       - json_object
     mixins:
       - ProjectScoped
@@ -44,10 +56,20 @@ classes:
         range: datetime
       source_dataset:
         range: DataSet
-        required: true
+        inlined: false
+        description: Dataset providing the source entities. Populate for CellToCellMapping and CellToClusterMapping.
       target_dataset:
         range: DataSet
-        required: true
+        inlined: false
+        description: Dataset providing the target entities. Populate for CellToCellMapping.
+      source_hierarchy:
+        range: ClusterHierarchy
+        inlined: false
+        description: ClusterHierarchy providing the source entities. Populate for ClusterToClusterMapping.
+      target_hierarchy:
+        range: ClusterHierarchy
+        inlined: false
+        description: ClusterHierarchy providing the target entities. Populate for CellToClusterMapping and ClusterToClusterMapping.
       json_object:
         description: Arbitrary method parameters (JSON string).
 
@@ -82,7 +104,11 @@ classes:
         range: string
 
   CellToClusterMapping:
-    description: Mapping between a source cell and a target cluster, with scores/probabilities.
+    description: |-
+      Mapping between a source cell and a target cluster, with scores/probabilities.
+      The associated MappingSet should have source_dataset (cohort of source cells) and
+      target_hierarchy (taxonomy whose clusters are mapped to) populated; target_dataset
+      and source_hierarchy should be left empty.
     slots:
       - id
       - mapping_set
@@ -109,7 +135,10 @@ classes:
         range: string
 
   ClusterToClusterMapping:
-    description: Mapping between a source cluster and a target cluster, with scores/probabilities.
+    description: |-
+      Mapping between a source cluster and a target cluster, with scores/probabilities.
+      The associated MappingSet should have source_hierarchy and target_hierarchy
+      populated; source_dataset and target_dataset should be left empty.
     slots:
       - id
       - mapping_set
@@ -147,9 +176,21 @@ slots:
   target_cluster:
     description: Target cluster in the mapping.
   source_dataset:
-    description: Dataset providing the source entities.
+    description: Dataset providing the source entities (for cell-sourced mappings).
+    range: DataSet
+    inlined: false
   target_dataset:
-    description: Dataset providing the target entities.
+    description: Dataset providing the target entities (for cell-targeted mappings).
+    range: DataSet
+    inlined: false
+  source_hierarchy:
+    description: ClusterHierarchy providing the source entities (for cluster-sourced mappings).
+    range: ClusterHierarchy
+    inlined: false
+  target_hierarchy:
+    description: ClusterHierarchy providing the target entities (for cluster-targeted mappings).
+    range: ClusterHierarchy
+    inlined: false
   method_name:
     description: Name of the mapping method.
   method_version:

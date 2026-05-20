@@ -27,6 +27,15 @@ RUN pip install -U --no-cache-dir \
     standard-transform==1.4.1 \
     umap-learn==0.5.9.post2
 
+# ── DEV ONLY — comment out before publishing ──────────────────────
+# Install Node.js (needed for copilot CLI)
+RUN conda install -y nodejs -c conda-forge \
+    && conda clean -ya
+
+# Install GitHub Copilot CLI globally (no auth needed for install)
+RUN npm install -g @github/copilot
+#──────────────────────
+
 COPY postInstall /
 RUN --mount=type=secret,id=secrets . /run/secrets/secrets \
     && /postInstall

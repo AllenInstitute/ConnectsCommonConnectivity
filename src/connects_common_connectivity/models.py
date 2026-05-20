@@ -415,6 +415,92 @@ class ClusterHierarchy(ConfiguredBaseModel):
     clusters: Optional[list[str]] = Field(default=None, description="""All clusters in the hierarchy.""", json_schema_extra = { "linkml_meta": {'alias': 'clusters', 'domain_of': ['ClusterHierarchy']} })
 
 
+class Cluster(ConfiguredBaseModel):
+    """
+    A node (cluster) in a hierarchical clustering structure.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
+         'slot_usage': {'children': {'description': 'Child clusters.',
+                                     'multivalued': True,
+                                     'name': 'children',
+                                     'range': 'Cluster',
+                                     'slot_uri': 'skos:narrower'},
+                        'distance_to_parent': {'description': 'Distance metric to '
+                                                              'parent centroid.',
+                                               'name': 'distance_to_parent',
+                                               'range': 'float'},
+                        'hex_color': {'description': 'Suggested color to use when '
+                                                     'plotting this cluster',
+                                      'name': 'hex_color'},
+                        'level': {'description': 'Depth of the cluster in the '
+                                                 'hierarchy where 0 is the root '
+                                                 'cluster.',
+                                  'name': 'level',
+                                  'range': 'integer'},
+                        'parent': {'description': 'Direct parent cluster (omit for '
+                                                  'root).',
+                                   'name': 'parent',
+                                   'range': 'Cluster',
+                                   'slot_uri': 'skos:broader'},
+                        'score': {'description': 'Cluster quality metric (e.g., '
+                                                 'silhouette score).',
+                                  'name': 'score',
+                                  'range': 'float'}}})
+
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierarchyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['Cluster', 'ClusterMembership']} })
+    parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
+    children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
+    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
+    score: Optional[float] = Field(default=None, description="""Cluster quality metric (e.g., silhouette score).""", json_schema_extra = { "linkml_meta": {'alias': 'score',
+         'domain_of': ['Cluster',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping']} })
+    hex_color: Optional[str] = Field(default=None, description="""Suggested color to use when plotting this cluster""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
+         'aliases': ['rgb_hex', 'hex_color'],
+         'domain_of': ['Cluster', 'BrainRegion']} })
+    hierarchy_category: Optional[str] = Field(default=None, description="""This name for the level of detail this Cluster represents in the hierarchy""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_category', 'domain_of': ['Cluster']} })
+    distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
+
+    @field_validator('hex_color')
+    def pattern_hex_color(cls, v):
+        pattern=re.compile(r"^#?[0-9A-Fa-f]{6}$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid hex_color format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid hex_color format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
 class HierarchyCategory(ConfiguredBaseModel):
     """
     A set of names to give to different levels of resolution within a hierarchical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
@@ -608,7 +694,7 @@ class ProjectScoped(ConfiguredBaseModel):
 
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataSet(ProjectScoped):
@@ -654,7 +740,7 @@ class DataSet(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataItem(ProjectScoped):
@@ -704,7 +790,7 @@ class DataItem(ProjectScoped):
     neuroglancer_link: Optional[str] = Field(default=None, description="""A link that illustrates this data item visualized in a common coordinate framework in neuroglancer.""", json_schema_extra = { "linkml_meta": {'alias': 'neuroglancer_link', 'domain_of': ['DataItem']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class DataItemDataSetAssociation(ProjectScoped):
@@ -732,96 +818,7 @@ class DataItemDataSetAssociation(ProjectScoped):
     dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
-
-
-class Cluster(ProjectScoped):
-    """
-    A node (cluster) in a hierarchical clustering structure.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
-         'mixins': ['ProjectScoped'],
-         'slot_usage': {'children': {'description': 'Child clusters.',
-                                     'multivalued': True,
-                                     'name': 'children',
-                                     'range': 'Cluster',
-                                     'slot_uri': 'skos:narrower'},
-                        'distance_to_parent': {'description': 'Distance metric to '
-                                                              'parent centroid.',
-                                               'name': 'distance_to_parent',
-                                               'range': 'float'},
-                        'hex_color': {'description': 'Suggested color to use when '
-                                                     'plotting this cluster',
-                                      'name': 'hex_color'},
-                        'level': {'description': 'Depth of the cluster in the '
-                                                 'hierarchy where 0 is the root '
-                                                 'cluster.',
-                                  'name': 'level',
-                                  'range': 'integer'},
-                        'parent': {'description': 'Direct parent cluster (omit for '
-                                                  'root).',
-                                   'name': 'parent',
-                                   'range': 'Cluster',
-                                   'slot_uri': 'skos:broader'},
-                        'score': {'description': 'Cluster quality metric (e.g., '
-                                                 'silhouette score).',
-                                  'name': 'score',
-                                  'range': 'float'}}})
-
-    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
-         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
-         'domain_of': ['DataSet',
-                       'DataItem',
-                       'AlgorithmRun',
-                       'ClusterHierarchy',
-                       'Cluster',
-                       'HierarchyCategory',
-                       'BrainRegion',
-                       'ZarrArray',
-                       'ZarrDataset',
-                       'ParquetDataset',
-                       'ProjectionMeasurementMatrix',
-                       'CellFeatureSet',
-                       'CellFeatureDefinition',
-                       'CellFeatureMatrix',
-                       'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction',
-                       'MappingSet',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping',
-                       'CellCellConnectivityLong',
-                       'CellCellMeasurementMatrix']} })
-    parent: Optional[str] = Field(default=None, description="""Direct parent cluster (omit for root).""", json_schema_extra = { "linkml_meta": {'alias': 'parent', 'domain_of': ['Cluster'], 'slot_uri': 'skos:broader'} })
-    children: Optional[list[str]] = Field(default=None, description="""Child clusters.""", json_schema_extra = { "linkml_meta": {'alias': 'children', 'domain_of': ['Cluster'], 'slot_uri': 'skos:narrower'} })
-    level: Optional[int] = Field(default=None, description="""Depth of the cluster in the hierarchy where 0 is the root cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
-    score: Optional[float] = Field(default=None, description="""Cluster quality metric (e.g., silhouette score).""", json_schema_extra = { "linkml_meta": {'alias': 'score',
-         'domain_of': ['Cluster',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping']} })
-    hex_color: Optional[str] = Field(default=None, description="""Suggested color to use when plotting this cluster""", json_schema_extra = { "linkml_meta": {'alias': 'hex_color',
-         'aliases': ['rgb_hex', 'hex_color'],
-         'domain_of': ['Cluster', 'BrainRegion']} })
-    hierarchy_category: Optional[str] = Field(default=None, description="""This name for the level of detail this Cluster represents in the hierarchy""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_category', 'domain_of': ['Cluster']} })
-    distance_to_parent: Optional[float] = Field(default=None, description="""Distance metric to parent centroid.""", json_schema_extra = { "linkml_meta": {'alias': 'distance_to_parent', 'domain_of': ['Cluster']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
-
-    @field_validator('hex_color')
-    def pattern_hex_color(cls, v):
-        pattern=re.compile(r"^#?[0-9A-Fa-f]{6}$")
-        if isinstance(v, list):
-            for element in v:
-                if isinstance(element, str) and not pattern.match(element):
-                    err_msg = f"Invalid hex_color format: {element}"
-                    raise ValueError(err_msg)
-        elif isinstance(v, str) and not pattern.match(v):
-            err_msg = f"Invalid hex_color format: {v}"
-            raise ValueError(err_msg)
-        return v
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class ClusterMembership(ProjectScoped):
@@ -851,6 +848,7 @@ class ClusterMembership(ProjectScoped):
 
     item: Optional[str] = Field(default=None, description="""A DataItem that is a member of a Cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'item', 'domain_of': ['ClusterMembership']} })
     cluster: Optional[str] = Field(default=None, description="""Cluster referenced in a membership association.""", json_schema_extra = { "linkml_meta": {'alias': 'cluster', 'domain_of': ['ClusterMembership']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id', 'domain_of': ['Cluster', 'ClusterMembership']} })
     membership_score: Optional[float] = Field(default=None, description="""Algorithm-defined membership strength. (Optional, does not need to be normalized)""", json_schema_extra = { "linkml_meta": {'alias': 'membership_score', 'domain_of': ['ClusterMembership']} })
     probability: Optional[float] = Field(default=None, description="""Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.""", ge=0.0, le=1.0, json_schema_extra = { "linkml_meta": {'alias': 'probability',
          'domain_of': ['ClusterMembership',
@@ -860,7 +858,7 @@ class ClusterMembership(ProjectScoped):
     distance: Optional[float] = Field(default=None, description="""Distance between the item and the cluster centroid. (Smaller is better).""", json_schema_extra = { "linkml_meta": {'alias': 'distance', 'domain_of': ['ClusterMembership']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class ZarrArray(ConfiguredBaseModel):
@@ -1143,11 +1141,12 @@ class ProjectionMeasurementMatrix(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
 
 
-class CellFeatureSet(ConfiguredBaseModel):
+class CellFeatureSet(ProjectScoped):
     """
     A defined set of cell features with their descriptions and metadata.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-morphology-features-schema',
+         'mixins': ['ProjectScoped'],
          'slot_usage': {'description': {'description': 'Longer human description of '
                                                        'what this feature set measures '
                                                        'and where it came from.',
@@ -1208,13 +1207,17 @@ class CellFeatureSet(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix']} })
     feature_definition_ids: Optional[list[str]] = Field(default=None, description="""Individual feature definitions within this set.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_definition_ids', 'domain_of': ['CellFeatureSet']} })
     extraction_method: Optional[str] = Field(default=None, description="""Method used to extract these features (e.g., 'L-Measure', 'NeuroMorpho', 'custom').""", json_schema_extra = { "linkml_meta": {'alias': 'extraction_method', 'domain_of': ['CellFeatureSet']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
-class CellFeatureDefinition(ConfiguredBaseModel):
+class CellFeatureDefinition(ProjectScoped):
     """
     Definition of a single feature with metadata.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-morphology-features-schema',
+         'mixins': ['ProjectScoped'],
          'slot_usage': {'data_type': {'description': 'Data type as NumPy typestr '
                                                      '(byteorder + code + bytes), '
                                                      "e.g., '<i2', '<f4', '|u1'.",
@@ -1225,6 +1228,10 @@ class CellFeatureDefinition(ConfiguredBaseModel):
                                                        'this feature measures.',
                                         'name': 'description',
                                         'range': 'string'},
+                        'feature_set_id': {'description': 'Feature set this definition '
+                                                          'belongs to.',
+                                           'name': 'feature_set_id',
+                                           'range': 'CellFeatureSet'},
                         'range_max': {'description': 'Expected maximum value for this '
                                                      'feature.',
                                       'name': 'range_max',
@@ -1279,6 +1286,11 @@ class CellFeatureDefinition(ConfiguredBaseModel):
     data_type: Optional[str] = Field(default=None, description="""Data type as NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'.""", json_schema_extra = { "linkml_meta": {'alias': 'data_type', 'domain_of': ['CellFeatureDefinition']} })
     range_min: Optional[float] = Field(default=None, description="""Expected minimum value for this feature.""", json_schema_extra = { "linkml_meta": {'alias': 'range_min', 'domain_of': ['CellFeatureDefinition']} })
     range_max: Optional[float] = Field(default=None, description="""Expected maximum value for this feature.""", json_schema_extra = { "linkml_meta": {'alias': 'range_max', 'domain_of': ['CellFeatureDefinition']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+    feature_set_id: Optional[str] = Field(default=None, description="""Feature set this definition belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id',
+         'domain_of': ['CellFeatureDefinition', 'CellFeatureMatrix']} })
 
     @field_validator('data_type')
     def pattern_data_type(cls, v):
@@ -1346,12 +1358,13 @@ class CellFeatureMatrix(ProjectScoped):
                        'ClusterToClusterMapping',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
-    feature_set_id: str = Field(default=..., description="""Reference to the CellFeatureSet that defines the features in this matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id', 'domain_of': ['CellFeatureMatrix']} })
+    feature_set_id: str = Field(default=..., description="""Reference to the CellFeatureSet that defines the features in this matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'feature_set_id',
+         'domain_of': ['CellFeatureDefinition', 'CellFeatureMatrix']} })
     parquet_path: Optional[str] = Field(default=None, description="""Path to parquet dataset containing wide-form data. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path', 'domain_of': ['CellFeatureMatrix']} })
     cell_index_column: Optional[str] = Field(default=None, description="""Column of the parquet which corresponds to the DataItem""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index_column', 'domain_of': ['CellFeatureMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
     @field_validator('parquet_path')
     def pattern_parquet_path(cls, v):
@@ -1653,7 +1666,16 @@ or: precomputed://gs://my_bucket/precomputed/skeletons/53434""", json_schema_ext
 
 class MappingSet(ProjectScoped):
     """
-    A coherent set of mappings produced by a specific method between datasets.
+    A coherent set of mappings produced by a specific method.
+    The source and target endpoints can be either a DataSet (a cohort of cells) or a
+    ClusterHierarchy (a global taxonomy), depending on the mapping kind.
+    LinkML cannot enforce \"exactly one of {source_dataset, source_hierarchy}\" or the
+    same for target, so the choice is left to per-mapping conventions:
+      - CellToCellMapping     : source_dataset    + target_dataset
+      - CellToClusterMapping  : source_dataset    + target_hierarchy
+      - ClusterToClusterMapping: source_hierarchy + target_hierarchy
+    At least one source field and one target field must be populated; consumers should
+    fail loudly if both source fields (or both target fields) are populated or empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],
@@ -1668,12 +1690,34 @@ class MappingSet(ProjectScoped):
                                         'required': True},
                         'method_version': {'name': 'method_version', 'range': 'string'},
                         'name': {'name': 'name', 'range': 'string'},
-                        'source_dataset': {'name': 'source_dataset',
-                                           'range': 'DataSet',
-                                           'required': True},
-                        'target_dataset': {'name': 'target_dataset',
-                                           'range': 'DataSet',
-                                           'required': True}}})
+                        'source_dataset': {'description': 'Dataset providing the '
+                                                          'source entities. Populate '
+                                                          'for CellToCellMapping and '
+                                                          'CellToClusterMapping.',
+                                           'inlined': False,
+                                           'name': 'source_dataset',
+                                           'range': 'DataSet'},
+                        'source_hierarchy': {'description': 'ClusterHierarchy '
+                                                            'providing the source '
+                                                            'entities. Populate for '
+                                                            'ClusterToClusterMapping.',
+                                             'inlined': False,
+                                             'name': 'source_hierarchy',
+                                             'range': 'ClusterHierarchy'},
+                        'target_dataset': {'description': 'Dataset providing the '
+                                                          'target entities. Populate '
+                                                          'for CellToCellMapping.',
+                                           'inlined': False,
+                                           'name': 'target_dataset',
+                                           'range': 'DataSet'},
+                        'target_hierarchy': {'description': 'ClusterHierarchy '
+                                                            'providing the target '
+                                                            'entities. Populate for '
+                                                            'CellToClusterMapping and '
+                                                            'ClusterToClusterMapping.',
+                                             'inlined': False,
+                                             'name': 'target_hierarchy',
+                                             'range': 'ClusterHierarchy'}}})
 
     id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
@@ -1715,12 +1759,14 @@ class MappingSet(ProjectScoped):
     method_version: Optional[str] = Field(default=None, description="""Version of the mapping method.""", json_schema_extra = { "linkml_meta": {'alias': 'method_version', 'domain_of': ['MappingSet']} })
     author: Optional[str] = Field(default=None, description="""Author or organization who produced this mapping.""", json_schema_extra = { "linkml_meta": {'alias': 'author', 'domain_of': ['MappingSet']} })
     created_at: Optional[datetime ] = Field(default=None, description="""Timestamp when the mapping set was created.""", json_schema_extra = { "linkml_meta": {'alias': 'created_at', 'domain_of': ['MappingSet']} })
-    source_dataset: str = Field(default=..., description="""Dataset providing the source entities.""", json_schema_extra = { "linkml_meta": {'alias': 'source_dataset', 'domain_of': ['MappingSet']} })
-    target_dataset: str = Field(default=..., description="""Dataset providing the target entities.""", json_schema_extra = { "linkml_meta": {'alias': 'target_dataset', 'domain_of': ['MappingSet']} })
+    source_dataset: Optional[str] = Field(default=None, description="""Dataset providing the source entities. Populate for CellToCellMapping and CellToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'source_dataset', 'domain_of': ['MappingSet']} })
+    target_dataset: Optional[str] = Field(default=None, description="""Dataset providing the target entities. Populate for CellToCellMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'target_dataset', 'domain_of': ['MappingSet']} })
+    source_hierarchy: Optional[str] = Field(default=None, description="""ClusterHierarchy providing the source entities. Populate for ClusterToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'source_hierarchy', 'domain_of': ['MappingSet']} })
+    target_hierarchy: Optional[str] = Field(default=None, description="""ClusterHierarchy providing the target entities. Populate for CellToClusterMapping and ClusterToClusterMapping.""", json_schema_extra = { "linkml_meta": {'alias': 'target_hierarchy', 'domain_of': ['MappingSet']} })
     json_object: Optional[str] = Field(default=None, description="""Arbitrary method parameters (JSON string).""", json_schema_extra = { "linkml_meta": {'alias': 'json_object', 'domain_of': ['AlgorithmRun', 'MappingSet']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
     @field_validator('json_object')
     def pattern_json_object(cls, v):
@@ -1808,12 +1854,15 @@ class CellToCellMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellToClusterMapping(ProjectScoped):
     """
     Mapping between a source cell and a target cluster, with scores/probabilities.
+    The associated MappingSet should have source_dataset (cohort of source cells) and
+    target_hierarchy (taxonomy whose clusters are mapped to) populated; target_dataset
+    and source_hierarchy should be left empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],
@@ -1878,12 +1927,14 @@ class CellToClusterMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class ClusterToClusterMapping(ProjectScoped):
     """
     Mapping between a source cluster and a target cluster, with scores/probabilities.
+    The associated MappingSet should have source_hierarchy and target_hierarchy
+    populated; source_dataset and target_dataset should be left empty.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-mappings-schema',
          'mixins': ['ProjectScoped'],
@@ -1947,7 +1998,7 @@ class ClusterToClusterMapping(ProjectScoped):
                        'ClusterToClusterMapping']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellCellConnectivityLong(ProjectScoped):
@@ -2029,7 +2080,7 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class CellCellMeasurementMatrix(ProjectScoped):
@@ -2131,7 +2182,7 @@ NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_
                        'CellCellMeasurementMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped']} })
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 # Model rebuild
@@ -2139,6 +2190,7 @@ NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_
 SpatialLocation.model_rebuild()
 AlgorithmRun.model_rebuild()
 ClusterHierarchy.model_rebuild()
+Cluster.model_rebuild()
 HierarchyCategory.model_rebuild()
 BrainRegion.model_rebuild()
 BrainRegionAssociation.model_rebuild()
@@ -2146,7 +2198,6 @@ ProjectScoped.model_rebuild()
 DataSet.model_rebuild()
 DataItem.model_rebuild()
 DataItemDataSetAssociation.model_rebuild()
-Cluster.model_rebuild()
 ClusterMembership.model_rebuild()
 ZarrArray.model_rebuild()
 ZarrDataset.model_rebuild()

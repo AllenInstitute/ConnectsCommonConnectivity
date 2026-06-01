@@ -23,23 +23,32 @@ agent prompt that implements each item. Hard rules: never edit `models.py`; neve
   from generated models + registry. Prompt: `prompts/03_validation.md`. Blocked by 1.1.
 
 ## Phase 3 — writers
+- [ ] **3.0 Relocate backends into `io/`** — move `arrow_utils.py`→`io/arrow.py`,
+  `write_utils.py`→`io/write_utils.py`, with re-export shims at old paths. Part of
+  `prompts/04_writers.md`.
 - [ ] **3.1 Write dispatch core** (`io/writers.py`) — `write_models(models, settings=...)`:
   infer class → registry lookup → strict-validate → arrow convert → metadata → write per
-  `write_mode`. Reuses `arrow_utils` + `write_utils`. Prompt: `prompts/04_writers.md`.
+  `write_mode`. Reuses `io/arrow.py` + `io/write_utils.py`. Prompt: `prompts/04_writers.md`.
   Blocked by 0.1, 1.1, 2.1.
 - [ ] **3.2 Typed wrappers** — `write_dataset`, `write_dataitem`, `write_association`,
   `write_features`, `write_cluster`, `write_cluster_membership`,
   `write_cell_to_cluster_mapping`, `write_projection_matrix`. Part of `prompts/04_writers.md`.
 - [ ] **3.3 Reconcile `write_utils.py`** — make `append_new_dataitems` the
   `append_new_by_id` backend without breaking current callers. Part of `prompts/04_writers.md`.
+- [ ] **3.4 Write-side transforms** (`io/transforms.py`) — `populate_region_coverage`
+  (pre-write enrichment of ProjectionMeasurementMatrix). Part of `prompts/04_writers.md`.
 
 ## Phase 4 — readers
+- [ ] **4.0 Fold `parquet_loader.py` into `io/readers.py`** (re-export shim at old path).
+  Part of `prompts/05_readers.md`.
 - [ ] **4.1 Predicate-based readers** (`io/readers.py`) — `read_dataset`, `read_dataitem`,
   `read_features` scoped by project/dataset. Prompt: `prompts/05_readers.md`. Blocked by 1.1.
 - [ ] **4.2 Cross-dataset reads** — flagship: DataItems with ClusterMembership OR
   CellToClusterMapping to a given cluster set. Part of `prompts/05_readers.md`.
-- [ ] **4.3 Fold in analysis utils** — `populate_region_coverage`,
-  `compare_region_coverage` from `io/io_plans.md`. Part of `prompts/05_readers.md`.
+
+## Phase 4b — analysis
+- [ ] **4b.1 Analysis module** (`io/analysis.py`) — `compare_region_coverage` (read-side
+  overlap summary). Prompt: `prompts/08_analysis.md`. Blocked by 4.1.
 
 ## Phase 5 — notebook migration
 - [ ] **5.1 Migrate `_01_dataset_dataitem` notebooks** — Settings + typed writers; fixes

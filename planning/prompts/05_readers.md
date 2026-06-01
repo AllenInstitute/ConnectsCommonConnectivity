@@ -2,6 +2,10 @@
 
 > Prepend `00_shared_context.md`. Depends on `write_spec.py` (+ `config.py`).
 
+## Relocation first (clean structure)
+Fold `parquet_loader.py` into `io/readers.py` (the typed Parquet→models backend). Keep a
+re-export shim at the old `parquet_loader` path until notebook migration is done.
+
 ## Goal
 Create `src/connects_common_connectivity/io/readers.py`: convenient reads over the shared
 Delta tables, scoped by the registry, plus flexible cross-dataset/cross-schema queries.
@@ -27,10 +31,10 @@ settings=None) -> DataFrame`:
   if the membership/mapping tables are denormalized that way (check how the `_03`/cluster
   notebooks write the hierarchy before assuming).
 
-## Layer 3 — fold in analysis utils
-Port `populate_region_coverage(pmm, matrix)` and `compare_region_coverage(pmms)` from
-`io/io_plans.md` into this module (or a sibling `analysis.py` if cleaner). Keep their
-documented signatures and pure-function behavior.
+## Note — analysis is a separate module
+Do NOT put analysis utils here. `compare_region_coverage(pmms)` goes in `io/analysis.py`
+(`08_analysis.md`), and `populate_region_coverage` is a write-side transform
+(`io/transforms.py`, `04_writers.md`). Readers only read.
 
 ## Tests (`tests/test_readers.py`)
 - Round-trip: write models via the writers, read them back scoped, assert equality on

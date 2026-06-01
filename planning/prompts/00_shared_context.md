@@ -12,9 +12,16 @@ area-to-area, patch-seq multimodal) in one format, plus taxonomies/clusters.
    you need and why; do not change the schema.
 3. **Single source of truth = the LinkML schema / generated models.** Read field
    definitions from `models.py`; do not restate them.
-4. New IO code goes under `src/connects_common_connectivity/io/`. Do not move plotting
-   code out of `code/utils.py`.
-5. Read `planning/ARCHITECTURE.md` fully before starting. It governs the design.
+4. All IO code lives under `src/connects_common_connectivity/io/` — this is a relocation
+   to a clean package, not a parallel one. Existing IO modules at the package root
+   (`arrow_utils.py`, `write_utils.py`, `parquet_loader.py`) are MOVED into `io/` and
+   become backends, not reimplemented. See the "Target io/ structure" section of
+   ARCHITECTURE.md for the exact layout and where each existing file goes. Do not move
+   plotting code out of `code/utils.py`. Do not move `cli.py` or `models.py`.
+5. When you move a module, keep a one-line re-export shim at its old path (e.g.
+   `from .io.arrow import *`) until notebook migration is done, so nothing breaks
+   mid-transition.
+6. Read `planning/ARCHITECTURE.md` fully before starting. It governs the design.
 
 ## What already exists — reuse, don't rebuild
 - `models.py`: generated pydantic v2 classes incl. `DataSet`, `DataItem`,

@@ -2,6 +2,13 @@
 
 > Prepend `00_shared_context.md`. Depends on `config.py`, `write_spec.py`, `validation.py`.
 
+## Relocation first (clean structure)
+Before writing new code, MOVE the existing backends into `io/` (with re-export shims at the
+old paths until notebook migration is done):
+- `arrow_utils.py` → `io/arrow.py`
+- `write_utils.py` → `io/write_utils.py`
+All new code imports from the `io/` locations.
+
 ## Goal
 Create `src/connects_common_connectivity/io/writers.py`: a single write dispatch that uses
 the registry so notebooks never hand-write `mode` / `predicate` / `partition_by` again.
@@ -32,7 +39,15 @@ Signatures should be ergonomic (accept the model(s) and optional `settings`).
 
 ## Wide feature matrices
 `CellFeatureMatrix` is wide Parquet. Route it through a matrix-specific path using
-`build_cell_feature_matrix_schema`; do not force it into the row-Delta path.
+`build_cell_feature_matrix_schema` (now in `io/arrow.py`); do not force it into the
+row-Delta path.
+
+## Write-side transforms (`io/transforms.py`)
+Create `io/transforms.py` for pre-write enrichment. Port `populate_region_coverage(pmm,
+matrix)` from `io/io_plans.md`: derive `region_coverage` from the dense values array,
+return a copy of the `ProjectionMeasurementMatrix` (pure function, no mutation, no IO).
+`write_projection_matrix` should call it (or accept an already-enriched matrix). Do NOT put
+`compare_region_coverage` here — that is read-side analysis (see `08_analysis.md`).
 
 ## Reconcile `write_utils.py`
 Make `append_new_dataitems` the `append_new_by_id` backend. If you must generalize it

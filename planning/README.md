@@ -12,10 +12,12 @@ that implement each piece. Created 2026-06-01.
   - `01_config.md` — global output path (`Settings`, no new dep).
   - `02_write_spec.md` — the registry (source of truth) + drift test.
   - `03_validation.md` — auto-derived strict submodels.
-  - `04_writers.md` — write dispatch + typed wrappers (fixes the patchseq bug).
-  - `05_readers.md` — predicate-based + cross-dataset reads.
+  - `04_writers.md` — write dispatch + typed wrappers + `io/transforms.py` (fixes the
+    patchseq bug; relocates `arrow_utils`/`write_utils` into `io/`).
+  - `05_readers.md` — predicate-based + cross-dataset reads (folds in `parquet_loader`).
   - `06_notebook_migration.md` — migrate ETL notebooks to the new API.
   - `07_tests.md` — safe-writing test suite.
+  - `08_analysis.md` — read-side analysis (`compare_region_coverage`).
 
 ## Two hard rules (repeated everywhere on purpose)
 1. **Never edit `src/connects_common_connectivity/models.py`** — auto-generated from LinkML.

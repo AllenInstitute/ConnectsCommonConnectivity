@@ -35,8 +35,49 @@ live in `planning/prompts/`. The task breakdown lives in `planning/TODO.md`.
 - `parquet_loader.py` — `load_parquet_to_models(...)` (Parquet → models with a report).
 - `cli.py` — LinkML `SchemaView`-based full validation (the `ccc` command). Kept as the
   occasional heavyweight conformance check, **not** on the hot write path.
-- `io/io_plans.md` — pre-existing analysis-util plans (`populate_region_coverage`,
-  `compare_region_coverage`). Keep; fold into the read/analysis module.
+- `io/io_plans.md` — two pre-existing ideas that are **different concerns** and must land in
+  different modules (see below):
+  - `populate_region_coverage(pmm, matrix)` — derives `region_coverage` from the dense
+    values **before** a matrix is written → a **write-side transform**.
+  - `compare_region_coverage(pmms)` — summarizes overlap across already-written matrices →
+    **read/analysis**.
+
+## Target `io/` structure (clean is the goal)
+
+The existing IO files are scattered at the package root. The target is a single tidy `io/`
+package; the existing modules are **relocated into it and become backends** the new files
+call. "Do not rebuild" means *move and wrap, never reimplement*.
+
+```
+src/connects_common_connectivity/
+  models.py            # generated, UNTOUCHED, stays at root
+  cli.py               # CLI entry point, stays at root; calls io.validation full check
+  io/
+    config.py          # NEW  Settings (global output_root)
+    write_spec.py      # NEW  registry — source of truth
+    validation.py      # NEW  auto-derived strict submodels
+    arrow.py           # MOVED from arrow_utils.py  (models <-> Arrow conversion)
+    writers.py         # NEW  write_models() + typed wrappers
+    write_utils.py     # MOVED from root  (append-by-id backend, walk_ancestors)
+    transforms.py      # NEW  write-side enrichment incl. populate_region_coverage
+    readers.py         # MOVED + folds parquet_loader.py + predicate/cross-dataset reads
+    analysis.py        # NEW  compare_region_coverage + future cross-dataset analysis
+```
+
+Where each existing file goes:
+- `arrow_utils.py` → `io/arrow.py`. Conversion layer used by `writers.py`. Pure move.
+- `write_utils.py` → `io/write_utils.py`. `append_new_dataitems` becomes the
+  `append_new_by_id` backend; `walk_ancestors` is used by membership/mapping writers and by
+  cross-dataset reads. Pure move.
+- `parquet_loader.py` → folded into `io/readers.py` (Parquet→models with report becomes the
+  typed-read backend). Pure move/merge.
+- `cli.py` stays at the package root as the `ccc` entry point; it calls into
+  `io/validation.py` for the occasional full LinkML conformance check.
+- `models.py` stays at root, generated, never edited.
+
+Migration safety: while notebooks are being migrated, the moved modules may keep one-line
+re-export shims at their old import paths (e.g. `from .io.arrow import *`) so nothing breaks
+mid-transition; delete the shims once `06_notebook_migration` is complete.
 
 ## The bug this design fixes
 
@@ -144,40 +185,51 @@ validator remains the separate, occasional full-conformance check.
 Example cross-field rule: an association's `dataset_id` must refer to a DataSet already
 present for that `project_id` (referential safety before write).
 
-## Module 4 — `writers.py` (+ keep `write_utils.py`)
+## Module 4 — `writers.py` (+ `io/write_utils.py`, `io/arrow.py`, `io/transforms.py`)
 
 A single dispatch core plus thin typed wrappers:
 
 - `write_models(models, *, settings=None)` — infers the class, looks up the registry,
-  validates each model via the strict submodel, converts via `arrow_utils`, attaches
+  validates each model via the strict submodel, converts via `io/arrow.py`, attaches
   LinkML metadata, then writes per `write_mode` (scoped overwrite with the
-  registry-built predicate, or `append_new_by_id` via the existing helper).
+  registry-built predicate, or `append_new_by_id` via the backend).
 - Wrappers for ergonomics and discoverability: `write_dataset`, `write_dataitem`,
   `write_association`, `write_features`, `write_cluster`, `write_cluster_membership`,
   `write_cell_to_cluster_mapping`, `write_projection_matrix`, etc. Each is a one-liner
   over `write_models`.
-- `write_utils.py` stays: `append_new_dataitems` becomes the `append_new_by_id` backend;
-  `walk_ancestors` stays for membership/mapping denormalization. Generalize
+- `io/write_utils.py` (moved from root): `append_new_dataitems` is the `append_new_by_id`
+  backend; `walk_ancestors` is used by membership/mapping writers. Generalize
   `append_new_dataitems` only if needed (e.g. parametrize the partition column), without
-  breaking its current callers.
+  breaking callers.
+- `io/transforms.py` holds **write-side enrichment** run before a write — notably
+  `populate_region_coverage(pmm, matrix)` from `io_plans.md`, which derives
+  `region_coverage` from the dense values. `write_projection_matrix` calls it (or accepts
+  an already-enriched matrix). Keep it a pure function (no IO, no mutation of input).
 
-Wide feature matrices (`CellFeatureMatrix`) use `build_cell_feature_matrix_schema` and a
-matrix-specific writer path, since they are wide Parquet, not row-modeled Delta tables.
+Wide feature matrices (`CellFeatureMatrix`) use `build_cell_feature_matrix_schema` (in
+`io/arrow.py`) and a matrix-specific writer path, since they are wide Parquet, not
+row-modeled Delta tables.
 
-## Module 5 — `readers.py` (+ fold in `io_plans.md`)
+## Module 5 — `readers.py` (folds `parquet_loader.py`)
 
 Two layers:
 
 - Thin predicate-based readers mirroring the write spec: `read_dataset`, `read_dataitem`,
-  `read_features`, scoped by `project_id`/`dataset_id`, returning polars/pandas.
+  `read_features`, scoped by `project_id`/`dataset_id`, returning polars/pandas. Typed
+  reads (Parquet→models) use the folded-in `load_parquet_to_models`.
 - Flexible cross-dataset / cross-schema reads now that datasets share tables. Flagship
   example: "read all DataItems that have either a ClusterMembership or a
   CellToClusterMapping to a given set of clusters" — a cross-table query joining
   membership/mapping tables on cluster ids and returning the union of matching DataItems,
   regardless of source dataset/modality. Users can still drop to raw
   `polars.read_delta` for ad-hoc queries; the readers are conveniences, not a wall.
-- Fold the `io_plans.md` analysis utilities (`populate_region_coverage`,
-  `compare_region_coverage`) into this module.
+
+## Module 6 — `analysis.py` (read-side analysis)
+
+Read-side analysis over already-written tables. Seed with `compare_region_coverage(pmms)`
+from `io_plans.md` (shared vs exclusive region coverage across matrices). This is distinct
+from `transforms.py`: analysis reads finished data and summarizes; transforms enrich data
+on its way in. Future cross-dataset analyses live here.
 
 ## Notebook migration (no logic, no schema, no models.py changes)
 

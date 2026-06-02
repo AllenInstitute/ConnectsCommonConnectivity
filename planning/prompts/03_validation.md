@@ -1,9 +1,14 @@
-# Agent prompt — Validation (auto-derived strict submodels)
+# Agent prompt — Write-validation (auto-derived strict submodels)
 
 > Prepend `00_shared_context.md`. Depends on `write_spec.py`.
 
+## Naming
+File is `io/write_validation.py`, NOT `io/validation.py`: this is specifically write-safety
+validation coupled to `write_spec`. The generic word "validation" is already claimed by
+`cli.py`'s LinkML full-conformance check — keep the two distinct.
+
 ## Goal
-Create `src/connects_common_connectivity/io/validation.py` that derives a STRICT pydantic
+Create `src/connects_common_connectivity/io/write_validation.py` that derives a STRICT pydantic
 submodel per class **at runtime** from (a) the generated model in `models.py` and (b) the
 registry's `required_for_write` + `cross_field_rules`. Single source of truth: nothing
 is restated from the schema.
@@ -18,16 +23,17 @@ is restated from the schema.
    - Cache the derived class (e.g. `functools.lru_cache`) so it's built once.
 2. `validate_for_write(model) -> model` (or list): run the instance through the strict
    submodel, raising a clear error that names the class, the failing slot/rule, and the
-   offending value. This runs on the hot write path, so keep it pydantic-only (fast); do
-   NOT call the LinkML/`cli.py` validator here.
-3. Implement a starter cross-field rule registry (a dict name → callable) including:
-   - `association_dataset_exists`: a `DataItemDataSetAssociation`'s `dataset_id` must
-     exist among written DataSets for that `project_id`. (May need a reader/lookup; if the
-     reader module isn't ready, implement the hook and mark it TODO without breaking the
-     import.)
-   Add others only as the registry references them.
+   offending value. This runs on the hot write path, so keep it pydantic-only (fast, **no
+   I/O**); do NOT call the LinkML/`cli.py` validator here.
+3. Implement a starter cross-field rule registry (a dict name → callable). Rules here MUST
+   be pure: they inspect only the model instance in hand, do no I/O, and never read other
+   tables. Add rules only as the registry references them.
+   - Do NOT implement `association_dataset_exists` here. It reads written DataSets, so it is
+     a referential check, not a structural one — it belongs off the hot path as an opt-in
+     `check_refs` in Phase 4b (`08_analysis.md`), after readers exist. Keeping it out of
+     this module is what frees Phase 2 from any dependency on Phase 4.
 
-## Tests (`tests/test_validation.py`)
+## Tests (`tests/test_write_validation.py`)
 - A model missing a `required_for_write` slot fails `validate_for_write` before any IO.
 - A valid model passes and is returned unchanged (round-trip equality on fields).
 - The generated `models.py` class is unchanged after deriving the strict model

@@ -18,7 +18,7 @@ Define a dataclass/pydantic model `WriteSpec` with fields:
 - `required_for_write: list[str]` — slots that must be non-null to write safely (may be
   stricter than the schema's `required`).
 - `cross_field_rules: list[str]` — names of cross-field checks (implemented in
-  `validation.py`); empty for now is fine.
+  `write_validation.py`); empty for now is fine.
 
 Expose `REGISTRY: dict[str, WriteSpec]` keyed by class name, and a
 `get_spec(model_or_cls) -> WriteSpec` lookup.

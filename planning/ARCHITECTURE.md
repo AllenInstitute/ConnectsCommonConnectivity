@@ -6,17 +6,10 @@ live in `planning/prompts/`. The task breakdown lives in `planning/TODO.md`.
 
 ## Hard constraints (read before any work)
 
-1. **Do not edit `src/connects_common_connectivity/models.py`.** It is auto-generated
-   from the LinkML YAMLs in `schemas/`. Any change to the data model happens in the
-   YAMLs and is regenerated — never hand-edited.
-2. **Do not change the LinkML schemas without explicit permission from YY.** If safe
-   writing turns out to need a new slot (e.g. a clearer project/dataset scoping key),
-   stop and ask first. Propose the change in writing; do not edit `schemas/*.yaml`
-   pre-emptively.
-3. **Single source of truth = the LinkML schema.** The registry and the derived
-   validators read from the generated models; they never restate field definitions.
-4. New IO code lives under `src/connects_common_connectivity/io/`. Plotting stays in
-   `code/utils.py`. Notebooks are migrated to call the new API, not to embed logic.
+The non-negotiable rules live in `prompts/00_shared_context.md` and are not restated here:
+never edit `models.py` (generated) or `schemas/*.yaml` (ask YY first); the LinkML schema is
+the single source of truth; all IO code lives under `src/connects_common_connectivity/io/`.
+This document assumes those and adds the design on top.
 
 ## What exists today (do not rebuild)
 
@@ -51,33 +44,49 @@ call. "Do not rebuild" means *move and wrap, never reimplement*.
 ```
 src/connects_common_connectivity/
   models.py            # generated, UNTOUCHED, stays at root
-  cli.py               # CLI entry point, stays at root; calls io.validation full check
+  cli.py               # CLI entry point, stays at root; full LinkML conformance check
+  config.py            # NEW  package-wide Settings (output_root, dry_run, ...) — see below
   io/
-    config.py          # NEW  Settings (global output_root)
+    __init__.py        # NEW  curated public API (what users import); __all__ + docstring
     write_spec.py      # NEW  registry — source of truth
-    validation.py      # NEW  auto-derived strict submodels
-    arrow.py           # MOVED from arrow_utils.py  (models <-> Arrow conversion)
-    writers.py         # NEW  write_models() + typed wrappers
+    write_validation.py# NEW  auto-derived strict submodels (write-safety validation)
+    arrow_utils.py     # MOVED from root (no rename)  (models <-> Arrow conversion)
+    writers.py         # NEW  write_models() + typed wrappers + write-side transforms
     write_utils.py     # MOVED from root  (append-by-id backend, walk_ancestors)
-    transforms.py      # NEW  write-side enrichment incl. populate_region_coverage
     readers.py         # MOVED + folds parquet_loader.py + predicate/cross-dataset reads
-    analysis.py        # NEW  compare_region_coverage + future cross-dataset analysis
 ```
 
+`config.py` lives at the **package root**, not in `io/`: configuration is package-wide
+(`cli.py` and future plotting/analysis code read it too), so the general name belongs in the
+general namespace next to `models.py`. Conversely the io validator is named
+`write_validation.py`, not `validation.py`: it is specifically write-safety validation
+coupled to `write_spec`, and the bare word "validation" is already claimed by `cli.py`'s
+LinkML conformance check — two different validations, so neither owns the generic name.
+
+Seed-stage modules are NOT split out prematurely. Write-side enrichment
+(`populate_region_coverage`) starts as a section at the top of `writers.py`; read-side
+analysis (`compare_region_coverage`) starts in `readers.py`. Promote either to its own
+module (`transforms.py` / `analysis.py`) only when a second function arrives — that move is
+a pure relocation with no public-API change because users import from `io/__init__.py`.
+
 Where each existing file goes:
-- `arrow_utils.py` → `io/arrow.py`. Conversion layer used by `writers.py`. Pure move.
+- `arrow_utils.py` → `io/arrow_utils.py`. Conversion layer used by `writers.py`. Pure move.
 - `write_utils.py` → `io/write_utils.py`. `append_new_dataitems` becomes the
   `append_new_by_id` backend; `walk_ancestors` is used by membership/mapping writers and by
   cross-dataset reads. Pure move.
 - `parquet_loader.py` → folded into `io/readers.py` (Parquet→models with report becomes the
   typed-read backend). Pure move/merge.
-- `cli.py` stays at the package root as the `ccc` entry point; it calls into
-  `io/validation.py` for the occasional full LinkML conformance check.
+- `cli.py` stays at the package root as the `ccc` entry point; it owns the occasional full
+  LinkML conformance check (separate from `io/write_validation.py`, which is the fast
+  write-path check).
+- `config.py` is NEW at the package root (package-wide settings; see structure note above).
 - `models.py` stays at root, generated, never edited.
 
 Migration safety: while notebooks are being migrated, the moved modules may keep one-line
-re-export shims at their old import paths (e.g. `from .io.arrow import *`) so nothing breaks
-mid-transition; delete the shims once `06_notebook_migration` is complete.
+re-export shims at their old import paths (e.g. `from .io.arrow_utils import *`) so nothing breaks
+mid-transition. Shim removal is a tracked task (TODO 5.4), gated by a test that asserts no
+old import path is referenced anywhere once migration is complete — otherwise the two import
+paths linger and become exactly the clutter this redesign removes.
 
 ## The bug this design fixes
 
@@ -124,28 +133,51 @@ LinkML schema ──▶│  models.py (generated)      │
                     Settings (global output_root)
 ```
 
-## Module 1 — `config.py` (global output path)
+## Module 1 — `config.py` (package root; discovered config file)
 
-Decision: **plain pydantic `BaseModel`**, version-controlled default in code, optional
-env override. No new dependency (no pydantic-settings).
+Decision: settings live in a **declarative, version-controlled `ccc_config.yaml`** at the
+repo root, discovered by walking up from the working directory (the `pyproject.toml` /
+`ruff` / `pytest` pattern) and loaded into a validated pydantic `Settings`. No `%run`, no
+process-global mutation, no per-notebook setup. No new dependency (pydantic + PyYAML, the
+latter already in the tree via LinkML).
+
+```yaml
+# ccc_config.yaml  (repo root — the ONE place values live)
+output_root: ../scratch/em_patchseq_wnm_v1/
+dry_run: false
+```
 
 ```python
 class Settings(BaseModel):
-    output_root: Path = Path("../scratch/em_patchseq_wnm_v1/")
-    # add knobs here later (dry_run, schema_version_pin, ...) as needed
+    output_root: Path          # required, no default
+    dry_run: bool = False
+    # room for more knobs (schema_version_pin, ...) later
 
-    @classmethod
-    def load(cls) -> "Settings":
-        default = cls.model_fields["output_root"].default
-        return cls(output_root=os.environ.get("CCC_OUTPUT_ROOT", default))
+@lru_cache
+def get_settings() -> Settings:
+    path = find_config_file("ccc_config.yaml")        # walk cwd → parents
+    if path is None:
+        raise RuntimeError("No ccc_config.yaml found — create one at the repo root "
+                           "with output_root: ...")
+    data = yaml.safe_load(path.read_text())
+    if env := os.environ.get("CCC_OUTPUT_ROOT"):      # developer escape hatch, path only
+        data["output_root"] = env
+    return Settings(**data)
 ```
 
-Rationale: the default is readable in git without running anything and adds no
-dependency; the `CCC_OUTPUT_ROOT` env override is the escape hatch for CodeOcean, where
-the write location differs from local. Notebooks replace the hardcoded `OUTPUT_ROOT`
-string with `settings = Settings.load()` and print the resolved value at the top.
-A `table_path(settings, "dataset")` helper resolves per-table subdirectories so notebooks
-never concatenate path strings.
+Resolution precedence: **explicit `settings=` arg (per call) > `CCC_OUTPUT_ROOT` env >
+`ccc_config.yaml` > error.** The file is the source of truth and is validated by pydantic on
+load; the env var is a subordinate developer override for `output_root` only (it cannot
+express structured knobs like `dry_run`). There is no built-in default path — a missing file
+fails loudly rather than writing somewhere arbitrary. `get_settings()` is a pure, cached
+function of the filesystem (clearable in tests), not a mutable global.
+
+How the ETL uses it (kills the per-notebook setup): there is no config cell at all. A
+notebook just imports and calls `write_dataset(...)` / `read_dataset(...)`; the library
+discovers `ccc_config.yaml` on its own. Writers/readers do `settings = settings or
+get_settings()`. To repoint local vs CodeOcean, edit the one file (or set `CCC_OUTPUT_ROOT`).
+A `table_path(settings, "dataset")` helper resolves per-table subdirectories so nothing
+concatenates path strings.
 
 ## Module 2 — `write_spec.py` (the registry)
 
@@ -171,7 +203,7 @@ Predicate is built from `scope_columns` + the row values, e.g.
 `"project_id = 'visp_patchseq' AND id = 'visp_exc_patchseq'"`. This is exactly the bug
 fix: DataSet now carries `id` in its scope.
 
-## Module 3 — `validation.py` (auto-derived strict submodels)
+## Module 3 — `io/write_validation.py` (auto-derived strict submodels)
 
 Decision: **auto-derived** strict submodels — single source of truth.
 
@@ -179,35 +211,44 @@ Decision: **auto-derived** strict submodels — single source of truth.
 (a) flips each slot in the registry's `required_for_write` to required, and (b) attaches
 the registry's `cross_field_rules` as pydantic `model_validator`s. No field definitions
 are restated; everything is read from `models.py` + the registry. `models.py` is never
-touched. Validation runs on the hot write path (fast, pydantic-only). The LinkML/`cli.py`
-validator remains the separate, occasional full-conformance check.
+touched. Validation runs on the hot write path (fast, pydantic-only, **no I/O**). The
+LinkML/`cli.py` validator remains the separate, occasional full-conformance check.
 
-Example cross-field rule: an association's `dataset_id` must refer to a DataSet already
-present for that `project_id` (referential safety before write).
+Hot-path validation is purely structural: required-slot enforcement plus pure cross-field
+rules that only inspect the model in hand. **Referential checks that read other tables do
+NOT belong on the hot path.** Example: "an association's `dataset_id` must refer to a
+DataSet already present for that `project_id`" requires a reader, so it is an opt-in check
+(`write_models(..., check_refs=True)`) implemented after readers exist (Phase 4b), not a
+strict-submodel validator. This keeps Phase 2 free of any dependency on Phase 4.
 
-## Module 4 — `writers.py` (+ `io/write_utils.py`, `io/arrow.py`, `io/transforms.py`)
+## Module 4 — `writers.py` (+ `io/write_utils.py`, `io/arrow_utils.py`)
 
 A single dispatch core plus thin typed wrappers:
 
 - `write_models(models, *, settings=None)` — infers the class, looks up the registry,
-  validates each model via the strict submodel, converts via `io/arrow.py`, attaches
+  validates each model via the strict submodel, converts via `io/arrow_utils.py`, attaches
   LinkML metadata, then writes per `write_mode` (scoped overwrite with the
   registry-built predicate, or `append_new_by_id` via the backend).
-- Wrappers for ergonomics and discoverability: `write_dataset`, `write_dataitem`,
+- Typed wrappers for discoverability (`write_dataset`, `write_dataitem`,
   `write_association`, `write_features`, `write_cluster`, `write_cluster_membership`,
-  `write_cell_to_cluster_mapping`, `write_projection_matrix`, etc. Each is a one-liner
-  over `write_models`.
+  `write_cell_to_cluster_mapping`, `write_projection_matrix`). `write_models` is the one
+  real entry point; the wrappers are sugar. To avoid hand-maintaining eight one-liners that
+  must stay in lockstep with the registry, **generate them from the registry** (a small
+  factory binding the class) and re-export the generated names from `io/__init__.py`. A
+  hand-written wrapper is justified only where a class needs a non-uniform signature
+  (e.g. `write_projection_matrix` taking the dense matrix for enrichment).
 - `io/write_utils.py` (moved from root): `append_new_dataitems` is the `append_new_by_id`
   backend; `walk_ancestors` is used by membership/mapping writers. Generalize
   `append_new_dataitems` only if needed (e.g. parametrize the partition column), without
   breaking callers.
-- `io/transforms.py` holds **write-side enrichment** run before a write — notably
-  `populate_region_coverage(pmm, matrix)` from `io_plans.md`, which derives
+- **Write-side enrichment** lives as a section at the top of `writers.py` (not yet its own
+  module): `populate_region_coverage(pmm, matrix)` from `io_plans.md` derives
   `region_coverage` from the dense values. `write_projection_matrix` calls it (or accepts
   an already-enriched matrix). Keep it a pure function (no IO, no mutation of input).
+  Split into `io/transforms.py` only when a second transform appears.
 
 Wide feature matrices (`CellFeatureMatrix`) use `build_cell_feature_matrix_schema` (in
-`io/arrow.py`) and a matrix-specific writer path, since they are wide Parquet, not
+`io/arrow_utils.py`) and a matrix-specific writer path, since they are wide Parquet, not
 row-modeled Delta tables.
 
 ## Module 5 — `readers.py` (folds `parquet_loader.py`)
@@ -223,17 +264,16 @@ Two layers:
   membership/mapping tables on cluster ids and returning the union of matching DataItems,
   regardless of source dataset/modality. Users can still drop to raw
   `polars.read_delta` for ad-hoc queries; the readers are conveniences, not a wall.
-
-## Module 6 — `analysis.py` (read-side analysis)
-
-Read-side analysis over already-written tables. Seed with `compare_region_coverage(pmms)`
-from `io_plans.md` (shared vs exclusive region coverage across matrices). This is distinct
-from `transforms.py`: analysis reads finished data and summarizes; transforms enrich data
-on its way in. Future cross-dataset analyses live here.
+- **Read-side analysis** lives as a section in `readers.py` to start:
+  `compare_region_coverage(pmms)` from `io_plans.md` (shared vs exclusive region coverage
+  across matrices). It reads finished data and summarizes — the mirror image of write-side
+  enrichment, which augments data on the way in. Split into `io/analysis.py` only when a
+  second analysis function appears.
 
 ## Notebook migration (no logic, no schema, no models.py changes)
 
-For each ETL notebook: replace hardcoded `OUTPUT_ROOT` with `Settings.load()`, replace
+For each ETL notebook: delete hardcoded `OUTPUT_ROOT` (no config cell — the library
+discovers `ccc_config.yaml`), replace
 direct `write_deltalake(...)` calls with the typed writers, and delete the per-cell
 `mode`/`predicate`/`partition_by` bookkeeping (now owned by the registry). Verification
 cells stay. The `visp_*_patchseq` bug is fixed automatically once DataSet writes go

@@ -3,24 +3,25 @@
 > Prepend `00_shared_context.md`. Run after writers/readers exist (can be built alongside).
 
 ## Goal
-A focused pytest suite under `tests/` covering the safe-writing guarantees. Use small
-synthetic models written to a `tmp_path` Delta root (set `CCC_OUTPUT_ROOT` to `tmp_path`)
-so tests never touch real data.
+Pull the suite together and fill the gaps. Several cases are already specified in their
+owning prompts — do NOT re-specify them here, just ensure they exist and run as one suite:
+- Registry↔schema drift → `02_write_spec.md` (`tests/test_write_spec.py`).
+- Patchseq shared-partition regression, idempotency, append-new-by-id, predicate
+  construction → `04_writers.md` (`tests/test_writers.py`).
+- Round-trip + cross-dataset reads → `05_readers.md` (`tests/test_readers.py`).
+- Strict-validation failures → `03_validation.md` (`tests/test_write_validation.py`).
+- Public-API surface → `09_public_api.md` (`tests/test_public_api.py`).
 
-## Required cases
-1. **Shared-partition safety (patchseq regression):** write `DataSet(id="A")` and
-   `DataSet(id="B")` both with `project_id="P"`; assert both rows survive. This is the
-   core regression for the bug.
-2. **Idempotency:** writing the same models twice → no duplicates, no row loss, for both
-   `overwrite_scoped` and `append_new_by_id`.
-3. **Append-new-by-id:** second write with one new + one existing id appends exactly one.
-4. **Strict validation:** a model missing a `required_for_write` slot, or violating a
-   cross-field rule, raises before any file is written (assert the Delta dir is unchanged).
-5. **Registry↔schema drift:** (from `02_write_spec.md`) every registry entry's class and
-   columns exist in `models.py`.
-6. **Round-trip:** write → read back via readers → equality on scope columns.
-7. **Predicate construction:** the predicate is derived from `scope_columns` (assert the
-   DataSet predicate includes both `project_id` and `id`).
+Use small synthetic models written to a `tmp_path` Delta root (set `CCC_OUTPUT_ROOT` to
+`tmp_path`) so tests never touch real data.
+
+## Gaps this prompt owns (not covered elsewhere)
+1. **No-shim regression (TODO 5.4):** after migration, assert no module imports the old
+   paths `arrow_utils`, `write_utils`, `parquet_loader` (grep the repo or import-scan); the
+   shims must be gone, not lingering.
+2. **End-to-end smoke:** a single test exercising write → read → analysis on a tiny fixture,
+   proving the modules compose.
+3. Confirm the whole suite is collected and green together (no per-prompt drift).
 
 ## Reporting
 Run `pytest -q` and paste the summary. Do not mark complete with failures.

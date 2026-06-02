@@ -1,11 +1,11 @@
 # Agent prompt — Writers (dispatch core + typed wrappers)
 
-> Prepend `00_shared_context.md`. Depends on `config.py`, `write_spec.py`, `validation.py`.
+> Prepend `00_shared_context.md`. Depends on `config.py`, `write_spec.py`, `write_validation.py`.
 
 ## Relocation first (clean structure)
 Before writing new code, MOVE the existing backends into `io/` (with re-export shims at the
 old paths until notebook migration is done):
-- `arrow_utils.py` → `io/arrow.py`
+- `arrow_utils.py` → `io/arrow_utils.py`
 - `write_utils.py` → `io/write_utils.py`
 All new code imports from the `io/` locations.
 
@@ -16,7 +16,8 @@ the registry so notebooks never hand-write `mode` / `predicate` / `partition_by`
 ## Core
 `write_models(models, *, settings=None) -> WriteResult`:
 1. Accept a single model or an iterable; infer the class; require homogeneous type.
-2. `settings = settings or Settings.load()`.
+2. `settings = settings or get_settings()` (loads the discovered `ccc_config.yaml`; an
+   explicit `settings=` still wins).
 3. Look up the `WriteSpec` via `get_spec`.
 4. Validate every model with `validate_for_write` (strict submodel) BEFORE any IO.
 5. Convert via `arrow_utils.models_to_table` + `build_arrow_schema`; attach metadata with
@@ -32,22 +33,30 @@ the registry so notebooks never hand-write `mode` / `predicate` / `partition_by`
      passing `project_id` and id column.
 8. Return a small result object: rows written/appended, path, mode, predicate used.
 
-## Typed wrappers (one-liners over `write_models`)
-`write_dataset`, `write_dataitem`, `write_association`, `write_features`, `write_cluster`,
-`write_cluster_membership`, `write_cell_to_cluster_mapping`, `write_projection_matrix`.
-Signatures should be ergonomic (accept the model(s) and optional `settings`).
+## Typed wrappers (generated from the registry)
+`write_models` is the one real entry point. Provide the discoverable per-class names
+(`write_dataset`, `write_dataitem`, `write_association`, `write_features`, `write_cluster`,
+`write_cluster_membership`, `write_cell_to_cluster_mapping`, `write_projection_matrix`) but
+**generate them from the registry** with a small factory that binds the class, rather than
+hand-writing eight one-liners that can drift from the registry. Hand-write a wrapper only
+where the signature is non-uniform (e.g. `write_projection_matrix` accepting the dense
+matrix for enrichment). The generated names are re-exported from `io/__init__.py` (Phase 3b).
 
 ## Wide feature matrices
 `CellFeatureMatrix` is wide Parquet. Route it through a matrix-specific path using
-`build_cell_feature_matrix_schema` (now in `io/arrow.py`); do not force it into the
+`build_cell_feature_matrix_schema` (now in `io/arrow_utils.py`); do not force it into the
 row-Delta path.
 
-## Write-side transforms (`io/transforms.py`)
-Create `io/transforms.py` for pre-write enrichment. Port `populate_region_coverage(pmm,
-matrix)` from `io/io_plans.md`: derive `region_coverage` from the dense values array,
-return a copy of the `ProjectionMeasurementMatrix` (pure function, no mutation, no IO).
-`write_projection_matrix` should call it (or accept an already-enriched matrix). Do NOT put
-`compare_region_coverage` here — that is read-side analysis (see `08_analysis.md`).
+## Write-side transform (section in `writers.py`, not a new module)
+Add pre-write enrichment as a clearly-marked section at the top of `writers.py` — do NOT
+create `io/transforms.py` yet (single function = premature module). Port
+`populate_region_coverage(pmm, matrix)` from `io/io_plans.md`: derive `region_coverage`
+from the dense values array, return a copy of the `ProjectionMeasurementMatrix` (pure
+function, no mutation, no IO). `write_projection_matrix` calls it (or accepts an
+already-enriched matrix). When a second write-side transform appears, relocate the section
+into `io/transforms.py` — a pure move, no public-API change (users import via
+`io/__init__.py`). Do NOT put `compare_region_coverage` here — that is read-side analysis
+(see `08_analysis.md`).
 
 ## Reconcile `write_utils.py`
 Make `append_new_dataitems` the `append_new_by_id` backend. If you must generalize it

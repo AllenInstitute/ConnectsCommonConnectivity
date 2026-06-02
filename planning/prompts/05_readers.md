@@ -31,10 +31,13 @@ settings=None) -> DataFrame`:
   if the membership/mapping tables are denormalized that way (check how the `_03`/cluster
   notebooks write the hierarchy before assuming).
 
-## Note — analysis is a separate module
-Do NOT put analysis utils here. `compare_region_coverage(pmms)` goes in `io/analysis.py`
-(`08_analysis.md`), and `populate_region_coverage` is a write-side transform
-(`io/transforms.py`, `04_writers.md`). Readers only read.
+## Read-side analysis (section in this file, not a new module)
+`compare_region_coverage(pmms)` is read-side analysis and starts as a clearly-marked section
+in `readers.py` — do NOT create `io/analysis.py` yet (single function = premature module).
+Its implementation is specified in `08_analysis.md`; build it there. When a second analysis
+function appears, relocate the section to `io/analysis.py` (pure move, no public-API change).
+`populate_region_coverage` is a write-side transform and stays with the writers
+(`04_writers.md`), not here.
 
 ## Tests (`tests/test_readers.py`)
 - Round-trip: write models via the writers, read them back scoped, assert equality on

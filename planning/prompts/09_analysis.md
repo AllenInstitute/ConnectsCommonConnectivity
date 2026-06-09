@@ -1,5 +1,8 @@
-# Agent prompt — Read-side analysis + referential check (Phase 4b)
+# Agent prompt — Read-side analysis + referential check
 
+> **DEFERRED — not actionable this round.** Rides with the read-side work, after config →
+> write IO → validation → notebook migration. Design kept for reference.
+>
 > Prepend `00_shared_context.md`. Depends on `readers.py` (uses read outputs).
 
 Two things land here, both requiring readers to exist:
@@ -21,7 +24,7 @@ Port `compare_region_coverage(pmms)` from `io/io_plans.md`:
 
 ## B. Opt-in referential check — `check_refs`
 This is the home for the referential rule deliberately kept off the hot path in
-`03_validation.md`. Implement it as an opt-in step invoked by writers:
+`05_validation.md`. Implement it as an opt-in step invoked by writers:
 - `write_models(..., check_refs=False)` — when True, before writing a
   `DataItemDataSetAssociation`, read the `dataset` table (via the readers) and assert each
   `dataset_id` exists for that `project_id`; raise a clear error naming the missing id.

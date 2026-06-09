@@ -1,10 +1,15 @@
 # Agent prompt — Readers (predicate-based + cross-dataset)
 
+> **DEFERRED — not actionable this round.** Priority is config → write IO → validation →
+> notebook migration. This design is kept for reference; do not start it until the write path
+> is done and notebooks are migrated.
+>
 > Prepend `00_shared_context.md`. Depends on `write_spec.py` (+ `config.py`).
 
 ## Relocation first (clean structure)
-Fold `parquet_loader.py` into `io/readers.py` (the typed Parquet→models backend). Keep a
-re-export shim at the old `parquet_loader` path until notebook migration is done.
+**Move** `parquet_loader.py` → `io/parquet_loader.py` as a PURE MOVE (re-export shim at the
+old path). Do NOT fold it into `io/readers.py` — keep it a standalone module; `readers.py`
+imports `load_parquet_to_models` from it where typed reads are wanted.
 
 ## Goal
 Create `src/connects_common_connectivity/io/readers.py`: convenient reads over the shared
@@ -34,10 +39,10 @@ settings=None) -> DataFrame`:
 ## Read-side analysis (section in this file, not a new module)
 `compare_region_coverage(pmms)` is read-side analysis and starts as a clearly-marked section
 in `readers.py` — do NOT create `io/analysis.py` yet (single function = premature module).
-Its implementation is specified in `08_analysis.md`; build it there. When a second analysis
+Its implementation is specified in `09_analysis.md`; build it there. When a second analysis
 function appears, relocate the section to `io/analysis.py` (pure move, no public-API change).
 `populate_region_coverage` is a write-side transform and stays with the writers
-(`04_writers.md`), not here.
+(`03_writers.md`), not here.
 
 ## Tests (`tests/test_readers.py`)
 - Round-trip: write models via the writers, read them back scoped, assert equality on

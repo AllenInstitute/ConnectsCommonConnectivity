@@ -1,6 +1,7 @@
 # Agent prompt — Writers (dispatch core + typed wrappers)
 
-> Prepend `00_shared_context.md`. Depends on `config.py`, `write_spec.py`, `write_validation.py`.
+> Prepend `00_shared_context.md`. Depends on `config.py`, `write_spec.py`. (Validation is
+> built afterward and slots into the pass-through hook below — not a dependency here.)
 
 ## Relocation first (clean structure)
 Before writing new code, MOVE the existing backends into `io/` (with re-export shims at the
@@ -19,7 +20,9 @@ the registry so notebooks never hand-write `mode` / `predicate` / `partition_by`
 2. `settings = settings or get_settings()` (loads the discovered `ccc_config.yaml`; an
    explicit `settings=` still wins).
 3. Look up the `WriteSpec` via `get_spec`.
-4. Validate every model with `validate_for_write` (strict submodel) BEFORE any IO.
+4. Call a **validation hook** before any IO. In this phase the hook is a pass-through
+   (identity) function — validation is built afterward (`05_validation.md`) and swaps the
+   real `validate_for_write` into this hook with no restructuring. Wire the call site now.
 5. Convert via `arrow_utils.models_to_table` + `build_arrow_schema`; attach metadata with
    `attach_linkml_metadata(linkml_class=<class name>)`.
 6. Resolve path with `table_path(settings, spec.subdir)`.
@@ -47,16 +50,13 @@ matrix for enrichment). The generated names are re-exported from `io/__init__.py
 `build_cell_feature_matrix_schema` (now in `io/arrow_utils.py`); do not force it into the
 row-Delta path.
 
-## Write-side transform (section in `writers.py`, not a new module)
-Add pre-write enrichment as a clearly-marked section at the top of `writers.py` — do NOT
-create `io/transforms.py` yet (single function = premature module). Port
-`populate_region_coverage(pmm, matrix)` from `io/io_plans.md`: derive `region_coverage`
-from the dense values array, return a copy of the `ProjectionMeasurementMatrix` (pure
-function, no mutation, no IO). `write_projection_matrix` calls it (or accepts an
-already-enriched matrix). When a second write-side transform appears, relocate the section
-into `io/transforms.py` — a pure move, no public-API change (users import via
-`io/__init__.py`). Do NOT put `compare_region_coverage` here — that is read-side analysis
-(see `08_analysis.md`).
+## Projection pre-write helper (in `io/write_utils.py`, not a transforms module)
+`populate_region_coverage(pmm, matrix)` is write plumbing the projection writer needs — same
+shelf as `append_new_dataitems` — so it lives in `io/write_utils.py`, NOT a separate
+`transforms` module. Port it from `io/io_plans.md`: derive `region_coverage` from the dense
+values array, return a copy of the `ProjectionMeasurementMatrix` (pure function, no mutation,
+no IO). `write_projection_matrix` calls it (or accepts an already-enriched matrix). Do NOT
+port `compare_region_coverage` — that is read-side analysis and is deferred (`09_analysis.md`).
 
 ## Reconcile `write_utils.py`
 Make `append_new_dataitems` the `append_new_by_id` backend. If you must generalize it

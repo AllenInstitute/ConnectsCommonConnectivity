@@ -46,9 +46,10 @@ exist under `project_id='visp_patchseq'`. Before the fix, the second run wiped t
 Report the before/after row counts.
 
 ## After migration — hand off shim removal
-Once every notebook imports from the `io/` paths, the re-export shims at `arrow_utils.py`,
-`write_utils.py`, `parquet_loader.py` are dead weight. Do TODO 5.4: delete them and confirm
+Once every notebook imports from the `io/` paths, the write-side re-export shims at
+`arrow_utils.py` and `write_utils.py` are dead weight. Do TODO 3.4: delete them and confirm
 the no-shim test (`07_tests.md`) passes. Report which old paths were still referenced, if any.
+(`parquet_loader.py` is untouched this round — it moves with the deferred read-side work.)
 
 ## Do not
 - Change the science/ETL transformation logic. Fix the `etl_visp_inh_patchseq` data logic

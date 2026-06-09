@@ -1,24 +1,23 @@
 # Agent prompt — Public API (`io/__init__.py`)
 
-> Prepend `00_shared_context.md`. Depends on writers (3.1/3.2); readers can be added later.
+> Prepend `00_shared_context.md`. Depends on writers (1.4); reader exports added later when
+> the read-side work happens.
 
 ## Why
 `io/__init__.py` is the single most important file for "user-friendly": it defines what a
 user types after `from connects_common_connectivity.io import …` and what shows up in
-autocomplete. It also decouples the public surface from internal module layout, so seed
-sections can later be split into `transforms.py` / `analysis.py` without breaking imports.
+autocomplete. It also decouples the public surface from internal module layout.
 
 ## Requirements
 1. A concise module docstring: one paragraph on the IO layer (note settings come from a
-   discovered `ccc_config.yaml`) + a 3–5 line usage example (a `write_*` call, a `read_*`
-   call — no config ceremony needed).
-2. Curated re-exports — only the names users should touch:
+   discovered `ccc_config.yaml`) + a 3–5 line usage example (a `write_*` call — no config
+   ceremony needed).
+2. Curated re-exports — only the names users should touch (write-side for now):
    - config (from the package root, `from ..config import ...`): `get_settings`, `Settings`,
      `table_path`
    - writers: `write_models` + the generated typed wrappers
-   - readers: `read_dataset`, `read_dataitem`, `read_features`,
-     `read_dataitems_for_clusters`, and (when present) `compare_region_coverage`
-   Do NOT re-export backends (`arrow`, `write_utils`) or internal helpers.
+   - reader names are added here when readers land (deferred) — leave a clear TODO comment.
+   Do NOT re-export backends (`arrow_utils`, `write_utils`) or internal helpers.
 3. Define `__all__` to match exactly the curated list (keeps `dir()` and `*` imports clean).
 4. Keep it import-light: no heavy work at import time; just imports + `__all__`.
 

@@ -51,9 +51,12 @@ src/connects_common_connectivity/
     write_spec.py      # NEW  registry — source of truth
     write_validation.py# NEW  auto-derived strict submodels (write-safety validation)
     arrow_utils.py     # MOVED from root (no rename)  (models <-> Arrow conversion)
-    writers.py         # NEW  write_models() + typed wrappers + write-side transforms
-    write_utils.py     # MOVED from root  (append-by-id backend, walk_ancestors)
-    readers.py         # MOVED + folds parquet_loader.py + predicate/cross-dataset reads
+    writers.py         # NEW  write_models() + typed wrappers
+    write_utils.py     # MOVED from root  (append-by-id backend, walk_ancestors,
+                        #                   populate_region_coverage)
+    # --- deferred (see "Later — elaborations"; designs kept, not built yet) ---
+    parquet_loader.py  # MOVED from root (PURE MOVE, not folded into readers)
+    readers.py         # NEW  predicate-based + cross-dataset reads
 ```
 
 `config.py` lives at the **package root**, not in `io/`: configuration is package-wide
@@ -63,19 +66,19 @@ general namespace next to `models.py`. Conversely the io validator is named
 coupled to `write_spec`, and the bare word "validation" is already claimed by `cli.py`'s
 LinkML conformance check — two different validations, so neither owns the generic name.
 
-Seed-stage modules are NOT split out prematurely. Write-side enrichment
-(`populate_region_coverage`) starts as a section at the top of `writers.py`; read-side
-analysis (`compare_region_coverage`) starts in `readers.py`. Promote either to its own
-module (`transforms.py` / `analysis.py`) only when a second function arrives — that move is
-a pure relocation with no public-API change because users import from `io/__init__.py`.
+Seed-stage modules are NOT split out prematurely. `populate_region_coverage` is **not** a
+separate "transforms" module — it lives in `write_utils.py` as a helper the projection
+writer calls (it's write plumbing, like `append_new_dataitems`). Read-side
+`compare_region_coverage` is deferred entirely (see "Later — elaborations").
 
 Where each existing file goes:
 - `arrow_utils.py` → `io/arrow_utils.py`. Conversion layer used by `writers.py`. Pure move.
 - `write_utils.py` → `io/write_utils.py`. `append_new_dataitems` becomes the
-  `append_new_by_id` backend; `walk_ancestors` is used by membership/mapping writers and by
-  cross-dataset reads. Pure move.
-- `parquet_loader.py` → folded into `io/readers.py` (Parquet→models with report becomes the
-  typed-read backend). Pure move/merge.
+  `append_new_by_id` backend; `walk_ancestors` is used by membership/mapping writers;
+  `populate_region_coverage` (ported from `io_plans.md`) is the pre-write projection helper.
+  Pure move + additions.
+- `parquet_loader.py` → `io/parquet_loader.py`. **Pure move, NOT folded into readers** —
+  deferred with the read-side work.
 - `cli.py` stays at the package root as the `ccc` entry point; it owns the occasional full
   LinkML conformance check (separate from `io/write_validation.py`, which is the fast
   write-path check).
@@ -181,29 +184,41 @@ concatenates path strings.
 
 ## Module 2 — `write_spec.py` (the registry)
 
-An explicit, hand-maintained lookup, one entry per writable class, seeded from the schema
-and refined from early experience. It is the source of truth for write/validation
-behavior. A test cross-checks it against the LinkML schema so drift fails loudly (the
-class names and `project_id`/identifier slots must exist in the generated models).
+An explicit, hand-maintained lookup, one entry per writable class. **Build it like a
+prototype, not a derivation.** Do not assume every class is scoped-overwrite-with-predicate;
+that pattern fits DataSet/Association, but `append_new_by_id` already exists for DataItem
+because append was the right behavior there, and other classes may want append or modes we
+haven't named yet. For each class, write a small real example in a notebook *first*, see how
+it actually wants to be written, and let that experience set the entry. The registry is then
+the source of truth, cross-checked against the schema for drift (class names and
+`project_id`/identifier slots must exist in the generated models).
 
 Each entry declares:
 
 - `subdir` — Delta table subdirectory under `output_root` (e.g. `"dataset"`).
 - `partition_by` — Delta partition columns (e.g. `["project_id"]`).
-- `scope_columns` — columns that define the overwrite predicate (the identity within the
-  shared table). DataSet → `["project_id", "id"]`; DataItemDataSetAssociation →
-  `["project_id", "dataset_id"]`.
-- `write_mode` — `"overwrite_scoped"` (scoped idempotent overwrite) or
-  `"append_new_by_id"` (the `append_new_dataitems` behavior for DataItem).
+- `scope_columns` — for scoped-overwrite classes, the columns that define the predicate (the
+  identity within the shared table). DataSet → `["project_id", "id"]`;
+  DataItemDataSetAssociation → `["project_id", "dataset_id"]`. May be empty/N-A for
+  append-mode classes.
+- `write_mode` — a small open vocabulary, not a fixed binary: `"overwrite_scoped"`,
+  `"append_new_by_id"` (the `append_new_dataitems` behavior), and whatever else the
+  prototyping surfaces. New modes are added when a class's example shows the existing ones
+  don't fit — `write_mode` is a `Literal` we extend, not a constraint to force classes into.
 - `required_for_write` — slots that must be present/non-null for a safe write (may be
   stricter than the schema's own `required`).
-- `cross_field_rules` — names of cross-field checks to attach to the strict validator.
+- `cross_field_rules` — names of cross-field checks to attach to the strict validator
+  (validation is layered in after the write path works; see ordering).
 
-Predicate is built from `scope_columns` + the row values, e.g.
+For `overwrite_scoped`, the predicate is built from `scope_columns` + the row values, e.g.
 `"project_id = 'visp_patchseq' AND id = 'visp_exc_patchseq'"`. This is exactly the bug
 fix: DataSet now carries `id` in its scope.
 
 ## Module 3 — `io/write_validation.py` (auto-derived strict submodels)
+
+Built **after** the write path works (priority order: config → write IO → validation). The
+writers ship first with a pass-through validation hook; this module swaps the real validator
+into that hook.
 
 Decision: **auto-derived** strict submodels — single source of truth.
 
@@ -218,17 +233,19 @@ Hot-path validation is purely structural: required-slot enforcement plus pure cr
 rules that only inspect the model in hand. **Referential checks that read other tables do
 NOT belong on the hot path.** Example: "an association's `dataset_id` must refer to a
 DataSet already present for that `project_id`" requires a reader, so it is an opt-in check
-(`write_models(..., check_refs=True)`) implemented after readers exist (Phase 4b), not a
-strict-submodel validator. This keeps Phase 2 free of any dependency on Phase 4.
+(`write_models(..., check_refs=True)`) deferred with the read-side work (it needs a reader),
+not a strict-submodel validator. This keeps validation free of any dependency on readers.
 
 ## Module 4 — `writers.py` (+ `io/write_utils.py`, `io/arrow_utils.py`)
 
 A single dispatch core plus thin typed wrappers:
 
 - `write_models(models, *, settings=None)` — infers the class, looks up the registry,
-  validates each model via the strict submodel, converts via `io/arrow_utils.py`, attaches
-  LinkML metadata, then writes per `write_mode` (scoped overwrite with the
-  registry-built predicate, or `append_new_by_id` via the backend).
+  converts via `io/arrow_utils.py`, attaches LinkML metadata, then writes per `write_mode`
+  (scoped overwrite with the registry-built predicate, or `append_new_by_id` via the
+  backend). It calls a **validation hook** before writing; in the write-IO phase that hook is
+  a pass-through, and Module 3 (built afterward) swaps in the real strict validator with no
+  restructuring.
 - Typed wrappers for discoverability (`write_dataset`, `write_dataitem`,
   `write_association`, `write_features`, `write_cluster`, `write_cluster_membership`,
   `write_cell_to_cluster_mapping`, `write_projection_matrix`). `write_models` is the one
@@ -238,37 +255,34 @@ A single dispatch core plus thin typed wrappers:
   hand-written wrapper is justified only where a class needs a non-uniform signature
   (e.g. `write_projection_matrix` taking the dense matrix for enrichment).
 - `io/write_utils.py` (moved from root): `append_new_dataitems` is the `append_new_by_id`
-  backend; `walk_ancestors` is used by membership/mapping writers. Generalize
-  `append_new_dataitems` only if needed (e.g. parametrize the partition column), without
-  breaking callers.
-- **Write-side enrichment** lives as a section at the top of `writers.py` (not yet its own
-  module): `populate_region_coverage(pmm, matrix)` from `io_plans.md` derives
-  `region_coverage` from the dense values. `write_projection_matrix` calls it (or accepts
-  an already-enriched matrix). Keep it a pure function (no IO, no mutation of input).
-  Split into `io/transforms.py` only when a second transform appears.
+  backend; `walk_ancestors` is used by membership/mapping writers; `populate_region_coverage`
+  (ported from `io_plans.md`) is the pre-write projection helper. `write_projection_matrix`
+  calls `populate_region_coverage` (or accepts an already-enriched matrix). Keep it a pure
+  function (no IO, no mutation of input). Generalize `append_new_dataitems` only if needed
+  (e.g. parametrize the partition column) without breaking callers. Rationale: this is write
+  plumbing the projection writer needs — same shelf as `append_new_dataitems` — not a
+  separate "transforms" concern.
 
 Wide feature matrices (`CellFeatureMatrix`) use `build_cell_feature_matrix_schema` (in
 `io/arrow_utils.py`) and a matrix-specific writer path, since they are wide Parquet, not
 row-modeled Delta tables.
 
-## Module 5 — `readers.py` (folds `parquet_loader.py`)
+## Later — elaborations (deferred; design kept, not built yet)
 
-Two layers:
+These are **not actionable in this round.** Priority now is config → write IO → validation →
+notebook migration. Once the write path is solid and notebooks are migrated, revisit:
 
-- Thin predicate-based readers mirroring the write spec: `read_dataset`, `read_dataitem`,
-  `read_features`, scoped by `project_id`/`dataset_id`, returning polars/pandas. Typed
-  reads (Parquet→models) use the folded-in `load_parquet_to_models`.
-- Flexible cross-dataset / cross-schema reads now that datasets share tables. Flagship
-  example: "read all DataItems that have either a ClusterMembership or a
-  CellToClusterMapping to a given set of clusters" — a cross-table query joining
-  membership/mapping tables on cluster ids and returning the union of matching DataItems,
-  regardless of source dataset/modality. Users can still drop to raw
-  `polars.read_delta` for ad-hoc queries; the readers are conveniences, not a wall.
-- **Read-side analysis** lives as a section in `readers.py` to start:
-  `compare_region_coverage(pmms)` from `io_plans.md` (shared vs exclusive region coverage
-  across matrices). It reads finished data and summarizes — the mirror image of write-side
-  enrichment, which augments data on the way in. Split into `io/analysis.py` only when a
-  second analysis function appears.
+- **Readers** (`io/readers.py`): predicate-based readers mirroring the write spec
+  (`read_dataset`, `read_dataitem`, `read_features` scoped by `project_id`/`dataset_id`),
+  plus flexible cross-dataset reads now that datasets share tables — flagship: "all DataItems
+  with either a ClusterMembership or a CellToClusterMapping to a given cluster set." Users can
+  always drop to raw `polars.read_delta`; readers are conveniences, not a wall. When this
+  starts, `parquet_loader.py` is **moved** to `io/parquet_loader.py` (pure move, not folded)
+  and used as the typed-read backend.
+- **Read-side analysis**: `compare_region_coverage(pmms)` from `io_plans.md` (shared vs
+  exclusive region coverage across matrices) — reads finished data and summarizes.
+- **Opt-in referential check** (`write_models(..., check_refs=True)`): needs a reader, so it
+  rides with the read-side work.
 
 ## Notebook migration (no logic, no schema, no models.py changes)
 
@@ -286,6 +300,8 @@ after a re-run as the migration's acceptance test.
 - Idempotency: writing the same models twice yields no duplicates and no row loss.
 - Shared-partition safety: writing dataset B does not remove dataset A's rows when they
   share a `project_id` (the patchseq regression test).
+- Per-class write example: every writable class has a small notebook example exercising its
+  registry entry (the prototyping evidence behind its `write_mode`/`scope_columns`).
 - Strict-validator tests: missing `required_for_write` slot or failing cross-field rule
-  raises before any write touches disk.
-- Round-trip: write models → read back via readers → equality on scope columns.
+  raises before any write touches disk (added with Module 3).
+- Round-trip (write → read back → equality on scope columns): deferred with readers.

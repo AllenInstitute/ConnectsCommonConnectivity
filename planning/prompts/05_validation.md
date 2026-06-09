@@ -1,6 +1,7 @@
 # Agent prompt — Write-validation (auto-derived strict submodels)
 
-> Prepend `00_shared_context.md`. Depends on `write_spec.py`.
+> Prepend `00_shared_context.md`. Depends on `write_spec.py` and `writers.py` (built after
+> the write path; wires into the pass-through validation hook left in `write_models`).
 
 ## Naming
 File is `io/write_validation.py`, NOT `io/validation.py`: this is specifically write-safety
@@ -25,13 +26,15 @@ is restated from the schema.
    submodel, raising a clear error that names the class, the failing slot/rule, and the
    offending value. This runs on the hot write path, so keep it pydantic-only (fast, **no
    I/O**); do NOT call the LinkML/`cli.py` validator here.
-3. Implement a starter cross-field rule registry (a dict name → callable). Rules here MUST
+3. **Wire it into `write_models`:** replace the pass-through validation hook left by
+   `03_writers.md` with `validate_for_write`. This is the only change to the writer.
+4. Implement a starter cross-field rule registry (a dict name → callable). Rules here MUST
    be pure: they inspect only the model instance in hand, do no I/O, and never read other
    tables. Add rules only as the registry references them.
    - Do NOT implement `association_dataset_exists` here. It reads written DataSets, so it is
-     a referential check, not a structural one — it belongs off the hot path as an opt-in
-     `check_refs` in Phase 4b (`08_analysis.md`), after readers exist. Keeping it out of
-     this module is what frees Phase 2 from any dependency on Phase 4.
+     a referential check, not a structural one — it is deferred with the read-side work as an
+     opt-in `check_refs` (`09_analysis.md`). Keeping it out keeps validation free of any
+     dependency on readers.
 
 ## Tests (`tests/test_write_validation.py`)
 - A model missing a `required_for_write` slot fails `validate_for_write` before any IO.

@@ -1,0 +1,5 @@
+# Package-wide settings for ConnectsCommonConnectivity.
+# Discovered by walking up from cwd (pyproject.toml/ruff/pytest pattern).
+# Edit this file (or set CCC_OUTPUT_ROOT) to repoint writers/readers.
+output_root: scratch/em_patchseq_wnm_v1/
+dry_run: false

@@ -7,10 +7,16 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
 
 ## This round (write path → migration → tests)
 
-- [ ] **W1 — Config** (`prompts/01_config.md`) — `config.py` at the package root, pydantic
+- [x] **W1 — Config** (`prompts/01_config.md`) — `config.py` at the package root, pydantic
   `Settings` loaded from a discovered `ccc_config.yaml` (walk-up like `pyproject.toml`),
-  cached `get_settings()`, `table_path()` helper. Precedence: explicit arg > `CCC_OUTPUT_ROOT`
-  env > `ccc_config.yaml` > error. No `configure()` global, no `%run`. Blocks W3+.
+  cached `get_settings()`, `table_path()` helper, plus `output_root()` convenience that
+  returns the path relative to cwd (notebooks in `code/` see `../scratch/...`). Relative
+  values in the file are anchored at the config file's directory using `os.path.abspath`
+  (not `Path.resolve`, so Code Ocean's `scratch -> /scratch` symlink isn't followed).
+  Precedence: explicit arg > `CCC_OUTPUT_ROOT` env > `ccc_config.yaml` > error. No
+  `configure()` global, no `%run`. Re-exported from `io/__init__.py`.
+  `ccc_config.yaml` seeded at repo root with `output_root: scratch/em_patchseq_wnm_v1/`.
+  Tests: `tests/test_config.py` (14 tests, all passing).
 - [ ] **W2 — Write spec registry** (`prompts/02_write_spec.md`) — `io/write_spec.py`: one
   entry per writable class (`subdir`, `partition_by`, `scope_columns`, `write_mode`,
   `required_for_write`, `cross_field_rules`). Seed DataSet/DataItem/Association now; add

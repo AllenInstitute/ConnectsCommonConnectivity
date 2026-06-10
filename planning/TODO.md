@@ -17,15 +17,20 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   `configure()` global, no `%run`. Re-exported from `io/__init__.py`.
   `ccc_config.yaml` seeded at repo root with `output_root: scratch/em_patchseq_wnm_v1/`.
   Tests: `tests/test_config.py` (14 tests, all passing).
-- [ ] **W2 — Write spec registry** (`prompts/02_write_spec.md`) — `io/write_spec.py`: one
-  entry per writable class (`subdir`, `partition_by`, `scope_columns`, `write_mode`,
-  `required_for_write`, `cross_field_rules`). Seed DataSet/DataItem/Association now; add
-  others as W3 prototypes them. Includes the registry↔schema drift test.
-- [ ] **W3 — Writers + relocation + per-class prototyping** (`prompts/03_writers.md`) —
-  Move `arrow_utils.py`/`write_utils.py` into `io/` (re-export shims at old paths). Build
-  `io/writers.py` (`write_models` + registry-generated typed wrappers) with a pass-through
-  validation hook for W5. Land `populate_region_coverage` in `io/write_utils.py`. For each
-  writable class, add a small real write example to a notebook and let it set the W2 entry.
+- [ ] **W2 — Write spec registry (seed only)** (`prompts/02_write_spec.md`) —
+  `io/write_spec.py`: `WriteSpec` pydantic model, `REGISTRY` seeded with **exactly three**
+  entries (`DataSet`, `DataItem`, `DataItemDataSetAssociation`), `get_spec()` lookup, and
+  the drift test (`tests/test_write_spec.py`). `required_for_write` and
+  `cross_field_rules` left empty — W5 owns those. The remaining classes are W3's job.
+- [ ] **W3 — Writers + relocation + registry expansion** (`prompts/03_writers.md`) —
+  Move `arrow_utils.py`/`write_utils.py` into `io/` (re-export shims at old paths, removed
+  in W6). Build `io/writers.py`: `write_models()` dispatch, `WriteResult` frozen dataclass,
+  `WRITABLE_CLASSES` discovery tuple, pass-through `_validation_hook` for W5 to swap, plus
+  `write_projection_matrix()` (the one non-`write_models` public writer, justified by its
+  non-uniform signature). **No per-class wrappers** — `write_models` infers the class.
+  Land `populate_region_coverage` in `io/write_utils.py`. **Expand the registry** by
+  prototyping each remaining writable class one at a time (notebook write → registry entry
+  → smoke test). `CellFeatureMatrix` stays in the registry under `wide_parquet` mode.
   Blocked by W1, W2.
 - [ ] **W4 — Public API** (`prompts/04_public_api.md`) — `io/__init__.py`: curated
   re-exports + `__all__`. The user-facing surface; defines what autocomplete shows. Blocked
@@ -33,11 +38,11 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
 - [ ] **W5 — Write validation** (`prompts/05_validation.md`) — `io/write_validation.py`:
   `strict_model_for(cls)` flips `required_for_write` to required + attaches pure
   `cross_field_rules` (no I/O). Swap `validate_for_write` into the W3 hook. Blocked by W2, W3.
-- [ ] **W6 — Notebook migration** (`prompts/06_notebook_migration.md`) — Create
-  `ccc_config.yaml` at repo root. Migrate every ETL notebook to typed writers; delete
-  hardcoded `OUTPUT_ROOT` and per-cell `mode`/`predicate`/`partition_by`. Run the patchseq
-  regression (exc then inh, both DataSet rows must coexist). Remove the W3 re-export shims
-  and confirm nothing imports the old paths. Blocked by W3 (W5 preferred).
+- [ ] **W6 — Notebook migration** (`prompts/06_notebook_migration.md`) — Migrate every
+  ETL notebook to typed writers; delete hardcoded `OUTPUT_ROOT` and per-cell
+  `mode`/`predicate`/`partition_by` (`ccc_config.yaml` already exists from W1). Run the
+  patchseq regression (exc then inh, both DataSet rows must coexist). Remove the W3
+  re-export shims and confirm nothing imports the old paths. Blocked by W3 (W5 preferred).
 - [ ] **W7 — Write-side test suite** (`prompts/07_tests.md`) — Drift, patchseq regression,
   idempotency, append-new-by-id, predicate construction, per-class example smoke, no-shim
   regression, public-API surface. Owns only the gaps not specified by W2/W3/W4/W5.

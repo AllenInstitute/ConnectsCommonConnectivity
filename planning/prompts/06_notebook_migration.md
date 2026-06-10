@@ -20,15 +20,15 @@ changes. The library finds it by walking up from the notebook's working director
 ## Per ETL notebook
 1. Delete the hardcoded `OUTPUT_ROOT = "../scratch/..."` entirely. There is no replacement
    config cell and no `%run` — the library discovers `ccc_config.yaml` on its own, so
-   `write_*` / `read_*` calls need neither a path nor `settings=`. (If a cell wants to show
+   `write_models(...)` calls need neither a path nor `settings=`. (If a cell wants to show
    the resolved config, it may `from connects_common_connectivity.io import get_settings;
    print(get_settings())`, but this is optional.)
 2. Replace each direct `write_deltalake(... mode=... predicate=... partition_by=...)` call
-   with the matching typed writer (`write_dataset`, `write_dataitem`, `write_association`,
-   `write_features`, `write_cluster`, `write_cell_to_cluster_mapping`,
-   `write_projection_matrix`, ...). Delete the now-redundant `mode`/`predicate`/
-   `partition_by` arguments and their explanatory comments — that logic now lives in the
-   registry.
+   with `write_models(my_instance)` (or `write_models([inst1, inst2])`). The class is
+   inferred from the argument; the registry owns mode / predicate / partition. Use
+   `write_projection_matrix(pmm, matrix)` for the one projection notebook — it's the
+   single non-`write_models` writer. Delete the now-redundant `mode`/`predicate`/
+   `partition_by` arguments and their explanatory comments.
 3. Keep verification cells; update their paths to use
    `table_path(get_settings(), ...)`.
 

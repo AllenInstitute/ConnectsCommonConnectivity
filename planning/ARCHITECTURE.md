@@ -51,7 +51,7 @@ src/connects_common_connectivity/
     write_spec.py      # NEW  registry — source of truth
     write_validation.py# NEW  auto-derived strict submodels (write-safety validation)
     arrow_utils.py     # MOVED from root (no rename)  (models <-> Arrow conversion)
-    writers.py         # NEW  write_models() + typed wrappers
+    writers.py         # NEW  write_models() + write_projection_matrix()
     write_utils.py     # MOVED from root  (append-by-id backend, walk_ancestors,
                         #                   populate_region_coverage)
     # --- deferred (see "Later — elaborations"; designs kept, not built yet) ---
@@ -125,9 +125,9 @@ LinkML schema ──▶│  models.py (generated)      │
             │              │                 │
             ▼              ▼                 ▼
       validation      write module        read module
-   (strict submodel  (write_dataset,    (predicate-based +
-    derived per      write_dataitem,     flexible cross-dataset
-    class)           write_features...)  reads)
+   (strict submodel  (write_models +     (predicate-based +
+    derived per      write_projection    flexible cross-dataset
+    class)           _matrix)            reads)
                               │
                               ▼
                     Settings (global output_root)
@@ -173,7 +173,7 @@ fails loudly rather than writing somewhere arbitrary. `get_settings()` is a pure
 function of the filesystem (clearable in tests), not a mutable global.
 
 How the ETL uses it (kills the per-notebook setup): there is no config cell at all. A
-notebook just imports and calls `write_dataset(...)` / `read_dataset(...)`; the library
+notebook just imports and calls `write_models(...)` / `read_dataset(...)`; the library
 discovers `ccc_config.yaml` on its own. Writers/readers do `settings = settings or
 get_settings()`. To repoint local vs CodeOcean, edit the one file (or set `CCC_OUTPUT_ROOT`).
 A `table_path(settings, "dataset")` helper resolves per-table subdirectories so nothing
@@ -235,22 +235,24 @@ not a strict-submodel validator. This keeps validation free of any dependency on
 
 ## Module 4 — `writers.py` (+ `io/write_utils.py`, `io/arrow_utils.py`)
 
-A single dispatch core plus thin typed wrappers:
+A single dispatch core, no per-class wrappers:
 
-- `write_models(models, *, settings=None)` — infers the class, looks up the registry,
-  converts via `io/arrow_utils.py`, attaches LinkML metadata, then writes per `write_mode`
-  (scoped overwrite with the registry-built predicate, or `append_new_by_id` via the
-  backend). It calls a **validation hook** before writing; in the write-IO phase that hook is
-  a pass-through, and Module 3 (built afterward) swaps in the real strict validator with no
-  restructuring.
-- Typed wrappers for discoverability (`write_dataset`, `write_dataitem`,
-  `write_association`, `write_features`, `write_cluster`, `write_cluster_membership`,
-  `write_cell_to_cluster_mapping`, `write_projection_matrix`). `write_models` is the one
-  real entry point; the wrappers are sugar. To avoid hand-maintaining eight one-liners that
-  must stay in lockstep with the registry, **generate them from the registry** (a small
-  factory binding the class) and re-export the generated names from `io/__init__.py`. A
-  hand-written wrapper is justified only where a class needs a non-uniform signature
-  (e.g. `write_projection_matrix` taking the dense matrix for enrichment).
+- `write_models(models, *, settings=None) -> WriteResult` — infers the class, looks up
+  the registry, converts via `io/arrow_utils.py`, attaches LinkML metadata, then writes
+  per `write_mode` (scoped overwrite with the registry-built predicate, `append_new_by_id`
+  via the backend, `wide_parquet` for `CellFeatureMatrix`). It calls a **validation hook**
+  before writing; in the write-IO phase that hook is a pass-through, and Module 3 (built
+  afterward) swaps in the real strict validator with no restructuring.
+- **No `write_dataset` / `write_dataitem` / `write_association` / etc. wrappers.**
+  `write_models()` infers the class from its argument; renaming it per class adds no
+  behavior, only drift surface. Discoverability is provided by
+  `WRITABLE_CLASSES = tuple(s.model_cls for s in REGISTRY.values())` plus
+  `write_models`'s docstring.
+- `write_projection_matrix(pmm, matrix, *, settings=None) -> WriteResult` is the **one**
+  non-`write_models` public writer, justified because its signature is non-uniform (it
+  takes the dense matrix for `populate_region_coverage` enrichment before delegating to
+  `write_models`). No other exceptions — if a future class needs pre-write enrichment, the
+  caller does the enrichment and then calls `write_models`.
 - `io/write_utils.py` (moved from root): `append_new_dataitems` is the `append_new_by_id`
   backend; `walk_ancestors` is used by membership/mapping writers; `populate_region_coverage`
   (ported from `io_plans.md`) is the pre-write projection helper. `write_projection_matrix`
@@ -260,9 +262,9 @@ A single dispatch core plus thin typed wrappers:
   plumbing the projection writer needs — same shelf as `append_new_dataitems` — not a
   separate "transforms" concern.
 
-Wide feature matrices (`CellFeatureMatrix`) use `build_cell_feature_matrix_schema` (in
-`io/arrow_utils.py`) and a matrix-specific writer path, since they are wide Parquet, not
-row-modeled Delta tables.
+Wide feature matrices (`CellFeatureMatrix`) stay inside the registry under
+`write_mode = "wide_parquet"`; `write_models` dispatches them through
+`build_cell_feature_matrix_schema` (in `io/arrow_utils.py`) and a Parquet write.
 
 ## Later — elaborations (deferred; design kept, not built yet)
 

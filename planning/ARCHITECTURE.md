@@ -71,14 +71,11 @@ separate "transforms" module — it lives in `write_utils.py` as a helper the pr
 writer calls (it's write plumbing, like `append_new_dataitems`). Read-side
 `compare_region_coverage` is deferred entirely (see "Later — elaborations").
 
-Where each existing file goes:
-- `arrow_utils.py` → `io/arrow_utils.py`. Conversion layer used by `writers.py`. Pure move.
-- `write_utils.py` → `io/write_utils.py`. `append_new_dataitems` becomes the
-  `append_new_by_id` backend; `walk_ancestors` is used by membership/mapping writers;
-  `populate_region_coverage` (ported from `io_plans.md`) is the pre-write projection helper.
-  Pure move + additions.
-- `parquet_loader.py` → `io/parquet_loader.py`. **Pure move, NOT folded into readers** —
-  deferred with the read-side work.
+Module placement summary (the operational "how to move them" lives in
+`prompts/03_writers.md` so it is not restated in three places):
+- `arrow_utils.py`, `write_utils.py` → `io/` as backends to `writers.py` (W3).
+- `parquet_loader.py` → `io/parquet_loader.py` is a **pure move, deferred** with the
+  read-side work; do NOT move it now.
 - `cli.py` stays at the package root as the `ccc` entry point; it owns the occasional full
   LinkML conformance check (separate from `io/write_validation.py`, which is the fast
   write-path check).
@@ -87,7 +84,7 @@ Where each existing file goes:
 
 Migration safety: while notebooks are being migrated, the moved modules may keep one-line
 re-export shims at their old import paths (e.g. `from .io.arrow_utils import *`) so nothing breaks
-mid-transition. Shim removal is a tracked task (TODO 5.4), gated by a test that asserts no
+mid-transition. Shim removal is a tracked task (TODO W6), gated by a test that asserts no
 old import path is referenced anywhere once migration is complete — otherwise the two import
 paths linger and become exactly the clutter this redesign removes.
 

@@ -12,10 +12,11 @@ This file is only the rules of the room.
    task seems to need a new slot, STOP and report what you need and why.
 3. **Single source of truth = the LinkML schema / generated models.** Read field
    definitions from `models.py`; never restate them.
-4. **IO code lives under `src/connects_common_connectivity/io/`.** Existing root
-   modules (`arrow_utils.py`, `write_utils.py`, `parquet_loader.py`) are MOVED there and
-   wrapped as backends — never reimplemented. `cli.py` and `models.py` stay at root; so does
-   `config.py` (package-wide settings, not IO-specific) and plotting stays in
+4. **IO code lives under `src/connects_common_connectivity/io/`.** Write-side root
+   modules (`arrow_utils.py`, `write_utils.py`) are MOVED there and wrapped as backends in
+   W3 — never reimplemented. `parquet_loader.py` is a **deferred move** that rides with the
+   read-side work; do NOT relocate it during W1–W7. `cli.py` and `models.py` stay at root;
+   so does `config.py` (package-wide settings, not IO-specific) and plotting stays in
    `code/utils.py`. Exact layout: ARCHITECTURE.md → "Target io/ structure".
 5. When you move a module, leave a one-line re-export shim at its old path until notebook
    migration is done, so nothing breaks mid-transition.

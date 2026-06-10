@@ -14,8 +14,13 @@ right there, and other classes may want append or modes not yet named. **For eac
 build a small real write example in a notebook first** (paired with `03_writers.md`), see how
 it actually wants to be written, and let that decide the entry. `write_mode` is an open
 `Literal` you extend when an example doesn't fit the existing modes — not a constraint to
-force classes into. Seed the three correctness-critical classes below; add the rest as their
-examples are built rather than all at once up front.
+force classes into.
+
+**Sequencing:** in W2 (this prompt) seed *only* the three correctness-critical classes
+below — enough to unblock W3. The remaining entries are added during W3, where the writer
+exists to prototype against; that loop (notebook example → registry entry) is W3's job, not
+this one's. Trying to fill the whole registry up front contradicts "prototype, don't
+assume."
 
 ## Registry shape
 Define a dataclass/pydantic model `WriteSpec` with fields:

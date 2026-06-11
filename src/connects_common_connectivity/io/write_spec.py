@@ -81,6 +81,7 @@ REGISTRY: dict[str, WriteSpec] = {
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id"],
         write_mode="overwrite_scoped",
+        required_for_write=["hierarchy_id"],
     ),
     "ClusterHierarchy": WriteSpec(
         model_cls=ClusterHierarchy,
@@ -95,6 +96,7 @@ REGISTRY: dict[str, WriteSpec] = {
         partition_by=["project_id", "hierarchy_id"],
         scope_columns=["project_id", "hierarchy_id"],
         write_mode="overwrite_scoped",
+        required_for_write=["hierarchy_id"],
     ),
     "MappingSet": WriteSpec(
         model_cls=MappingSet,
@@ -125,6 +127,7 @@ REGISTRY: dict[str, WriteSpec] = {
         partition_by=["project_id", "feature_set_id"],
         scope_columns=["project_id", "feature_set_id"],
         write_mode="overwrite_scoped",
+        required_for_write=["feature_set_id"],
     ),
     "CellFeatureMatrix": WriteSpec(
         model_cls=CellFeatureMatrix,

@@ -120,14 +120,12 @@ def test_io_reexports_settings_helpers():
     from connects_common_connectivity.io import (
         Settings as IOSettings,
         get_settings as io_get_settings,
-        output_root as io_output_root,
         table_path as io_table_path,
     )
 
     assert IOSettings is Settings
     assert io_get_settings is get_settings
     assert io_table_path is table_path
-    assert io_output_root is output_root
 
 
 def test_get_settings_is_cached(tmp_path, monkeypatch):

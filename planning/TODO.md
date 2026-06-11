@@ -39,12 +39,21 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   `overwrite_scoped` for its metadata-pointer rows. Revisit when the wide-matrix
   contract is clarified. Tests: `tests/test_writers.py`, `tests/test_write_relocation.py`
   (full suite 119 passing).
-- [ ] **W4 — Public API** (`prompts/04_public_api.md`) — `io/__init__.py`: curated
-  re-exports + `__all__`. The user-facing surface; defines what autocomplete shows. Blocked
-  by W3.
-- [ ] **W5 — Write validation** (`prompts/05_validation.md`) — `io/write_validation.py`:
-  `strict_model_for(cls)` flips `required_for_write` to required + attaches pure
-  `cross_field_rules` (no I/O). Swap `validate_for_write` into the W3 hook. Blocked by W2, W3.
+- [x] **W4 — Public API** (`prompts/04_public_api.md`) — `io/__init__.py`: curated
+  re-exports + `__all__` (`get_settings`, `Settings`, `table_path`, `write_models`,
+  `write_projection_matrix`, `WriteResult`, `WRITABLE_CLASSES`). Module docstring
+  with usage example, `# TODO(W8): reader exports` placeholder. Test:
+  `tests/test_public_api.py`.
+- [x] **W5 — Write validation** (`prompts/05_validation.md`) — `io/write_validation.py`:
+  `strict_model_for(cls)` flips `required_for_write` to required + strips `Optional`
+  from those annotations (cached per class, no `models.py` mutation);
+  `validate_for_write()` re-validates instances and raises `ValueError` naming the
+  missing slots before any IO. Wired into `write_models` (replaces the W3
+  pass-through hook). Populated `required_for_write` for `Cluster`,
+  `ClusterMembership`, and `CellFeatureDefinition` (the only entries whose
+  predicate / partition columns are `Optional` in the generated schema). Tests:
+  `tests/test_write_validation.py`. Cross-field rules deferred (still empty list
+  on every spec).
 - [ ] **W6 — Notebook migration** (`prompts/06_notebook_migration.md`) — Migrate every
   ETL notebook to typed writers; delete hardcoded `OUTPUT_ROOT` and per-cell
   `mode`/`predicate`/`partition_by` (`ccc_config.yaml` already exists from W1). Run the

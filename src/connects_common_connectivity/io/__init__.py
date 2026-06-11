@@ -1,13 +1,37 @@
 """IO layer for ConnectsCommonConnectivity.
 
-This package owns write/read backends and (re-)exports a few package-wide
-helpers for convenience. The settings live in :mod:`connects_common_connectivity.config`;
-they are re-exported here so IO callers can ``from connects_common_connectivity.io
-import get_settings, table_path``.
+The IO layer owns the write/read path between generated pydantic models
+and the shared Delta lake. This module is the curated public surface:
+import from here for stable user code; everything else under ``io/`` is
+internal plumbing.
+
+Example::
+
+    from connects_common_connectivity.io import write_models, write_projection_matrix
+    from connects_common_connectivity.models import DataSet
+
+    write_models(DataSet(id="ds1", name="example", project_id="p1"))
+    write_projection_matrix(pmm, dense_matrix)
 """
 
 from __future__ import annotations
 
-from ..config import Settings, get_settings, output_root, table_path
+from ..config import Settings, get_settings, table_path
+from .writers import (
+    WRITABLE_CLASSES,
+    WriteResult,
+    write_models,
+    write_projection_matrix,
+)
 
-__all__ = ["Settings", "get_settings", "output_root", "table_path"]
+# TODO(W8): reader exports
+
+__all__ = [
+    "get_settings",
+    "Settings",
+    "table_path",
+    "write_models",
+    "write_projection_matrix",
+    "WriteResult",
+    "WRITABLE_CLASSES",
+]

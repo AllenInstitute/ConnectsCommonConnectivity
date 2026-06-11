@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added write-time validation: `write_models()` now re-validates each
+  model through a runtime-derived strict subclass that flips
+  `WriteSpec.required_for_write` slots to non-optional, raising
+  `ValueError` before any IO if a write-required slot is missing or
+  `None`. Public helpers `strict_model_for()` and `validate_for_write()`
+  live in `connects_common_connectivity.io.write_validation`.
+- Added curated public API at `connects_common_connectivity.io`: imports
+  for `get_settings`, `Settings`, `table_path`, `write_models`,
+  `write_projection_matrix`, `WriteResult`, and `WRITABLE_CLASSES` are
+  now stable and pinned by `__all__`.
 - Added `connects_common_connectivity.io.writers` with `write_models()` (the
   single dispatch core for all generated pydantic models),
   `write_projection_matrix()`, `WriteResult`, and `WRITABLE_CLASSES`.

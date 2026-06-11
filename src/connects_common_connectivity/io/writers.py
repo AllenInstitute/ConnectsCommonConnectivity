@@ -25,6 +25,7 @@ from ..config import Settings, get_settings, table_path
 from .arrow_utils import attach_linkml_metadata, build_arrow_schema, models_to_table
 from .write_spec import REGISTRY, WriteSpec, get_spec
 from .write_utils import append_new_dataitems, populate_region_coverage
+from .write_validation import validate_for_write
 
 # ---------------------------------------------------------------------------
 # Result type
@@ -63,8 +64,12 @@ WRITABLE_CLASSES: tuple[type, ...] = tuple(
 
 
 def _validation_hook(models: Sequence[BaseModel], spec: WriteSpec) -> Sequence[BaseModel]:
-    """Pass-through identity hook; W5 monkey-patches this to enforce invariants."""
-    return models
+    """Strict re-validation against ``spec.required_for_write`` (W5).
+
+    Identity-shaped: takes a sequence in, returns a sequence out. Pure
+    pydantic; no I/O.
+    """
+    return validate_for_write(list(models), spec)
 
 
 # ---------------------------------------------------------------------------

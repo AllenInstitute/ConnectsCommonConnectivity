@@ -17,21 +17,28 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   `configure()` global, no `%run`. Re-exported from `io/__init__.py`.
   `ccc_config.yaml` seeded at repo root with `output_root: scratch/em_patchseq_wnm_v1/`.
   Tests: `tests/test_config.py` (14 tests, all passing).
-- [ ] **W2 — Write spec registry (seed only)** (`prompts/02_write_spec.md`) —
+- [x] **W2 — Write spec registry (seed only)** (`prompts/02_write_spec.md`) —
   `io/write_spec.py`: `WriteSpec` pydantic model, `REGISTRY` seeded with **exactly three**
   entries (`DataSet`, `DataItem`, `DataItemDataSetAssociation`), `get_spec()` lookup, and
   the drift test (`tests/test_write_spec.py`). `required_for_write` and
   `cross_field_rules` left empty — W5 owns those. The remaining classes are W3's job.
-- [ ] **W3 — Writers + relocation + registry expansion** (`prompts/03_writers.md`) —
-  Move `arrow_utils.py`/`write_utils.py` into `io/` (re-export shims at old paths, removed
-  in W6). Build `io/writers.py`: `write_models()` dispatch, `WriteResult` frozen dataclass,
-  `WRITABLE_CLASSES` discovery tuple, pass-through `_validation_hook` for W5 to swap, plus
-  `write_projection_matrix()` (the one non-`write_models` public writer, justified by its
-  non-uniform signature). **No per-class wrappers** — `write_models` infers the class.
-  Land `populate_region_coverage` in `io/write_utils.py`. **Expand the registry** by
-  prototyping each remaining writable class one at a time (notebook write → registry entry
-  → smoke test). `CellFeatureMatrix` stays in the registry under `wide_parquet` mode.
-  Blocked by W1, W2.
+- [x] **W3 — Writers + relocation + registry expansion** (`prompts/03_writers.md`) —
+  Moved `arrow_utils.py`/`write_utils.py` into `io/` (re-export shims at old paths, to
+  be removed in W6). Built `io/writers.py`: `write_models()` dispatch, `WriteResult`
+  frozen dataclass, `WRITABLE_CLASSES` discovery tuple, pass-through `_validation_hook`
+  for W5 to swap, plus `write_projection_matrix()` (the one non-`write_models` public
+  writer, justified by its non-uniform signature). **No per-class wrappers** —
+  `write_models` infers the class. `populate_region_coverage` landed in
+  `io/write_utils.py`. Registry expanded to 12 entries (added `Cluster`,
+  `ClusterHierarchy`, `ClusterMembership`, `MappingSet`, `CellToClusterMapping`,
+  `CellFeatureSet`, `CellFeatureDefinition`, `CellFeatureMatrix`,
+  `ProjectionMeasurementMatrix`); `CellToCellMapping` / `ClusterToClusterMapping` /
+  `AlgorithmRun` deferred (no notebook writes them this round). **Deviation:** did
+  **not** add `wide_parquet` mode — the wide cell-feature Parquet is built from raw
+  dataframes that don't fit `WriteSpec`'s shape; `CellFeatureMatrix` stays as
+  `overwrite_scoped` for its metadata-pointer rows. Revisit when the wide-matrix
+  contract is clarified. Tests: `tests/test_writers.py`, `tests/test_write_relocation.py`
+  (full suite 119 passing).
 - [ ] **W4 — Public API** (`prompts/04_public_api.md`) — `io/__init__.py`: curated
   re-exports + `__all__`. The user-facing surface; defines what autocomplete shows. Blocked
   by W3.

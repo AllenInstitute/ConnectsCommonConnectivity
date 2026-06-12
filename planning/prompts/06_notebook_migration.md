@@ -3,34 +3,72 @@
 > Prepend `00_shared_context.md`. Depends on writers (and readers for verification cells).
 
 ## Goal
-Migrate the ETL notebooks in `code/etl_*.ipynb` to use the new IO API. Move bookkeeping
-into the library; keep the science logic and verification cells. The output path lives in
-ONE file (`ccc_config.yaml`) discovered automatically — notebooks carry no path and no
-config cell.
+Migrate the ETL notebooks in `code/etl_*.ipynb` to use the new IO API. Replace the
+hand-rolled `write_deltalake(... mode/predicate/partition_by ...)` calls with
+`write_models` / `write_projection_matrix`, and replace the hardcoded
+`OUTPUT_ROOT = "../scratch/..."` constant with a call to
+`connects_common_connectivity.config.output_root()` — a cwd-aware helper that returns
+the path string with trailing `/`, so it's a literal drop-in for the old constant.
+Notebooks keep their per-dataset config cell (input paths, dataset/project ids,
+versions, feature-set ids, etc.); only the output root and the manual write
+bookkeeping move into the library.
 
-## First: create the config file
-Create `ccc_config.yaml` at the repo root (the single source of truth, version-controlled):
-```yaml
-output_root: ../scratch/em_patchseq_wnm_v1/   # match the value grep'd from code/*.ipynb
-dry_run: false
-```
-To repoint local vs CodeOcean, edit this file (or set `CCC_OUTPUT_ROOT`); nothing else
-changes. The library finds it by walking up from the notebook's working directory.
+## Required reading before touching any notebook
+1. `etl_example_prompt.md` (repo root) — describes the **pre-migration** notebook patterns:
+   write predicates, two-level overwrite rules, `append_new_dataitems`, the patchseq
+   shared-partition bug, parent propagation, etc. Read this so you understand WHAT each
+   notebook is doing scientifically and WHY the old write patterns were shaped that way.
+   Treat its rules about ids, enums, schemas, and verification cells as still binding.
+2. `src/connects_common_connectivity/io/` — the **post-migration** target. The functions
+   `write_models`, `write_projection_matrix`, `get_settings`, `table_path` (re-exported
+   from `connects_common_connectivity.io`) now own everything `etl_example_prompt.md`
+   spelled out by hand: mode, predicate, partition_by, append-new-by-id, two-level scoping
+   per class. Migration is the act of replacing those manual rules with these calls.
+3. The config file `ccc_config.yaml` already exists at repo root — do NOT recreate it.
+   Migration only edits notebooks.
+
+## What changes between old and new
+| Old (per `etl_example_prompt.md`) | New (this migration) |
+|---|---|
+| `OUTPUT_ROOT = "../scratch/..."` constant in cell 3 | `OUTPUT_ROOT = output_root()` — same string shape, sourced from `ccc_config.yaml` |
+| `write_deltalake(path, table, mode="overwrite", predicate=..., partition_by=...)` | `write_models(instance_or_list)` — registry owns mode/predicate/partition |
+| `append_new_dataitems(...)` for `dataitem/` | `write_models(dataitem_list)` — append-new-by-id is the registered mode |
+| Manual two-level predicate strings | None in notebooks; the `WriteSpec` for each class encodes them |
+| Verification cell hardcoded path string | `output_root() + "<table>/"` (or `table_path(get_settings(), "<table>")` for a typed `Path`) |
+| `write_deltalake(...)` for projection matrix wide form | `write_projection_matrix(pmm, dense_matrix)` |
+
+The model construction, ETL transforms, and verification assertions do not change.
 
 ## Per ETL notebook
-1. Delete the hardcoded `OUTPUT_ROOT = "../scratch/..."` entirely. There is no replacement
-   config cell and no `%run` — the library discovers `ccc_config.yaml` on its own, so
-   `write_models(...)` calls need neither a path nor `settings=`. (If a cell wants to show
-   the resolved config, it may `from connects_common_connectivity.io import get_settings;
-   print(get_settings())`, but this is optional.)
+1. Replace the hardcoded `OUTPUT_ROOT = "../scratch/..."` with
+   `OUTPUT_ROOT = output_root()` (imported from
+   `connects_common_connectivity.config`). The helper returns a cwd-relative path
+   string with trailing `/`, so existing string concatenations like
+   `OUTPUT_ROOT + "dataitem/"` keep working. `write_models(...)` calls need neither a
+   path nor `settings=` — the library discovers `ccc_config.yaml` on its own.
 2. Replace each direct `write_deltalake(... mode=... predicate=... partition_by=...)` call
    with `write_models(my_instance)` (or `write_models([inst1, inst2])`). The class is
    inferred from the argument; the registry owns mode / predicate / partition. Use
    `write_projection_matrix(pmm, matrix)` for the one projection notebook — it's the
    single non-`write_models` writer. Delete the now-redundant `mode`/`predicate`/
    `partition_by` arguments and their explanatory comments.
-3. Keep verification cells; update their paths to use
-   `table_path(get_settings(), ...)`.
+3. Keep verification cells; their `OUTPUT_ROOT + "<table>/"` reads continue to work
+   unchanged once `OUTPUT_ROOT` is sourced from `output_root()`.
+
+## Pilot first — do not fan out
+Migrate ONE notebook end-to-end before touching any others. Pick
+`etl_visp_inh_patchseq_01_dataset_dataitem.ipynb` as the pilot (small, exercises the
+patchseq bug, uses both `DataSet` and `DataItem` writes). For the pilot:
+
+1. Run the pre-migration version once and record the output Delta tables (row counts and
+   `(project_id, id)` sets for `dataset/`, `dataitem/`, `dataitem_dataset_association/`).
+2. Migrate the notebook per the rules above and run it against a **fresh** output root
+   (point `ccc_config.yaml` or `CCC_OUTPUT_ROOT` somewhere new so the pre-migration data
+   is preserved for comparison).
+3. Diff: assert the post-migration tables match the pre-migration ones in row count and
+   `(project_id, id)` set equality. Any drift is a registry/spec bug — STOP and report
+   before migrating further notebooks.
+4. Only after the pilot passes the diff, proceed in the order below.
 
 ## Migrate in this order
 1. `etl_*_01_dataset_dataitem.ipynb` (all of minnie, wnm, visp_exc/inh patchseq) — these

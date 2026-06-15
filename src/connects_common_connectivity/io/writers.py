@@ -297,9 +297,31 @@ def write_projection_matrix(
     return write_models(enriched, settings=settings)
 
 
+def write_cellcellconnectivitylong(
+    *args: Any, **kwargs: Any
+) -> WriteResult:
+    """Placeholder writer for ``CellCellConnectivityLong`` rows.
+
+    TODO: ``CellCellConnectivityLong`` is not yet in the WriteSpec REGISTRY,
+    and the existing ETL notebooks (``etl_minnie_04_cell_cell.ipynb``,
+    ``parse_minnie_clustering.ipynb``) write to non-canonical, run-specific
+    subdirs (e.g. ``cellcellconnectivitylong_proofread_pre_to_csm_post/``)
+    rather than the canonical ``cellcellconnectivitylong/`` subdir that
+    ``write_models`` would resolve. Until we either (a) consolidate those
+    callers onto the canonical subdir and add a ``WriteSpec``, or (b) extend
+    the dispatch to accept a per-call subdir override, those notebooks keep
+    using ``write_deltalake`` directly. This stub exists as a reminder.
+    """
+    raise NotImplementedError(
+        "write_cellcellconnectivitylong is not implemented yet; "
+        "see writers.py docstring for migration plan."
+    )
+
+
 __all__ = [
     "WRITABLE_CLASSES",
     "WriteResult",
     "write_models",
     "write_projection_matrix",
+    "write_cellcellconnectivitylong",
 ]

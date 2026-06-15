@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `WriteSpec` registry entries for `AlgorithmRun` and
+  `HierarchyCategory` (both project-agnostic, scope=`["id"]`,
+  `overwrite_scoped`). These classes are now writable through
+  `write_models(...)` and surface in `WRITABLE_CLASSES`.
 - Added write-time validation: `write_models()` now re-validates each
   model through a runtime-derived strict subclass that flips
   `WriteSpec.required_for_write` slots to non-optional, raising
@@ -28,21 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated `code/etl_*.ipynb` notebooks to the curated IO API:
+  hardcoded `OUTPUT_ROOT = "../scratch/..."` strings are replaced with
+  `output_root()` from `connects_common_connectivity.config`, and
+  hand-rolled `write_deltalake(..., mode=..., predicate=..., partition_by=...)`
+  calls for registry-backed models are replaced with `write_models(...)`
+  (and `write_projection_matrix(...)` for projection matrices).
 - Moved `arrow_utils` and `write_utils` under
-  `connects_common_connectivity.io.*`. The old import paths
-  (`connects_common_connectivity.arrow_utils`,
-  `connects_common_connectivity.write_utils`) keep working as deprecated
-  re-export shims.
+  `connects_common_connectivity.io.*`.
 
 ### Deprecated
 
-- Importing from `connects_common_connectivity.arrow_utils` and
-  `connects_common_connectivity.write_utils`; use
-  `connects_common_connectivity.io.arrow_utils` /
-  `connects_common_connectivity.io.write_utils` instead. The shims will be
-  removed once notebook migration completes.
-
 ### Removed
+
+- Removed the deprecated re-export shims
+  `connects_common_connectivity.arrow_utils` and
+  `connects_common_connectivity.write_utils`. Import from
+  `connects_common_connectivity.io.arrow_utils` /
+  `connects_common_connectivity.io.write_utils` instead.
 
 ### Fixed
 

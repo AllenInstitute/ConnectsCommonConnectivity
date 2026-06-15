@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from ..models import (
+    AlgorithmRun,
     CellFeatureDefinition,
     CellFeatureMatrix,
     CellFeatureSet,
@@ -27,6 +28,7 @@ from ..models import (
     DataItem,
     DataItemDataSetAssociation,
     DataSet,
+    HierarchyCategory,
     MappingSet,
     ProjectionMeasurementMatrix,
 )
@@ -148,6 +150,22 @@ REGISTRY: dict[str, WriteSpec] = {
         # in etl_wnm_exc_04). The notebook predicate is therefore ``id IN (...)``
         # only, with no partition columns. Once the schema gains
         # ``ProjectScoped``, partition_by/scope_columns should be widened.
+        partition_by=[],
+        scope_columns=["id"],
+        write_mode="overwrite_scoped",
+    ),
+    # AlgorithmRun and HierarchyCategory are project-agnostic taxonomy metadata
+    # (no project_id slot). Notebook predicates are id-only, matching scope=["id"].
+    "AlgorithmRun": WriteSpec(
+        model_cls=AlgorithmRun,
+        subdir="algorithmrun",
+        partition_by=[],
+        scope_columns=["id"],
+        write_mode="overwrite_scoped",
+    ),
+    "HierarchyCategory": WriteSpec(
+        model_cls=HierarchyCategory,
+        subdir="hierarchycategory",
         partition_by=[],
         scope_columns=["id"],
         write_mode="overwrite_scoped",

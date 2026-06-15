@@ -28,6 +28,7 @@ from connects_common_connectivity.io.writers import (
     write_projection_matrix,
 )
 from connects_common_connectivity.models import (
+    AlgorithmRun,
     CellFeatureDefinition,
     CellFeatureMatrix,
     CellFeatureSet,
@@ -38,6 +39,7 @@ from connects_common_connectivity.models import (
     DataItem,
     DataItemDataSetAssociation,
     DataSet,
+    HierarchyCategory,
     Laterality,
     MappingSet,
     Modality,
@@ -245,6 +247,10 @@ def _make_instance(cls):
             region_index=["VISp"],
             values="file:///tmp/pmm.delta",
         )
+    if cls is AlgorithmRun:
+        return AlgorithmRun(id="run1", algorithm_name="kmeans")
+    if cls is HierarchyCategory:
+        return HierarchyCategory(id="cluster", description="leaf", level="0")
     raise AssertionError(f"no fixture for {cls.__name__}")
 
 

@@ -2,7 +2,7 @@
 import pyarrow as pa
 import pytest
 
-from connects_common_connectivity.write_utils import append_new_dataitems
+from connects_common_connectivity.io.write_utils import append_new_dataitems
 
 
 def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:

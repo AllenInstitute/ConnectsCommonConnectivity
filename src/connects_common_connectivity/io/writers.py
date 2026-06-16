@@ -21,7 +21,7 @@ import pyarrow as pa
 from deltalake import write_deltalake
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings, table_path
+from ..config import Settings, get_settings
 from .arrow_utils import attach_linkml_metadata, build_arrow_schema, models_to_table
 from .write_spec import REGISTRY, WriteSpec, get_spec
 from .write_utils import append_new_dataitems, populate_region_coverage
@@ -224,7 +224,37 @@ def _dispatch_append_new_by_id(
 # ---------------------------------------------------------------------------
 
 
-def write_models(models: Any, *, settings: Settings | None = None) -> WriteResult:
+def _resolve_output_root(
+    settings: Settings | None,
+    output_root: str | Path | None,
+) -> Path:
+    """Resolve the effective on-disk root for a single write call.
+
+    Precedence (highest first):
+
+    1. Explicit ``output_root=`` (str or :class:`Path`). Used verbatim;
+       passing both ``settings=`` and ``output_root=`` is an error so callers
+       never have to remember a precedence rule.
+    2. Explicit ``settings=`` → ``settings.output_root``.
+    3. :func:`get_settings` → the discovered ``ccc_config.yaml``.
+    """
+    if output_root is not None and settings is not None:
+        raise TypeError(
+            "Pass either settings= or output_root=, not both. "
+            "output_root= is the per-call override; settings= carries the "
+            "full Settings object."
+        )
+    if output_root is not None:
+        return Path(output_root)
+    return Path((settings or get_settings()).output_root)
+
+
+def write_models(
+    models: Any,
+    *,
+    settings: Settings | None = None,
+    output_root: str | Path | None = None,
+) -> WriteResult:
     """Write a batch of generated pydantic models to the shared Delta lake.
 
     The class is inferred from ``models`` and dispatched through its
@@ -239,8 +269,16 @@ def write_models(models: Any, *, settings: Settings | None = None) -> WriteResul
         same class. The class must be one of :data:`WRITABLE_CLASSES`.
     settings:
         Optional explicit settings. Falls back to :func:`get_settings` when
-        omitted; an explicit ``settings=`` always wins (matches the
-        precedence documented in :mod:`connects_common_connectivity.config`).
+        omitted; an explicit ``settings=`` always wins over the discovered
+        config (matches the precedence documented in
+        :mod:`connects_common_connectivity.config`).
+    output_root:
+        Optional per-call override of the on-disk root under which the
+        canonical ``spec.subdir`` is written. Use this when a single
+        notebook/dataset should write to a different location than the
+        shared ``ccc_config.yaml`` ``output_root`` (e.g. an isolated test
+        dataset). Mutually exclusive with ``settings=`` — passing both
+        raises ``TypeError``.
 
     Returns
     -------
@@ -265,12 +303,12 @@ def write_models(models: Any, *, settings: Settings | None = None) -> WriteResul
 
     items = list(_validation_hook(items, spec))
 
-    settings = settings or get_settings()
+    root = _resolve_output_root(settings, output_root)
     schema = build_arrow_schema(cls)
     table = models_to_table(items, schema=schema)
     table = attach_linkml_metadata(table, linkml_class=cls.__name__)
 
-    path = table_path(settings, spec.subdir)
+    path = root / spec.subdir
 
     if spec.write_mode == "overwrite_scoped":
         return _dispatch_overwrite_scoped(table, spec, path)
@@ -283,7 +321,11 @@ def write_models(models: Any, *, settings: Settings | None = None) -> WriteResul
 
 
 def write_projection_matrix(
-    pmm: Any, matrix: Any, *, settings: Settings | None = None
+    pmm: Any,
+    matrix: Any,
+    *,
+    settings: Settings | None = None,
+    output_root: str | Path | None = None,
 ) -> WriteResult:
     """Enrich ``pmm`` with derived ``region_coverage`` and write it.
 
@@ -292,9 +334,12 @@ def write_projection_matrix(
     alongside the model so coverage can be derived from it. The input
     ``pmm`` is not mutated — :func:`populate_region_coverage` returns a
     new instance.
+
+    ``settings`` and ``output_root`` have the same semantics — and the same
+    mutual-exclusion rule — as in :func:`write_models`.
     """
     enriched = populate_region_coverage(pmm, matrix)
-    return write_models(enriched, settings=settings)
+    return write_models(enriched, settings=settings, output_root=output_root)
 
 
 def write_cellcellconnectivitylong(

@@ -326,3 +326,79 @@ def test_write_models_rejects_unregistered_class(settings):
 
     with pytest.raises(TypeError):
         write_models(NotInRegistry(), settings=settings)
+
+
+# ---------------------------------------------------------------------------
+# Per-call output_root override
+# ---------------------------------------------------------------------------
+
+
+def test_write_models_output_root_override_writes_to_given_path(tmp_path):
+    """Passing output_root= writes under that root, bypassing get_settings()."""
+    alt_root = tmp_path / "alt_dataset"
+    ds = DataSet(id="d_alt", name="alt", project_id="p_alt")
+
+    result = write_models(ds, output_root=alt_root)
+
+    assert result.path == alt_root / "dataset"
+    rows = pl.read_delta(str(alt_root / "dataset")).filter(
+        pl.col("id") == "d_alt"
+    )
+    assert rows.shape[0] == 1
+
+
+def test_write_models_output_root_accepts_string(tmp_path):
+    """str and Path are both accepted for output_root."""
+    alt_root = tmp_path / "string_root"
+    ds = DataSet(id="d_str", name="s", project_id="p_str")
+
+    result = write_models(ds, output_root=str(alt_root))
+
+    assert result.path == alt_root / "dataset"
+
+
+def test_write_models_rejects_both_settings_and_output_root(settings, tmp_path):
+    """Passing both settings= and output_root= raises (no precedence to memorize)."""
+    ds = DataSet(id="d_x", name="x", project_id="p_x")
+    with pytest.raises(TypeError, match="either settings= or output_root="):
+        write_models(ds, settings=settings, output_root=tmp_path / "other")
+
+
+def test_write_projection_matrix_output_root_override(tmp_path):
+    """write_projection_matrix forwards output_root through write_models."""
+    alt_root = tmp_path / "pmm_alt"
+    pmm = ProjectionMeasurementMatrix(
+        id="pmm_alt",
+        measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
+        modality=Modality.MORPHOLOGY,
+        laterality=Laterality.IPSILATERAL,
+        unit=Unit.MICRONS_LENGTH,
+        data_item_index=["c1", "c2"],
+        region_index=["r1", "r2"],
+        values="file:///tmp/pmm_alt.delta",
+    )
+    matrix = np.array([[1.0, 0.0], [0.0, 2.0]])
+
+    result = write_projection_matrix(pmm, matrix, output_root=alt_root)
+
+    assert result.path == alt_root / "projectionmeasurementmatrix"
+
+
+def test_write_projection_matrix_rejects_both_settings_and_output_root(
+    settings, tmp_path
+):
+    pmm = ProjectionMeasurementMatrix(
+        id="pmm_x",
+        measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
+        modality=Modality.MORPHOLOGY,
+        laterality=Laterality.IPSILATERAL,
+        unit=Unit.MICRONS_LENGTH,
+        data_item_index=["c1"],
+        region_index=["r1"],
+        values="file:///tmp/pmm_x.delta",
+    )
+    matrix = np.array([[1.0]])
+    with pytest.raises(TypeError, match="either settings= or output_root="):
+        write_projection_matrix(
+            pmm, matrix, settings=settings, output_root=tmp_path / "other"
+        )

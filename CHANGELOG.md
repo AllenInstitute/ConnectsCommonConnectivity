@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `CALCIUM_IMAGING` value to the `Modality` enum for calcium imaging
+  based functional correlations.
+- Added an `output_root=` keyword to `write_models()` and
+  `write_projection_matrix()` for per-call overrides of the on-disk root.
+  Accepts a `str` or `Path` and writes to `<output_root>/<spec.subdir>/`,
+  bypassing `ccc_config.yaml` for that call. Mutually exclusive with
+  `settings=` (passing both raises `TypeError`). Lets a single notebook
+  redirect its writes (e.g. an isolated test dataset) without mutating
+  process-global config or environment variables.
 - Added `WriteSpec` registry entries for `AlgorithmRun` and
   `HierarchyCategory` (both project-agnostic, scope=`["id"]`,
   `overwrite_scoped`). These classes are now writable through

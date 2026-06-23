@@ -16,6 +16,7 @@ The pilot of the Common Connectivity Pilot is focused on developing a framework 
 - Packaged with `pyproject.toml` and intended to be managed via `uv`
 - BrainRegion ETL example from Parquet (S3/local) via `examples/etl_brain_regions.py` or CLI `ccc etl-brain-regions`
 - Generic Parquet→LinkML loader utility (`parquet_loader.py`) for any class in the schema
+- Curated IO layer (`connects_common_connectivity.io`) for writing generated pydantic models to a shared Delta lake — `write_models(...)` / `write_projection_matrix(...)` dispatched via a `WriteSpec` registry, with output location resolved from `ccc_config.yaml`
 
 ## Getting Started (with uv)
 
@@ -147,7 +148,7 @@ Pydantic models; this repository currently favors agility for early design.
 
 ## ETL Notebooks
 
-A set of ETL Jupyter notebooks in `code/` registers real datasets into the shared Delta Lake store under `results/em_patchseq_wnm_v1/`. These serve as concrete working examples for every schema class.
+A set of ETL Jupyter notebooks in `code/` registers real datasets into a shared Delta Lake store via the `connects_common_connectivity.io` layer (`write_models`, `write_projection_matrix`). The output location is resolved from `ccc_config.yaml` at the repo root (or the `CCC_OUTPUT_ROOT` environment variable), so notebooks do not hard-code a destination path. These serve as concrete working examples for every schema class.
 
 - **`code/etl_examples_readme.ipynb`** — markdown-only overview of all registered datasets and feature sets: what each dataset contains, why cell counts differ between sources, and how shared feature sets work across projects. Start here if you're new to the data.
 

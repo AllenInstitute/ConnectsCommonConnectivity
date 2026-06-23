@@ -82,7 +82,7 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   (5) strict-validation failures in `tests/test_write_validation.py`; (6) public-API
   surface in `tests/test_public_api.py`. Full suite green: `uv run pytest -q` → 160
   passed.
-- [ ] **W8 — README / usage docs** — Update README for the write API. No prompt; small task.
+- [x] **W8 — README / usage docs** — Update README for the write API. No prompt; small task.
   Ask before large edits.
 
 ## Deferred (do not start; design kept for reference)

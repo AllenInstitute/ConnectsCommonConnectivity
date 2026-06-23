@@ -1,21 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-import connects_common_connectivity as ccc
-
-
-def _models():
-    return ccc.generate_pydantic_models()
-
-
 # ---------------------------------------------------------------------------
 # MappingSet — source/target endpoints can be DataSet or ClusterHierarchy
 # ---------------------------------------------------------------------------
 
 
-def test_mapping_set_dataset_to_dataset():
+def test_mapping_set_dataset_to_dataset(models):
     # Cell-to-cell shape: source_dataset + target_dataset (back-compat).
-    MappingSet = _models()["MappingSet"]
+    MappingSet = models["MappingSet"]
     ms = MappingSet(
         id="ms_cell_cell",
         name="ms_cell_cell",
@@ -30,9 +23,9 @@ def test_mapping_set_dataset_to_dataset():
     assert ms.target_hierarchy is None
 
 
-def test_mapping_set_dataset_to_hierarchy():
+def test_mapping_set_dataset_to_hierarchy(models):
     # Cell-to-cluster shape: source_dataset + target_hierarchy.
-    MappingSet = _models()["MappingSet"]
+    MappingSet = models["MappingSet"]
     ms = MappingSet(
         id="ms_cell_cluster",
         name="ms_cell_cluster",
@@ -47,9 +40,9 @@ def test_mapping_set_dataset_to_hierarchy():
     assert ms.source_hierarchy is None
 
 
-def test_mapping_set_hierarchy_to_hierarchy():
+def test_mapping_set_hierarchy_to_hierarchy(models):
     # Cluster-to-cluster shape: source_hierarchy + target_hierarchy.
-    MappingSet = _models()["MappingSet"]
+    MappingSet = models["MappingSet"]
     ms = MappingSet(
         id="ms_cluster_cluster",
         name="ms_cluster_cluster",
@@ -64,10 +57,10 @@ def test_mapping_set_hierarchy_to_hierarchy():
     assert ms.target_hierarchy == "visp_met_types_v1"
 
 
-def test_mapping_set_endpoints_optional():
+def test_mapping_set_endpoints_optional(models):
     # All four endpoint slots are optional at the schema level (LinkML can't enforce
     # "exactly one of"); convention is enforced per-mapping kind.
-    MappingSet = _models()["MappingSet"]
+    MappingSet = models["MappingSet"]
     ms = MappingSet(
         id="ms_minimal",
         name="ms_minimal", method_name="m", project_id="p1",
@@ -78,20 +71,20 @@ def test_mapping_set_endpoints_optional():
     assert ms.target_hierarchy is None
 
 
-def test_mapping_set_method_name_still_required():
-    MappingSet = _models()["MappingSet"]
+def test_mapping_set_method_name_still_required(models):
+    MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)method_name.*Field required"):
         MappingSet(id="ms1", project_id="p1")
 
 
-def test_mapping_set_project_id_still_required():
-    MappingSet = _models()["MappingSet"]
+def test_mapping_set_project_id_still_required(models):
+    MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Field required"):
         MappingSet(id="ms1", method_name="m")
 
 
-def test_mapping_set_hierarchy_fields_must_be_strings():
-    MappingSet = _models()["MappingSet"]
+def test_mapping_set_hierarchy_fields_must_be_strings(models):
+    MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)target_hierarchy.*Input should be a valid string"):
         MappingSet(
             id="ms1", method_name="m", project_id="p1",
@@ -104,8 +97,8 @@ def test_mapping_set_hierarchy_fields_must_be_strings():
 # ---------------------------------------------------------------------------
 
 
-def test_cell_to_cluster_mapping_round_trip():
-    CellToClusterMapping = _models()["CellToClusterMapping"]
+def test_cell_to_cluster_mapping_round_trip(models):
+    CellToClusterMapping = models["CellToClusterMapping"]
     m = CellToClusterMapping(
         id="map_001",
         mapping_set="ms_cell_cluster",
@@ -122,8 +115,8 @@ def test_cell_to_cluster_mapping_round_trip():
     assert m.probability == 0.91
 
 
-def test_cell_to_cluster_mapping_requires_target_cluster():
-    CellToClusterMapping = _models()["CellToClusterMapping"]
+def test_cell_to_cluster_mapping_requires_target_cluster(models):
+    CellToClusterMapping = models["CellToClusterMapping"]
     with pytest.raises(ValidationError, match=r"(?s)target_cluster.*Field required"):
         CellToClusterMapping(
             id="map_001",

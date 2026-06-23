@@ -99,6 +99,17 @@ def test_validate_for_write_accepts_a_list():
     assert [m.id for m in result] == ["c1", "c2"]
 
 
+def test_validate_for_write_list_reports_failing_row():
+    spec = REGISTRY["Cluster"]
+    items = [
+        Cluster(id="c1", hierarchy_id="h1"),
+        Cluster(id="c2"),  # missing hierarchy_id
+    ]
+    with pytest.raises(ValueError, match="hierarchy_id") as ei:
+        validate_for_write(items, spec)
+    assert "c2" in str(ei.value), f"error should name failing row; got: {ei.value}"
+
+
 def test_validate_for_write_passthrough_when_required_is_empty():
     spec = REGISTRY["DataSet"]
     ds = DataSet(id="d1", name="d", project_id="p1")
@@ -128,4 +139,7 @@ def test_write_models_calls_validation_before_io(tmp_path):
     with pytest.raises(ValueError, match="hierarchy_id"):
         write_models(bad, settings=settings)
     # No table directory created — IO never happened.
-    assert not (tmp_path / "cluster").exists()
+    assert not (tmp_path / "cluster").exists(), (
+        "validation failure should short-circuit before any IO; "
+        "cluster/ directory was created anyway"
+    )

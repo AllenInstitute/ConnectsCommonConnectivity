@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from connects_common_connectivity.config import (
     CONFIG_FILENAME,
     Settings,
@@ -14,16 +15,6 @@ from connects_common_connectivity.config import (
     output_root,
     table_path,
 )
-
-
-@pytest.fixture(autouse=True)
-def _reset_cache_and_env(monkeypatch, tmp_path):
-    """Each test runs in an isolated tmp cwd with a cleared cache and no env override."""
-    monkeypatch.delenv("CCC_OUTPUT_ROOT", raising=False)
-    monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
 
 
 def _write_config(dir_: Path, **values) -> Path:
@@ -105,14 +96,14 @@ def test_table_path_joins_and_returns_path(tmp_path):
 def test_output_root_is_required(tmp_path):
     _write_config(tmp_path, dry_run=False)  # missing output_root
     get_settings.cache_clear()
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match=r"(?s)output_root.*[Ff]ield required"):
         get_settings()
 
 
 def test_unknown_keys_rejected(tmp_path):
     _write_config(tmp_path, output_root=str(tmp_path), nonsense_key=1)
     get_settings.cache_clear()
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError, match=r"(?s)[Ee]xtra inputs are not permitted"):
         get_settings()
 
 

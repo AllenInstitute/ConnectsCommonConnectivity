@@ -51,7 +51,7 @@ def test_idempotent_partial_rerun(tmp_path):
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["a", "b"]), project_id="proj_a")
     n = append_new_dataitems(path, _make_table(["a", "b", "c"]), project_id="proj_a")
-    assert n == 1  # only "c" is new
+    assert n == 1, f"expected only 'c' to be new; appended {n} rows"
 
 
 # ---------------------------------------------------------------------------

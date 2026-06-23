@@ -227,7 +227,7 @@ def _dispatch_append_new_by_id(
 def _resolve_output_root(
     settings: Settings | None,
     output_root: str | Path | None,
-) -> Path:
+) -> tuple[Path, Settings | None]:
     """Resolve the effective on-disk root for a single write call.
 
     Precedence (highest first):
@@ -245,8 +245,9 @@ def _resolve_output_root(
             "full Settings object."
         )
     if output_root is not None:
-        return Path(output_root)
-    return Path((settings or get_settings()).output_root)
+        return Path(output_root), None
+    resolved = settings or get_settings()
+    return Path(resolved.output_root), resolved
 
 
 def write_models(
@@ -303,12 +304,21 @@ def write_models(
 
     items = list(_validation_hook(items, spec))
 
-    root = _resolve_output_root(settings, output_root)
+    root, resolved_settings = _resolve_output_root(settings, output_root)
+    path = root / spec.subdir
+
+    if resolved_settings is not None and resolved_settings.dry_run:
+        return WriteResult(
+            class_name=spec.model_cls.__name__,
+            path=path,
+            mode=spec.write_mode,
+            predicates=(),
+            rows_written=0,
+        )
+
     schema = build_arrow_schema(cls)
     table = models_to_table(items, schema=schema)
     table = attach_linkml_metadata(table, linkml_class=cls.__name__)
-
-    path = root / spec.subdir
 
     if spec.write_mode == "overwrite_scoped":
         return _dispatch_overwrite_scoped(table, spec, path)

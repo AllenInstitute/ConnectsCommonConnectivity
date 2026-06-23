@@ -64,4 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `write_models()` to honor `Settings.dry_run=True`: writes are now skipped,
+  `rows_written` is reported as `0`, and no Delta table directories are created.
+
 ### Security

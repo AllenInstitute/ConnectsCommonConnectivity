@@ -1,10 +1,10 @@
 # Tests Review — Implementation Plan
 
-Five PRs, each independently mergeable, each small enough to review in <10 min.
+Five sequential work packages, implemented in order on the same execution track (no PR slicing).
 
 ---
 
-## PR 1 — `conftest.py` foundation (enables everything else)
+## Work Package 1 — `conftest.py` foundation (enables everything else)
 
 **Goal:** kill duplication and enforce stable test isolation (fresh cwd/env + cleared `get_settings` cache) in one shot.
 
@@ -57,7 +57,7 @@ Then:
 
 ---
 
-## PR 2 — Tighten exception assertions
+## Work Package 2 — Tighten exception assertions
 
 **Pattern:** prefer the narrowest exception + a `match=` that names the *field or condition*, not the generic word.
 
@@ -92,14 +92,14 @@ with pytest.raises(KeyError, match=r"UnregisteredModel"):
 
 Note: this test needs `from pydantic import BaseModel` at the top of `test_writers.py`. Match on the class name rather than the exact error string — it's a more durable contract than the message text.
 
-**Rule of thumb to leave in the PR description:**
+**Rule of thumb to leave in the package notes:**
 > Never `pytest.raises(Exception)`. Always pick the narrowest class the production code raises, and always include `match=` naming the field or condition. If you don't know which exception the code raises, that's the first thing to find out — that's the contract.
 
 For the dynamically-generated pydantic models in `test_basic.py`, import `from pydantic import ValidationError` at module top — it's the same class instance the dynamic models will raise.
 
 ---
 
-## PR 3 — Failure messages on regression-critical asserts
+## Work Package 3 — Failure messages on regression-critical asserts
 
 Only add custom messages where the failure mode is non-obvious. Don't litter every assert.
 
@@ -139,7 +139,7 @@ Skip messages on simple positive assertions like `assert cfd.range_max is None` 
 
 ---
 
-## PR 4 — Coverage drift guards & list-failure tests
+## Work Package 4 — Coverage drift guards & list-failure tests
 
 ### 4a. `WRITABLE_CLASSES` ↔ fixture drift
 
@@ -200,9 +200,9 @@ def test_validate_for_write_list_reports_failing_row():
 
 ---
 
-## PR 5 — Plug the real coverage gaps
+## Work Package 5 — Plug the real coverage gaps
 
-This is the only PR that touches behavior beyond test infra. Split per module to keep diffs small.
+This is the only work package that may touch behavior beyond test infra. Split per module to keep diffs small.
 
 ### 5a. `dry_run` semantics
 ```python
@@ -254,9 +254,21 @@ Drops `data/`, `results/`, `scratch/`, `metadata/`, `environment/` from the walk
 
 ---
 
+## Sequential execution guardrails (hard stops between packages)
+
+Do **not** start the next work package until the current package meets its guardrail.
+
+1. **WP1 → WP2:** `conftest.py` is in place, duplicated helper fixtures are removed from target files, and settings/cache isolation behavior remains intact.
+2. **WP2 → WP3:** broad `pytest.raises(Exception)` uses targeted in this plan are replaced with narrow exception types and meaningful `match=` checks.
+3. **WP3 → WP4:** custom assertion messages were added only to regression-critical/non-obvious assertions (no blanket message churn).
+4. **WP4 → WP5:** fixture drift guard(s) are in place and list-failure validation coverage is added; registry/fixture mismatch now fails with explicit guidance.
+5. **WP5 completion:** coverage-gap tests are in place; if `dry_run` exposes a real bug, fix behavior in the same package before declaring completion.
+
+---
+
 ## Sequencing & rollout
 
-| PR | Effort | Risk | Blocks |
+| Work package | Effort | Risk | Blocks |
 |---|---|---|---|
 | 1. conftest | 1h | low | 2, 3 |
 | 2. exceptions | 30m | low | — |
@@ -264,4 +276,4 @@ Drops `data/`, `results/`, `scratch/`, `metadata/`, `environment/` from the walk
 | 4. drift guards | 1h | low | — |
 | 5. coverage gaps | 2–4h | medium (may surface real bugs) | — |
 
-PRs 1–4 are pure test refactors → merge fast. PR 5 is where you'll likely find a `dry_run` bug; budget time for a fix-PR alongside it.
+Work packages 1–4 are pure test refactors. Work package 5 is where you'll likely find a `dry_run` bug; budget time for an immediate behavior fix in the same execution sequence.

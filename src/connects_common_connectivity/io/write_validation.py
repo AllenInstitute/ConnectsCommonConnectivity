@@ -128,7 +128,7 @@ def validate_for_write(models: Any, spec: WriteSpec) -> Any:
         return items if was_iter else items[0]
 
     revalidated: list[BaseModel] = []
-    for m in items:
+    for idx, m in enumerate(items):
         try:
             revalidated.append(strict.model_validate(m.model_dump()))
         except ValidationError as err:
@@ -141,9 +141,11 @@ def validate_for_write(models: Any, spec: WriteSpec) -> Any:
                 }
             )
             slot_text = ", ".join(missing) if missing else "(see below)"
+            row_id = getattr(m, "id", None)
+            row_hint = f"row {idx}" if row_id is None else f"row {idx} (id={row_id})"
             raise ValueError(
                 f"{cls.__name__}: missing required_for_write slot(s): "
-                f"{slot_text}. {err}"
+                f"{slot_text} at {row_hint}. {err}"
             ) from err
 
     return revalidated if was_iter else revalidated[0]

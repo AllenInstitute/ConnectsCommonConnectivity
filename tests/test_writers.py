@@ -16,6 +16,7 @@ import numpy as np
 import polars as pl
 import pyarrow as pa
 import pytest
+from pydantic import BaseModel
 
 from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io.write_spec import REGISTRY
@@ -49,20 +50,6 @@ from connects_common_connectivity.models import (
 )
 
 # ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def settings(tmp_path) -> Settings:
-    return Settings(output_root=tmp_path)
-
-
-def _read(path) -> pl.DataFrame:
-    return pl.read_delta(str(path))
-
-
-# ---------------------------------------------------------------------------
 # Predicate construction
 # ---------------------------------------------------------------------------
 
@@ -78,11 +65,17 @@ def test_build_predicate_format():
     )
 
 
-def test_build_predicate_escapes_single_quotes():
-    assert (
-        _build_predicate(["name"], ["O'Hara"])
-        == "name = 'O''Hara'"
-    )
+@pytest.mark.parametrize(
+    "value,expected_literal",
+    [
+        ("O'Hara", "'O''Hara'"),
+        ("", "''"),
+        ("a\\b", "'a\\b'"),
+        ("café", "'café'"),
+    ],
+)
+def test_build_predicate_escapes(value, expected_literal):
+    assert _build_predicate(["name"], [value]) == f"name = {expected_literal}"
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +104,7 @@ def test_group_by_scope_preserves_first_appearance_order():
 # ---------------------------------------------------------------------------
 
 
-def test_patchseq_regression_two_datasets_same_project(settings):
+def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
     """Two DataSet rows with the same ``project_id`` but different ``id`` must coexist.
 
     Before W2/W3 the notebooks predicated on ``project_id`` only, so a
@@ -123,20 +116,35 @@ def test_patchseq_regression_two_datasets_same_project(settings):
     write_models(ds_a, settings=settings)
     write_models(ds_b, settings=settings)
 
-    rows = _read(settings.output_root / "dataset")
+    rows = read_delta(settings.output_root / "dataset")
     ids = sorted(rows["id"].to_list())
-    assert ids == ["visp_exc_patchseq", "visp_inh_patchseq"]
+    assert ids == ["visp_exc_patchseq", "visp_inh_patchseq"], (
+        f"patchseq regression: second write wiped first. "
+        f"Expected both datasets, got {ids}"
+    )
 
 
-def test_overwrite_scoped_is_idempotent(settings):
+def test_overwrite_scoped_is_idempotent(settings, read_delta):
     ds = DataSet(id="d1", name="example", project_id="p1")
     write_models(ds, settings=settings)
     write_models(ds, settings=settings)
-    rows = _read(settings.output_root / "dataset")
-    assert rows.shape[0] == 1
+    rows = read_delta(settings.output_root / "dataset")
+    assert rows.shape[0] == 1, f"idempotent rewrite produced {rows.shape[0]} rows"
+    assert rows["id"].to_list() == ["d1"], "row identity changed across rewrites"
+    assert rows["name"].to_list() == ["example"], "row content drifted across rewrites"
 
 
-def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings):
+def test_dry_run_does_not_write(tmp_path):
+    settings = Settings(output_root=tmp_path, dry_run=True)
+    ds = DataSet(id="d1", name="d", project_id="p1")
+
+    result = write_models(ds, settings=settings)
+
+    assert result.rows_written == 0, "dry_run must report 0 rows written"
+    assert not (tmp_path / "dataset").exists(), "dry_run must not create tables"
+
+
+def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, read_delta):
     rows_in = [
         DataSet(id="a", name="A", project_id="p1"),
         DataSet(id="b", name="B", project_id="p1"),
@@ -146,7 +154,7 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings):
     assert len(result.predicates) == 2
     assert result.rows_written == 2
     # Both end up in the table.
-    rows = _read(settings.output_root / "dataset")
+    rows = read_delta(settings.output_root / "dataset")
     assert sorted(rows["id"].to_list()) == ["a", "b"]
 
 
@@ -155,7 +163,7 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings):
 # ---------------------------------------------------------------------------
 
 
-def test_append_new_by_id_only_appends_unseen(settings):
+def test_append_new_by_id_only_appends_unseen(settings, read_delta):
     items_first = [
         DataItem(id="cell_1", name="cell_1", project_id="p1"),
         DataItem(id="cell_2", name="cell_2", project_id="p1"),
@@ -172,7 +180,7 @@ def test_append_new_by_id_only_appends_unseen(settings):
     r2 = write_models(items_second, settings=settings)
     assert r2.rows_written == 1
 
-    rows = _read(settings.output_root / "dataitem")
+    rows = read_delta(settings.output_root / "dataitem")
     assert sorted(rows["id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
 
 
@@ -190,79 +198,88 @@ def test_append_new_by_id_rejects_mixed_project_ids(settings):
 # ---------------------------------------------------------------------------
 
 
+INSTANCE_FACTORIES = {
+    DataSet: lambda: DataSet(id="ds1", name="ds", project_id="p1"),
+    DataItem: lambda: DataItem(id="di1", name="di1", project_id="p1"),
+    DataItemDataSetAssociation: lambda: DataItemDataSetAssociation(
+        dataitem_id="di1", dataset_id="ds1", project_id="p1"
+    ),
+    Cluster: lambda: Cluster(id="c1", hierarchy_id="h1", level=0),
+    ClusterHierarchy: lambda: ClusterHierarchy(id="h1", root="c1", clusters=["c1"]),
+    ClusterMembership: lambda: ClusterMembership(
+        item="cell_1", cluster="c1", hierarchy_id="h1", project_id="p1"
+    ),
+    MappingSet: lambda: MappingSet(id="m1", project_id="p1", name="m", method_name="dummy"),
+    CellToClusterMapping: lambda: CellToClusterMapping(
+        id="ctc1",
+        project_id="p1",
+        mapping_set="m1",
+        source_cell="cell_1",
+        target_cluster="c1",
+    ),
+    CellFeatureSet: lambda: CellFeatureSet(id="fs1", project_id="p1"),
+    CellFeatureDefinition: lambda: CellFeatureDefinition(
+        id="feat_a",
+        project_id="p1",
+        feature_set_id="fs1",
+        data_type="<f4",
+        unit=Unit.MICRONS_LENGTH.value,
+    ),
+    CellFeatureMatrix: lambda: CellFeatureMatrix(
+        id="cfm1",
+        project_id="p1",
+        feature_set_id="fs1",
+        parquet_path="file:///tmp/wide.parquet",
+        cell_index_column="id",
+    ),
+    ProjectionMeasurementMatrix: lambda: ProjectionMeasurementMatrix(
+        id="pmm1",
+        measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
+        modality=Modality.MORPHOLOGY,
+        laterality=Laterality.IPSILATERAL,
+        unit=Unit.MICRONS_LENGTH,
+        data_item_index=["cell_1"],
+        region_index=["VISp"],
+        values="file:///tmp/pmm.delta",
+    ),
+    AlgorithmRun: lambda: AlgorithmRun(id="run1", algorithm_name="kmeans"),
+    HierarchyCategory: lambda: HierarchyCategory(id="cluster", description="leaf", level="0"),
+}
+
+
 def _make_instance(cls):
     """Return a minimal valid instance of ``cls`` for the round-trip smoke test."""
-    if cls is DataSet:
-        return DataSet(id="ds1", name="ds", project_id="p1")
-    if cls is DataItem:
-        return DataItem(id="di1", name="di1", project_id="p1")
-    if cls is DataItemDataSetAssociation:
-        return DataItemDataSetAssociation(
-            dataitem_id="di1", dataset_id="ds1", project_id="p1"
+    try:
+        return INSTANCE_FACTORIES[cls]()
+    except KeyError:
+        pytest.fail(
+            f"No fixture for {cls.__name__}. Add an entry to "
+            "INSTANCE_FACTORIES in tests/test_writers.py."
         )
-    if cls is Cluster:
-        return Cluster(id="c1", hierarchy_id="h1", level=0)
-    if cls is ClusterHierarchy:
-        return ClusterHierarchy(id="h1", root="c1", clusters=["c1"])
-    if cls is ClusterMembership:
-        return ClusterMembership(
-            item="cell_1", cluster="c1", hierarchy_id="h1", project_id="p1"
-        )
-    if cls is MappingSet:
-        return MappingSet(id="m1", project_id="p1", name="m", method_name="dummy")
-    if cls is CellToClusterMapping:
-        return CellToClusterMapping(
-            id="ctc1",
-            project_id="p1",
-            mapping_set="m1",
-            source_cell="cell_1",
-            target_cluster="c1",
-        )
-    if cls is CellFeatureSet:
-        return CellFeatureSet(id="fs1", project_id="p1")
-    if cls is CellFeatureDefinition:
-        return CellFeatureDefinition(
-            id="feat_a",
-            project_id="p1",
-            feature_set_id="fs1",
-            data_type="<f4",
-            unit=Unit.MICRONS_LENGTH.value,
-        )
-    if cls is CellFeatureMatrix:
-        return CellFeatureMatrix(
-            id="cfm1",
-            project_id="p1",
-            feature_set_id="fs1",
-            parquet_path="file:///tmp/wide.parquet",
-            cell_index_column="id",
-        )
-    if cls is ProjectionMeasurementMatrix:
-        return ProjectionMeasurementMatrix(
-            id="pmm1",
-            measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
-            modality=Modality.MORPHOLOGY,
-            laterality=Laterality.IPSILATERAL,
-            unit=Unit.MICRONS_LENGTH,
-            data_item_index=["cell_1"],
-            region_index=["VISp"],
-            values="file:///tmp/pmm.delta",
-        )
-    if cls is AlgorithmRun:
-        return AlgorithmRun(id="run1", algorithm_name="kmeans")
-    if cls is HierarchyCategory:
-        return HierarchyCategory(id="cluster", description="leaf", level="0")
-    raise AssertionError(f"no fixture for {cls.__name__}")
+
+
+def test_every_writable_class_has_a_fixture():
+    missing = set(WRITABLE_CLASSES) - set(INSTANCE_FACTORIES)
+    assert not missing, (
+        f"WRITABLE_CLASSES added entries without fixtures: "
+        f"{sorted(c.__name__ for c in missing)}"
+    )
+    stale = set(INSTANCE_FACTORIES) - set(WRITABLE_CLASSES)
+    assert not stale, (
+        f"INSTANCE_FACTORIES has stale entries not in WRITABLE_CLASSES: "
+        f"{sorted(c.__name__ for c in stale)}"
+    )
 
 
 @pytest.mark.parametrize("cls", WRITABLE_CLASSES, ids=[c.__name__ for c in WRITABLE_CLASSES])
-def test_round_trip_each_writable_class(cls, settings):
+def test_round_trip_each_writable_class(cls, settings, read_delta):
     instance = _make_instance(cls)
     result = write_models(instance, settings=settings)
     assert result.class_name == cls.__name__
     spec = REGISTRY[cls.__name__]
     assert result.path == settings.output_root / spec.subdir
     assert result.rows_written == 1
-    rows = _read(result.path)
+    rows = read_delta(result.path)
     assert rows.shape[0] >= 1
 
 
@@ -271,7 +288,7 @@ def test_round_trip_each_writable_class(cls, settings):
 # ---------------------------------------------------------------------------
 
 
-def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings):
+def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings, read_delta):
     pmm = ProjectionMeasurementMatrix(
         id="pmm_test",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
@@ -294,7 +311,7 @@ def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings):
     assert result.class_name == "ProjectionMeasurementMatrix"
     assert pmm.region_coverage in (None, [])  # input not mutated
 
-    rows = _read(settings.output_root / "projectionmeasurementmatrix")
+    rows = read_delta(settings.output_root / "projectionmeasurementmatrix")
     coverage = rows.filter(pl.col("id") == "pmm_test")["region_coverage"].to_list()[0]
     assert list(coverage) == ["VISp", "MOB"]
 
@@ -324,8 +341,16 @@ def test_write_models_rejects_unregistered_class(settings):
     class NotInRegistry:
         pass
 
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="pydantic model or iterable"):
         write_models(NotInRegistry(), settings=settings)
+
+
+def test_write_models_rejects_unregistered_pydantic_model(settings):
+    class UnregisteredModel(BaseModel):
+        id: str
+
+    with pytest.raises(KeyError, match="UnregisteredModel"):
+        write_models(UnregisteredModel(id="u1"), settings=settings)
 
 
 # ---------------------------------------------------------------------------

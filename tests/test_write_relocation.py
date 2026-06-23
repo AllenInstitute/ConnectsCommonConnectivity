@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SEARCH_ROOTS = ["src", "tests", "code", "scripts", "planning"]
 
 EXCLUDED_DIRS = {".venv", ".git", ".pytest_cache", ".ruff_cache",
                  ".ipynb_checkpoints", ".Trash-0", "node_modules"}
@@ -41,13 +42,14 @@ def test_shim_modules_not_importable():
 
 
 def _iter_source_files():
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file():
+    for root in SEARCH_ROOTS:
+        base = REPO_ROOT / root
+        if not base.exists():
             continue
-        if any(part in EXCLUDED_DIRS for part in path.parts):
-            continue
-        if path.suffix in {".py", ".ipynb"}:
-            yield path
+        for path in base.rglob("*"):
+            if path.is_file() and path.suffix in {".py", ".ipynb"}:
+                if not any(part in EXCLUDED_DIRS for part in path.parts):
+                    yield path
 
 
 def test_no_source_references_shim_paths():

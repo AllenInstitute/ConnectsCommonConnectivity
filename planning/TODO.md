@@ -54,11 +54,22 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   predicate / partition columns are `Optional` in the generated schema). Tests:
   `tests/test_write_validation.py`. Cross-field rules deferred (still empty list
   on every spec).
-- [ ] **W6 — Notebook migration** (`prompts/06_notebook_migration.md`) — Migrate every
-  ETL notebook to typed writers; delete hardcoded `OUTPUT_ROOT` and per-cell
-  `mode`/`predicate`/`partition_by` (`ccc_config.yaml` already exists from W1). Run the
-  patchseq regression (exc then inh, both DataSet rows must coexist). Remove the W3
-  re-export shims and confirm nothing imports the old paths. Blocked by W3 (W5 preferred).
+- [x] **W6 — Notebook migration** (`prompts/06_notebook_migration.md`) — Every ETL
+  notebook now routes registry-backed writes through `write_models()` /
+  `write_projection_matrix()`; hardcoded `OUTPUT_ROOT = "../scratch/..."` strings
+  replaced with `output_root()` from `config`. Patchseq regression covered (exc and
+  inh `DataSet` rows coexist via `scope=["project_id", "id"]`). W3 re-export shims
+  removed; nothing imports the old `connects_common_connectivity.arrow_utils` /
+  `write_utils` paths. **Carve-outs (deferred, tracked elsewhere):**
+  (a) Wide cell-feature and wide projection-matrix parquets in
+  `etl_minnie_02`, `etl_visp_exc_patchseq_02`, `etl_visp_inh_patchseq_02`,
+  `etl_wnm_exc_02`, and `etl_wnm_exc_04` (ipsi/contra) still call
+  `write_deltalake` directly — `wide_parquet` mode not yet in the registry
+  (W3 deviation; revisit when the wide-matrix contract is clarified).
+  (b) `CellCellConnectivityLong` writes in `etl_minnie_04` (cells 19, 25) —
+  class not in the registry; `writers.py` has a `write_cellcellconnectivitylong`
+  stub documenting the migration plan.
+  (c) `etl_v1dd_01_v1196` cell 12 wide-parquet stub (still a `# TODO` placeholder).
 - [ ] **W7 — Write-side test suite** (`prompts/07_tests.md`) — Drift, patchseq regression,
   idempotency, append-new-by-id, predicate construction, per-class example smoke, no-shim
   regression, public-API surface. Owns only the gaps not specified by W2/W3/W4/W5.

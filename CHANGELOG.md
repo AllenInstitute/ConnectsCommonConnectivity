@@ -45,8 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardcoded `OUTPUT_ROOT = "../scratch/..."` strings are replaced with
   `output_root()` from `connects_common_connectivity.config`, and
   hand-rolled `write_deltalake(..., mode=..., predicate=..., partition_by=...)`
-  calls for registry-backed models are replaced with `write_models(...)`
-  (and `write_projection_matrix(...)` for projection matrices).
+  calls for every registry-backed model are replaced with `write_models(...)`
+  (and `write_projection_matrix(...)` for projection-matrix metadata rows).
+  Wide cell-feature / projection-matrix parquets and `CellCellConnectivityLong`
+  writes remain on raw `write_deltalake` pending registry support.
 - Moved `arrow_utils` and `write_utils` under
   `connects_common_connectivity.io.*`.
 

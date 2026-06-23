@@ -24,8 +24,6 @@ from .writers import (
     write_projection_matrix,
 )
 
-# TODO(W8): reader exports
-
 __all__ = [
     "get_settings",
     "Settings",

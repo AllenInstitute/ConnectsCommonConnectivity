@@ -6,13 +6,11 @@ the write actually depends on. Many generated fields are ``Optional`` in
 contexts, but the *write* path needs them concretely (e.g. the predicate
 columns, the partition columns, the id used for dedupe).
 
-W2's :class:`WriteSpec` records this in ``required_for_write``. This
-module turns that list into a real check by deriving a strict pydantic
-subclass of the generated model — runtime-only, never mutating
-``models.py`` — and re-validating each instance through it before any IO.
-
-The CLI's LinkML-conformance check is a different beast (whole-schema,
-generic, no registry). The two intentionally do not share code.
+The :class:`WriteSpec` for each writable class records this in
+``required_for_write``. This module turns that list into a real check by
+deriving a strict pydantic subclass of the generated model —
+runtime-only, never mutating ``models.py`` — and re-validating each
+instance through it before any IO.
 """
 
 from __future__ import annotations
@@ -107,10 +105,9 @@ def _coerce_iterable(models: Any) -> tuple[bool, list[BaseModel]]:
 def validate_for_write(models: Any, spec: WriteSpec) -> Any:
     """Re-validate ``models`` through the strict submodel for ``spec.model_cls``.
 
-    Same shape contract as the W3 ``_validation_hook``: a single instance
-    in returns a single instance out; an iterable in returns a list out.
-    No I/O. Pydantic-only. On failure, raises :class:`ValueError` naming
-    the class and the failing slot.
+    Single instance in returns a single instance out; an iterable in
+    returns a list out. No I/O. Pydantic-only. On failure, raises
+    :class:`ValueError` naming the class and the failing slot.
     """
     was_iter, items = _coerce_iterable(models)
     if not items:

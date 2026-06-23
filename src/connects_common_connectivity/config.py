@@ -148,9 +148,9 @@ def output_root(settings: Optional[Settings] = None, *, absolute: bool = False) 
     ``code/`` and a script running at the repo root both point at the same
     place. By default this function then returns the path **relative to the
     current working directory**, so a notebook in ``code/`` sees
-    ``"../scratch/em_patchseq_wnm_v1/"`` while a process at the repo root
-    sees ``"scratch/em_patchseq_wnm_v1/"``. Pass ``absolute=True`` to get the
-    fully resolved absolute path instead.
+    ``"../scratch/<project>/"`` while a process at the repo root sees
+    ``"scratch/<project>/"``. Pass ``absolute=True`` to get the fully
+    resolved absolute path instead.
 
     Prefer :func:`table_path` for new code — it returns a typed :class:`Path`
     for a named table subdir and is cwd-independent.

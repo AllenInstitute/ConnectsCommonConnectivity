@@ -2,12 +2,9 @@
 
 A :class:`WriteSpec` describes how a generated pydantic model is persisted into
 the shared Delta lake: which subdirectory, which partition columns, which scope
-columns, and which write mode the backend should dispatch on.
-
-Only the seed entries needed to unblock W3 are registered here
-(``DataSet``, ``DataItem``, ``DataItemDataSetAssociation``). Additional classes
-are added in W3 as their writers are prototyped — see
-``planning/prompts/03_writers.md``.
+columns, and which write mode the backend should dispatch on. :data:`REGISTRY`
+is the source of truth for which classes are writable; add an entry here to
+make a new class writable through :func:`write_models`.
 """
 
 from __future__ import annotations
@@ -53,9 +50,9 @@ REGISTRY: dict[str, WriteSpec] = {
         model_cls=DataSet,
         subdir="dataset",
         partition_by=["project_id"],
-        # patchseq fix: today's notebooks predicate only on project_id, which
-        # is why visp_inh_patchseq overwrites visp_exc_patchseq. Scoping on
-        # (project_id, id) keeps each DataSet row independent.
+        # Scoped on (project_id, id) so DataSet rows from sibling notebooks
+        # sharing a project_id (e.g. patchseq exc/inh) do not overwrite each
+        # other.
         scope_columns=["project_id", "id"],
         write_mode="overwrite_scoped",
     ),
@@ -140,7 +137,7 @@ REGISTRY: dict[str, WriteSpec] = {
         # the wide-form numeric Parquet at ``cellfeatures/{feature_set_id}/``
         # is built from raw dataframes in the notebook, not from a model
         # instance, so it does not flow through ``write_models`` and stays
-        # outside the registry. See planning/prompts/03_writers.md report.
+        # outside the registry.
         write_mode="overwrite_scoped",
     ),
     "ProjectionMeasurementMatrix": WriteSpec(

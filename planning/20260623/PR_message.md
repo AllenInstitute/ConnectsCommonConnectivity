@@ -51,6 +51,7 @@ The `WriteSpec` registered per writable class is one declaration that drives bot
 - Wide cell-feature / projection-matrix parquet writes (still use `write_deltalake` directly).
 - `CellCellConnectivityLong` — no registry entry yet; the `write_cellcellconnectivitylong` stub in `io/writers.py` documents the migration plan.
 - The `etl_v1dd_01` new dataset ingestion prototype ongoing in parallel.
+- A `merge_by_id` (read-existing → union → overwrite) write mode for shared scopes like `(visp_patchseq, visp_inh_patchseq)` where multiple notebooks contribute disjoint subsets. The union is currently inlined in patch-seq / WNM notebooks; see `planning/multi_writer_scope_design.md` for the draft design discussion.
 
 ## Verification
 

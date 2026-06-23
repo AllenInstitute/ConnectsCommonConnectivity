@@ -25,10 +25,11 @@ schemas/single_cell_schema.yaml
 ### Package utilities (read-only reference)
 ```
 src/connects_common_connectivity/models.py      # Pydantic models — read to understand fields
-src/connects_common_connectivity/arrow_utils.py # build_arrow_schema, models_to_table,
-                                                 # attach_linkml_metadata,
-                                                 # build_cell_feature_matrix_schema
-src/connects_common_connectivity/write_utils.py # append_new_dataitems, walk_ancestors
+src/connects_common_connectivity/io/arrow_utils.py # build_arrow_schema, models_to_table,
+                                                    # attach_linkml_metadata,
+                                                    # build_cell_feature_matrix_schema
+src/connects_common_connectivity/io/write_utils.py # walk_ancestors
+src/connects_common_connectivity/io/writers.py     # write_models, write_projection_matrix
 ```
 
 ### Example notebooks (read for patterns)
@@ -110,45 +111,30 @@ Every notebook follows this cell order. Do not skip sections.
 
 ## 5. Write pattern reference
 
-### 5a. `dataitem/` — use `append_new_dataitems` (never overwrite, never plain append)
+### 5a. Registry-backed tables — use `write_models` (do not hand-build predicates)
 
 ```python
-from connects_common_connectivity.write_utils import append_new_dataitems
+from connects_common_connectivity.io import write_models
 
-n = append_new_dataitems(OUTPUT_ROOT + "dataitem/", arrow_table, project_id=PROJECT_ID)
-print(f"Appended {n} new DataItem rows")
+result = write_models(rows, output_root=OUTPUT_ROOT)
+print(result.mode, result.rows_written, result.predicates)
 ```
 
-- Reads existing `(project_id, id)` pairs, appends only rows whose `id` is new.
-- Re-running appends nothing. Two notebooks sharing the same `project_id` do not clobber each other.
-- **Never** use `write_deltalake(..., mode="overwrite", predicate="project_id=...")` for `dataitem/`. A predicate-scoped overwrite wipes the entire partition, deleting the other dataset's cells.
+- `write_models` infers class from `rows`, then applies the registered `subdir`, `partition_by`, scope predicate, and write mode from `io/write_spec.py`.
+- For registry tables, notebook code should **not** call `write_deltalake` directly and should not build `predicate=` strings by hand.
+- Re-running is idempotent when you pass the full intended scope slice (the standard pattern in current notebooks).
 
-### 5b. All registry tables — `mode="overwrite"` with a two-level predicate
+### 5b. `DataItem` writes are id-deduped append via `write_models`
 
 ```python
-write_deltalake(
-    OUTPUT_ROOT + "<table>/", arrow_table,
-    mode="overwrite",
-    predicate=f"project_id = '{PROJECT_ID}' AND <discriminator> = '{VALUE}'",
-    partition_by=["project_id"],
-)
+new_dataitems = [DataItem(id=cid, name=cid, project_id=PROJECT_ID) for cid in new_ids]
+written = write_models(new_dataitems, output_root=OUTPUT_ROOT).rows_written
+print(f"DataItems appended: {written}")
 ```
 
-A **two-level predicate** is required. One level (`project_id`) is not enough when two notebooks share a `project_id` but write different rows to the same table. The second level pins the predicate to exactly the rows this notebook owns.
-
-| Table | Second predicate field | Example value |
-|---|---|---|
-| `dataset/` | `id` | `dataset_id = 'visp_inh_patchseq'` |
-| `dataitem_dataset_association/` | `dataset_id` | `dataset_id = 'visp_inh_patchseq'` |
-| `cellfeaturedefinition/` | `feature_set_id` | `feature_set_id = 'inh_visp_morph_features'` |
-| `cellfeatureset/` | `id` | `id = 'inh_visp_morph_features'` |
-| `cellfeaturematrix/` | `feature_set_id` | `feature_set_id = 'inh_visp_morph_features'` |
-| `clustermembership/` | `hierarchy_id` | `hierarchy_id = 'visp_met_types_taxonomy'` |
-| `celltoclustermapping/` | `mapping_set` | `mapping_set = 'visp_exc_wnm_mettype_mapping'` |
-| `projectionmeasurementmatrix/` | `id` | `id = 'wnm_exc_proj_ipsi'` |
-| `cellcellconnectivitylong/<example_id>/` | (folder scopes the example) | — |
-
-`cellfeaturedefinition/` should also use `partition_by=["project_id", "feature_set_id"]` for query performance.
+- `DataItem` dispatches to `append_new_by_id` (id dedupe within one `project_id` per call).
+- Re-running with the same ids appends nothing.
+- **Do not** use scoped overwrite for `dataitem/`.
 
 ### 5c. Wide-form feature parquet — `mode="overwrite"` with predicate on `project_id`
 
@@ -171,37 +157,34 @@ If a feature CSV contains cell ids not present in the `_01` DataItems, register 
 
 1. Read `dataitem_dataset_association/` filtered to `project_id AND dataset_id` → collect existing ids.
 2. Identify new ids (`set(csv_ids) - set(existing_ids)`).
-3. Call `append_new_dataitems` for new `DataItem` rows.
-4. Plain `mode="append"` for new `DataItemDataSetAssociation` rows — but only after deduplicating against existing association rows:
-   ```python
-   existing_assoc_ids = set(pl.read_delta(...).filter(...)[\"dataitem_id\"])
-   truly_new = [a for a in new_assoc if a.dataitem_id not in existing_assoc_ids]
-   if truly_new:
-       write_deltalake(..., mode="append", ...)
-   ```
+3. Call `write_models([...DataItem(...)...], output_root=OUTPUT_ROOT)` for any new cells.
+4. Re-assert the full `(project_id, dataset_id)` association scope with `write_models([...DataItemDataSetAssociation(...)...])` (pass the full intended set, not append-only deltas).
 
 ### 5e. Cluster taxonomy tables (global)
 
-`cluster/`, `clusterhierarchy/`, `algorithmrun/` have **no `project_id`**. Multiple taxonomies coexist in the same Delta table; scope by `hierarchy_id` (or `id` for the hierarchy/run rows themselves).
+`cluster/`, `clusterhierarchy/`, `algorithmrun/`, and `hierarchycategory/` have **no `project_id`**. Write through `write_models`; registry scopes are:
+
+- `Cluster`: `hierarchy_id`
+- `ClusterHierarchy`: `id`
+- `AlgorithmRun`: `id`
+- `HierarchyCategory`: `id`
 
 ```python
-write_deltalake(
-    OUTPUT_ROOT + "cluster/", arrow_table,
-    mode="overwrite",
-    predicate=f"hierarchy_id = '{HIERARCHY_ID}'",
-    partition_by=["hierarchy_id"],
-)
+write_models(cluster_rows, output_root=OUTPUT_ROOT)
+write_models([hierarchy_row], output_root=OUTPUT_ROOT)
+write_models([run_row], output_root=OUTPUT_ROOT)
+write_models(category_rows, output_root=OUTPUT_ROOT)
 ```
 
-Use `predicate=f"id = '{HIERARCHY_ID}'"` for the single `clusterhierarchy/` row and `predicate=f"id = '{RUN_ID}'"` for the single `algorithmrun/` row. See `etl_tasic_01_cluster.ipynb` and `etl_visp_met_types_01_cluster.ipynb`.
+See `etl_tasic_01_cluster.ipynb` and `etl_visp_met_types_01_cluster.ipynb`.
 
 ### 5f. Membership and mapping (project-scoped, per-hierarchy)
 
-- `clustermembership/` — predicate `project_id AND hierarchy_id`, `partition_by=["project_id", "hierarchy_id"]`.
-- `celltoclustermapping/` — predicate `project_id AND mapping_set`, `partition_by=["project_id", "mapping_set"]`.
-- `mappingset/` — predicate by `id` (one row per named mapping).
+- `ClusterMembership` is scoped by `project_id AND hierarchy_id`.
+- `CellToClusterMapping` is scoped by `project_id AND mapping_set`.
+- `MappingSet` is scoped by `project_id AND id`.
 
-When two notebooks merge into the same `(project_id, hierarchy_id)` slice (e.g. exc + inh patch-seq both writing memberships into `(visp_patchseq, visp_met_types_taxonomy)`), each must read the existing slice back, union with the new rows, then overwrite. Re-running either notebook is then idempotent.
+When two notebooks merge into the same scoped slice (for example, both patch-seq `_03` notebooks writing memberships for the same `(project_id, hierarchy_id)`), each notebook should write the full intended slice via `write_models(...)`. Re-running either notebook remains idempotent.
 
 ### 5g. Cell-cell connectivity (`cellcellconnectivitylong/`)
 
@@ -216,7 +199,7 @@ Predicate `project_id` only; the folder scopes the example. See `etl_minnie_04_c
 
 ### 5h. Projection matrix (`projectionmeasurementmatrix/` + wide-form parquet)
 
-One Delta row per matrix; underlying wide table in `projection_<matrix_id>/`. Predicate `project_id AND id` for the registry row; predicate `project_id` for the wide-form folder (the folder already scopes to one matrix). See `etl_wnm_exc_04_projection_matrix.ipynb`.
+Use `write_projection_matrix(pmm_row, dense_matrix, output_root=OUTPUT_ROOT)` for `ProjectionMeasurementMatrix` rows; it computes `region_coverage` from the dense matrix and delegates to the registry-backed writer. Keep direct `write_deltalake` only for the underlying wide-form `projectionmeasurementmatrix/<matrix_id>/` parquet folders. See `etl_wnm_exc_04_projection_matrix.ipynb`.
 
 ### 5i. Membership vs mapping
 
@@ -229,10 +212,10 @@ If the cells were not in the cohort that defined the taxonomy, write `CellToClus
 
 ### 5j. Parent propagation (`walk_ancestors`)
 
-Every membership and mapping is parent-propagated: one row per (cell × ancestor) all the way up to the root. Use `walk_ancestors` from `write_utils.py`:
+Every membership and mapping is parent-propagated: one row per (cell × ancestor) all the way up to the root. Use `walk_ancestors` from `io.write_utils`:
 
 ```python
-from connects_common_connectivity.write_utils import walk_ancestors
+from connects_common_connectivity.io.write_utils import walk_ancestors
 
 for ancestor_id, is_leaf in walk_ancestors(leaf_id, parent_by_child):
     ...  # build one row, set probability/membership_score on the leaf only
@@ -245,7 +228,7 @@ for ancestor_id, is_leaf in walk_ancestors(leaf_id, parent_by_child):
 ## 6. Building arrow tables
 
 ```python
-from connects_common_connectivity.arrow_utils import (
+from connects_common_connectivity.io.arrow_utils import (
     build_arrow_schema,
     models_to_table,
     attach_linkml_metadata,
@@ -317,10 +300,10 @@ When two projects (different `project_id`) share a feature set (same `feature_se
 
 | Mistake | What goes wrong | Correct approach |
 |---|---|---|
-| `write_deltalake(dataitem/, mode="overwrite", predicate="project_id=...")` | Wipes the entire partition, deleting the other dataset's cells | Use `append_new_dataitems` |
-| Single-level predicate `project_id` on shared tables | Second notebook wipes first notebook's rows | Always use two-level predicate |
-| `mode="append"` on registry tables (dataset, cellfeatureset, etc.) | Accumulates duplicate rows on every re-run | Use `mode="overwrite"` with predicate |
-| `mode="append"` on association table without dedup check | Accumulates duplicate association rows | Check existing ids before appending |
+| Calling `write_deltalake` directly for a registry-backed model table | Notebook-level predicate/partition drift from `io/write_spec.py` | Use `write_models(...)` |
+| Hand-building `predicate=` / `partition_by=` for model writes | Scope bugs (row loss or accidental clobber) | Let `write_models` apply the registered scope |
+| Writing `DataItem` with overwrite or plain append | Clobbers or duplicates within a project partition | Use `write_models(DataItem(...))` (append_new_by_id) |
+| Appending only delta associations in `_02`/`_03` notebooks | Partial reruns can leave missing links | Re-write the full `(project_id, dataset_id)` scoped association slice with `write_models` |
 | Raw string for enum slot (`modality="MORPHOLOGY"`) | Pydantic validation error | Use `Modality.MORPHOLOGY.value` |
 | Casting or reformatting id values | Ids won't match across tables | Use ids as-is from the source file |
 | Editing `models.py` directly | Changes lost on next schema regen | Edit the schema YAML, then regenerate |
@@ -328,12 +311,12 @@ When two projects (different `project_id`) share a feature set (same `feature_se
 | Verifying with `project_id` filter only on a shared table | Asserts pass but row count is wrong (includes other dataset) | Always filter by both `project_id` and `dataset_id` (or `feature_set_id`) |
 | Positional `models_to_table(rows, ModelClass)` or `attach_linkml_metadata(table, "Cluster")` | Silent schema-construction error, opaque message | Use `schema=` and `linkml_class=` kwargs |
 | Setting `AlgorithmRun.produced_hierarchies = [hierarchy]` | Pydantic expects an inlined dict, not a list — validation error | Omit it; `ClusterHierarchy.run` carries the inverse link |
-| `mode="overwrite"` on `clustermembership/` with predicate on `project_id` only | Wipes other hierarchies' rows for the same project | Use two-level predicate: `project_id AND hierarchy_id` |
+| Manual overwrite on `clustermembership/` scoped only by `project_id` | Wipes other hierarchies' rows for the same project | Use `write_models` (`ClusterMembership` scope is `project_id AND hierarchy_id`) |
 | Writing `ClusterMembership` for cells not in the cohort that defined the taxonomy | Misrepresents provenance — they were classified, not members | Use `CellToClusterMapping` + a `MappingSet` row instead |
 
 ---
 
 ## 11. Known limitations
 
-- **`HierarchyCategory` has no safe global write pattern today.** The table has no `project_id` and no `hierarchy_id` discriminator, and category ids (`class`, `subclass`, `cluster`) are intentionally shared across taxonomies. Predicate-scoped overwrite would clobber sibling taxonomies' rows; plain append collides on `id`. Current `_03` notebooks (`etl_minnie_03`, `etl_visp_met_types_01_cluster`) skip this write and flag a TODO. A global-dedup append helper is the planned fix.
+- **`HierarchyCategory` rows are id-scoped global vocabulary rows.** Because ids like `class`, `subclass`, and `cluster` are shared across taxonomies, only write canonical shared definitions (same ids/meaning) via `write_models`. Do not invent taxonomy-specific category ids without a schema-level discriminator.
 - **`CellCellConnectivityLong` has no `connectome_id` discriminator.** Two example connectomes for the same project must live in separate folders (see §5g). Schema addition would let them share a folder.

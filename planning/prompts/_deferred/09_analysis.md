@@ -13,14 +13,34 @@ function = premature module; relocate to `io/analysis.py` only when a second ana
 function arrives, a pure move with no public-API change). It reads finished data and
 summarizes; it never writes or mutates inputs.
 
-Port `compare_region_coverage(pmms)` from `io/io_plans.md`:
-- Input: list of `ProjectionMeasurementMatrix` instances with `region_index` and
-  `region_coverage` populated.
-- Compute `shared_regions` (intersection of `region_index`), `shared_coverage`
-  (intersection of `region_coverage`), and, for every non-empty subset of the inputs, the
-  count of regions exclusively covered by that combination.
-- Print the summary table shown in `io_plans.md` and return a dict with keys
-  `shared_regions`, `shared_coverage`, `exclusive_counts`.
+Spec for `compare_region_coverage(pmms) → dict` (moved here from the old
+`src/connects_common_connectivity/io/io_plans.md`; source-tree file deleted):
+
+- **Input:** `pmms` — list of `ProjectionMeasurementMatrix` instances, each with
+  `region_index` and `region_coverage` populated. (`region_coverage` is produced by
+  `populate_region_coverage`, already shipped in `io/write_utils.py`.)
+- **Computes:**
+  - `shared_regions`: intersection of all `region_index` across inputs (what regions can
+    we compare at all?).
+  - `shared_coverage`: intersection of all `region_coverage` across inputs (where do all
+    datasets have signal?).
+  - For every non-empty subset of the input PMMs (powerset, size 1 through N): count of
+    regions that are in that subset's `region_coverage` intersection but **not** in any
+    other PMM's `region_coverage` (exclusive to that combination).
+- **Prints:** A summary table showing, for each subset combination, how many regions are
+  exclusively covered by that combination. Example for 3 datasets A, B, C:
+  ```
+  Only in A:           12
+  Only in B:            5
+  Only in C:            8
+  Only in A ∩ B:        3
+  Only in A ∩ C:        2
+  Only in B ∩ C:        1
+  In all (A ∩ B ∩ C):  45
+  ```
+- **Returns:** dict with keys `shared_regions`, `shared_coverage`, and
+  `exclusive_counts` (mapping subset labels to region counts).
+- **Properties:** Pure function, no side effects. Does not modify inputs.
 
 ## B. Opt-in referential check — `check_refs`
 This is the home for the referential rule deliberately kept off the hot path in

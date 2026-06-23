@@ -28,12 +28,15 @@ This document assumes those and adds the design on top.
 - `parquet_loader.py` — `load_parquet_to_models(...)` (Parquet → models with a report).
 - `cli.py` — LinkML `SchemaView`-based full validation (the `ccc` command). Kept as the
   occasional heavyweight conformance check, **not** on the hot write path.
-- `io/io_plans.md` — two pre-existing ideas that are **different concerns** and must land in
-  different modules (see below):
+- `io/io_plans.md` — historical: two pre-existing design notes (now superseded). Both
+  are referenced below so the design history stays linkable. The source-tree file has
+  been deleted; what remained relevant moved into `planning/`:
   - `populate_region_coverage(pmm, matrix)` — derives `region_coverage` from the dense
-    values **before** a matrix is written → a **write-side transform**.
+    values **before** a matrix is written → a **write-side transform**. **Shipped** in
+    `io/write_utils.py`; the file's docstring is now the source of truth.
   - `compare_region_coverage(pmms)` — summarizes overlap across already-written matrices →
-    **read/analysis**.
+    **read/analysis**. **Deferred** to the read-side work; full spec moved to
+    `planning/prompts/_deferred/09_analysis.md`.
 
 ## Target `io/` structure (clean is the goal)
 
@@ -255,7 +258,7 @@ A single dispatch core, no per-class wrappers:
   caller does the enrichment and then calls `write_models`.
 - `io/write_utils.py` (moved from root): `append_new_dataitems` is the `append_new_by_id`
   backend; `walk_ancestors` is used by membership/mapping writers; `populate_region_coverage`
-  (ported from `io_plans.md`) is the pre-write projection helper. `write_projection_matrix`
+  (ported from the now-deleted `io_plans.md`) is the pre-write projection helper. `write_projection_matrix`
   calls `populate_region_coverage` (or accepts an already-enriched matrix). Keep it a pure
   function (no IO, no mutation of input). Generalize `append_new_dataitems` only if needed
   (e.g. parametrize the partition column) without breaking callers. Rationale: this is write
@@ -278,7 +281,8 @@ notebook migration. Once the write path is solid and notebooks are migrated, rev
   always drop to raw `polars.read_delta`; readers are conveniences, not a wall. When this
   starts, `parquet_loader.py` is **moved** to `io/parquet_loader.py` (pure move, not folded)
   and used as the typed-read backend.
-- **Read-side analysis**: `compare_region_coverage(pmms)` from `io_plans.md` (shared vs
+- **Read-side analysis**: `compare_region_coverage(pmms)` (spec in
+  `planning/prompts/_deferred/09_analysis.md`) (shared vs
   exclusive region coverage across matrices) — reads finished data and summarizes.
 - **Opt-in referential check** (`write_models(..., check_refs=True)`): needs a reader, so it
   rides with the read-side work.

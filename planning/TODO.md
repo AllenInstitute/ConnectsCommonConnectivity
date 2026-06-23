@@ -70,9 +70,18 @@ Flat, ordered list. One row per prompt; sub-tasks live in the prompts. Design li
   class not in the registry; `writers.py` has a `write_cellcellconnectivitylong`
   stub documenting the migration plan.
   (c) `etl_v1dd_01_v1196` cell 12 wide-parquet stub (still a `# TODO` placeholder).
-- [ ] **W7 — Write-side test suite** (`prompts/07_tests.md`) — Drift, patchseq regression,
-  idempotency, append-new-by-id, predicate construction, per-class example smoke, no-shim
-  regression, public-API surface. Owns only the gaps not specified by W2/W3/W4/W5.
+- [x] **W7 — Write-side test suite** (`prompts/07_tests.md`) — Coverage verified against
+  the prompt's gap list: (1) per-class smoke for every `WRITABLE_CLASSES` entry via
+  `tests/test_writers.py::test_round_trip_each_writable_class` (parametrized, auto-covers
+  the 14 registered classes including post-hoc `AlgorithmRun` / `HierarchyCategory`);
+  (2) no-shim regression in `tests/test_write_relocation.py`
+  (`test_shim_modules_deleted`, `test_shim_modules_not_importable`,
+  `test_no_source_references_shim_paths`); (3) registry drift in
+  `tests/test_write_spec.py`; (4) patchseq regression / idempotency / append-new-by-id /
+  predicate construction / per-call `output_root=` override in `tests/test_writers.py`;
+  (5) strict-validation failures in `tests/test_write_validation.py`; (6) public-API
+  surface in `tests/test_public_api.py`. Full suite green: `uv run pytest -q` → 160
+  passed.
 - [ ] **W8 — README / usage docs** — Update README for the write API. No prompt; small task.
   Ask before large edits.
 

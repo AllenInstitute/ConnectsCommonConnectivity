@@ -143,7 +143,7 @@ path turns out to need invariants that don't fit `WriteSpec` cleanly, stop and r
 before adding a separate function.
 
 ## Projection pre-write helper + `write_projection_matrix`
-Port `populate_region_coverage(pmm, matrix)` from `io/io_plans.md` into
+Port `populate_region_coverage(pmm, matrix)` from the (now-deleted) `io/io_plans.md` into
 `io/write_utils.py` (write plumbing — same shelf as `append_new_dataitems`, NOT a separate
 `transforms` module). Pure function: derive `region_coverage` from the dense values array,
 return a NEW `ProjectionMeasurementMatrix` instance (no mutation, no IO).

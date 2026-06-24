@@ -12,7 +12,7 @@ You are picking up an in-progress ETL notebook that ingests the V1DD release 119
   - §4 canonical notebook structure.
   - §5a–§5j write patterns per table family.
   - §10 common mistakes table.
-- `/root/capsule/CHANGELOG.md` — only relevant if you end up changing schemas (don't unless the user asks).
+- `/root/capsule/CHANGELOG.md` — only relevant if you end up changing schemas (don't change schemas unless the user asks).
 
 ### The notebook in progress (the one you'll be editing)
 - `/root/capsule/code/etl_v1dd_01_v1196.ipynb`

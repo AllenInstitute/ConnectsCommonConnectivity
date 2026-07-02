@@ -21,7 +21,7 @@ from typing import Any, Iterable, Sequence, Union, get_args, get_origin
 
 from pydantic import BaseModel, Field, ValidationError, create_model
 
-from .write_spec import WriteSpec
+from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 
 
 __all__ = ["strict_model_for", "validate_for_write"]
@@ -63,9 +63,6 @@ def strict_model_for(model_cls: type) -> type[BaseModel]:
     runtime-only subclass; assertions on the parent class's
     ``model_fields`` continue to reflect the schema as generated.
     """
-    # Local import avoids a hard top-level cycle through the registry.
-    from .write_spec import REGISTRY
-
     spec = REGISTRY.get(model_cls.__name__)
     required: Sequence[str] = spec.required_for_write if spec else ()
     if not required:

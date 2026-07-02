@@ -1,4 +1,5 @@
 """Tests for write_utils.append_new_dataitems."""
+import polars as pl
 import pyarrow as pa
 import pytest
 
@@ -94,7 +95,5 @@ def test_shared_project_two_sources(tmp_path):
     assert n_inh2 == 0
 
     # Total rows for the shared project
-    import polars as pl
-
     total = pl.read_delta(path).filter(pl.col("project_id") == "visp_patchseq").shape[0]
     assert total == 5

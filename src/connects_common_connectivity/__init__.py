@@ -11,6 +11,8 @@ from typing import Dict, Type
 
 from pydantic import BaseModel
 
+from connects_common_connectivity import models as _models
+
 __version__ = "0.1.0"
 
 _INTERNAL_CLASSES = frozenset({"ConfiguredBaseModel", "LinkMLMeta"})
@@ -18,8 +20,6 @@ _INTERNAL_CLASSES = frozenset({"ConfiguredBaseModel", "LinkMLMeta"})
 
 def generate_pydantic_models() -> Dict[str, Type]:
     """Return a dict mapping class/enum names to their types from the generated models module."""
-    from . import models as _models
-
     result: Dict[str, Type] = {}
     for name, obj in inspect.getmembers(_models, inspect.isclass):
         if name.startswith("_") or name in _INTERNAL_CLASSES:

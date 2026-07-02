@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 from connects_common_connectivity.config import (
     CONFIG_FILENAME,
@@ -15,11 +16,14 @@ from connects_common_connectivity.config import (
     output_root,
     table_path,
 )
+from connects_common_connectivity.io import (
+    Settings as IOSettings,
+    get_settings as io_get_settings,
+    table_path as io_table_path,
+)
 
 
 def _write_config(dir_: Path, **values) -> Path:
-    import yaml
-
     path = dir_ / CONFIG_FILENAME
     path.write_text(yaml.safe_dump(values))
     return path
@@ -108,12 +112,6 @@ def test_unknown_keys_rejected(tmp_path):
 
 
 def test_io_reexports_settings_helpers():
-    from connects_common_connectivity.io import (
-        Settings as IOSettings,
-        get_settings as io_get_settings,
-        table_path as io_table_path,
-    )
-
     assert IOSettings is Settings
     assert io_get_settings is get_settings
     assert io_table_path is table_path

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.write_validation import (
     strict_model_for,
     validate_for_write,
 )
+from connects_common_connectivity.io.writers import write_models
 from connects_common_connectivity.models import (
     CellFeatureDefinition,
     Cluster,
@@ -131,9 +133,6 @@ def test_validate_for_write_rejects_class_mismatch():
 
 
 def test_write_models_calls_validation_before_io(tmp_path):
-    from connects_common_connectivity.config import Settings
-    from connects_common_connectivity.io.writers import write_models
-
     settings = Settings(output_root=tmp_path)
     bad = Cluster(id="c1")  # hierarchy_id missing
     with pytest.raises(ValueError, match="hierarchy_id"):

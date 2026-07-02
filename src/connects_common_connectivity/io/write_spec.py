@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from ..models import (
+from connects_common_connectivity.models import (
     AlgorithmRun,
     CellFeatureDefinition,
     CellFeatureMatrix,

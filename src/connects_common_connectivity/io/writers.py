@@ -21,11 +21,11 @@ import pyarrow as pa
 from deltalake import write_deltalake
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
-from .arrow_utils import attach_linkml_metadata, build_arrow_schema, models_to_table
-from .write_spec import REGISTRY, WriteSpec, get_spec
-from .write_utils import append_new_dataitems, populate_region_coverage
-from .write_validation import validate_for_write
+from connects_common_connectivity.config import Settings, get_settings
+from connects_common_connectivity.io.arrow_utils import attach_linkml_metadata, build_arrow_schema, models_to_table
+from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
+from connects_common_connectivity.io.write_utils import append_new_dataitems, populate_region_coverage
+from connects_common_connectivity.io.write_validation import validate_for_write
 
 # ---------------------------------------------------------------------------
 # Result type

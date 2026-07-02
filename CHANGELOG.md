@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed `WriteResult` to `WrittenResult` in `connects_common_connectivity.io` and `connects_common_connectivity.io.writers`. Update any `from connects_common_connectivity.io import WriteResult` to use `WrittenResult`.
+
 ### Deprecated
 
 ### Removed

@@ -33,7 +33,7 @@ from connects_common_connectivity.io.write_validation import validate_for_write
 
 
 @dataclass(frozen=True)
-class WriteResult:
+class WrittenResult:
     """Return value of a single :func:`write_models` invocation.
 
     ``predicates`` is one entry per scope group for ``overwrite_scoped``
@@ -156,7 +156,7 @@ def _group_by_scope(
 
 def _dispatch_overwrite_scoped(
     table: pa.Table, spec: WriteSpec, path: Path
-) -> WriteResult:
+) -> WrittenResult:
     """Group by scope, issue one predicated overwrite per group."""
     groups = _group_by_scope(table, spec.scope_columns)
     predicates: list[str] = []
@@ -173,7 +173,7 @@ def _dispatch_overwrite_scoped(
         )
         predicates.append(predicate)
         rows_written += sub.num_rows
-    return WriteResult(
+    return WrittenResult(
         class_name=spec.model_cls.__name__,
         path=path,
         mode="overwrite_scoped",
@@ -184,7 +184,7 @@ def _dispatch_overwrite_scoped(
 
 def _dispatch_append_new_by_id(
     table: pa.Table, spec: WriteSpec, path: Path
-) -> WriteResult:
+) -> WrittenResult:
     """Append only rows whose id is new, scoped to a single ``project_id``."""
     if not spec.scope_columns:
         raise ValueError(
@@ -210,7 +210,7 @@ def _dispatch_append_new_by_id(
     rows_written = append_new_dataitems(
         str(path), table, project_id=project_id, id_column=id_column
     )
-    return WriteResult(
+    return WrittenResult(
         class_name=spec.model_cls.__name__,
         path=path,
         mode="append_new_by_id",
@@ -255,7 +255,7 @@ def write_models(
     *,
     settings: Settings | None = None,
     output_root: str | Path | None = None,
-) -> WriteResult:
+) -> WrittenResult:
     """Write a batch of generated pydantic models to the shared Delta lake.
 
     The class is inferred from ``models`` and dispatched through its
@@ -283,7 +283,7 @@ def write_models(
 
     Returns
     -------
-    WriteResult
+    WrittenResult
         Class name, on-disk path, dispatch mode, the predicates issued (one
         per scope group for ``overwrite_scoped``; empty for
         ``append_new_by_id``), and the number of rows written.
@@ -308,7 +308,7 @@ def write_models(
     path = root / spec.subdir
 
     if resolved_settings is not None and resolved_settings.dry_run:
-        return WriteResult(
+        return WrittenResult(
             class_name=spec.model_cls.__name__,
             path=path,
             mode=spec.write_mode,
@@ -336,7 +336,7 @@ def write_projection_matrix(
     *,
     settings: Settings | None = None,
     output_root: str | Path | None = None,
-) -> WriteResult:
+) -> WrittenResult:
     """Enrich ``pmm`` with derived ``region_coverage`` and write it.
 
     The single non-:func:`write_models` public writer, justified by the
@@ -354,7 +354,7 @@ def write_projection_matrix(
 
 def write_cellcellconnectivitylong(
     *args: Any, **kwargs: Any
-) -> WriteResult:
+) -> WrittenResult:
     """Placeholder writer for ``CellCellConnectivityLong`` rows.
 
     Not implemented. ``CellCellConnectivityLong`` has no ``WriteSpec`` entry
@@ -376,7 +376,7 @@ def write_cellcellconnectivitylong(
 
 __all__ = [
     "WRITABLE_CLASSES",
-    "WriteResult",
+    "WrittenResult",
     "write_models",
     "write_projection_matrix",
     "write_cellcellconnectivitylong",

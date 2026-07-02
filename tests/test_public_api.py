@@ -16,7 +16,7 @@ EXPECTED = {
     "table_path",
     "write_models",
     "write_projection_matrix",
-    "WriteResult",
+    "WrittenResult",
     "WRITABLE_CLASSES",
 }
 

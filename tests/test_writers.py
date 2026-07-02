@@ -22,7 +22,7 @@ from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io.write_spec import REGISTRY
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
-    WriteResult,
+    WrittenResult,
     _build_predicate,
     _group_by_scope,
     write_models,
@@ -150,7 +150,7 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, rea
         DataSet(id="b", name="B", project_id="p1"),
     ]
     result = write_models(rows_in, settings=settings)
-    assert isinstance(result, WriteResult)
+    assert isinstance(result, WrittenResult)
     assert len(result.predicates) == 2
     assert result.rows_written == 2
     # Both end up in the table.

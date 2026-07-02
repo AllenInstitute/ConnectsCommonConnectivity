@@ -19,7 +19,7 @@ from __future__ import annotations
 from connects_common_connectivity.config import Settings, get_settings, table_path
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
-    WriteResult,
+    WrittenResult,
     write_models,
     write_projection_matrix,
 )
@@ -30,6 +30,6 @@ __all__ = [
     "table_path",
     "write_models",
     "write_projection_matrix",
-    "WriteResult",
+    "WrittenResult",
     "WRITABLE_CLASSES",
 ]

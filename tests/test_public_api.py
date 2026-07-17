@@ -13,7 +13,6 @@ import connects_common_connectivity.io as io_mod
 EXPECTED = {
     "get_settings",
     "Settings",
-    "table_path",
     "write_models",
     "write_projection_matrix",
     "WrittenResult",

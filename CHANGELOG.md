@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed `table_path()` from `connects_common_connectivity.config` and its re-export from `connects_common_connectivity.io`. Build table paths from `output_root()` instead, e.g. `Path(output_root()) / "<table>"`.
+- Removed the `Settings.describe()` method. Use `repr(settings)` for a readable summary of the resolved settings.
+
 ### Fixed
 
 ### Security

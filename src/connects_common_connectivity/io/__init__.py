@@ -16,7 +16,7 @@ Example::
 
 from __future__ import annotations
 
-from connects_common_connectivity.config import Settings, get_settings, table_path
+from connects_common_connectivity.config import Settings, get_settings
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
@@ -27,7 +27,6 @@ from connects_common_connectivity.io.writers import (
 __all__ = [
     "get_settings",
     "Settings",
-    "table_path",
     "write_models",
     "write_projection_matrix",
     "WrittenResult",

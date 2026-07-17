@@ -114,20 +114,6 @@ def _anchor_path(value, base: Path) -> Path:
     return Path(os.path.abspath(p))
 
 
-def table_path(settings: Settings, table: str) -> Path:
-    """Resolve the on-disk path for a named Delta/Parquet table subdir.
-
-    ``table`` should be one of the canonical subdir names used by the
-    notebooks (e.g. ``"dataset"``, ``"dataitem"``,
-    ``"dataitem_dataset_association"``, ``"cellfeatureset"``,
-    ``"cellfeaturematrix"``, ``"cluster"``, ``"clusterhierarchy"``,
-    ``"clustermembership"``, ``"mappingset"``, ``"celltoclustermapping"``,
-    ``"projectionmeasurementmatrix"``). Callers pass the exact name so
-    nothing concatenates path strings ad hoc.
-    """
-    return Path(settings.output_root) / table
-
-
 def output_root(settings: Optional[Settings] = None, *, absolute: bool = False) -> str:
     """Return ``output_root`` as a string with a trailing ``/``.
 
@@ -140,9 +126,6 @@ def output_root(settings: Optional[Settings] = None, *, absolute: bool = False) 
     ``"../scratch/<project>/"`` while a process at the repo root sees
     ``"scratch/<project>/"``. Pass ``absolute=True`` to get the fully
     resolved absolute path instead.
-
-    Prefer :func:`table_path` for new code — it returns a typed :class:`Path`
-    for a named table subdir and is cwd-independent.
     """
     s = settings if settings is not None else get_settings()
     abs_path = Path(s.output_root)
@@ -165,5 +148,4 @@ __all__ = [
     "find_config_file",
     "get_settings",
     "output_root",
-    "table_path",
 ]

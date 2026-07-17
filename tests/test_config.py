@@ -131,13 +131,6 @@ def test_get_settings_is_cached(tmp_path, monkeypatch):
     assert third.output_root == Path(str(tmp_path / "changed"))
 
 
-def test_describe_includes_resolved_values(tmp_path):
-    settings = Settings(output_root=tmp_path / "root", dry_run=True)
-    text = settings.describe()
-    assert "root" in text
-    assert "dry_run=True" in text
-
-
 def test_output_root_helper_appends_trailing_slash(tmp_path, monkeypatch):
     _write_config(tmp_path, output_root=str(tmp_path / "out"))
     get_settings.cache_clear()

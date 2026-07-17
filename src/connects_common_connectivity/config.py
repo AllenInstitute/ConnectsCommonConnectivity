@@ -6,8 +6,6 @@ version-controlled ``ccc_config.yaml`` at the repo root. Every entry point
 :func:`get_settings`, which walks up from ``cwd`` to find that file,
 validates it with pydantic, and returns a cached :class:`Settings`.
 
-No notebook setup cell, no ``%run``, no process-global mutation.
-
 Resolution precedence (highest wins):
 
 1. An explicit ``settings=`` argument passed by a caller.
@@ -43,15 +41,6 @@ class Settings(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
-
-    def describe(self) -> str:
-        """Return a human-readable summary of the resolved settings."""
-        return (
-            f"Settings(output_root={self.output_root!s}, dry_run={self.dry_run})"
-        )
-
-    def __repr__(self) -> str:  # pragma: no cover - trivial
-        return self.describe()
 
 
 def find_config_file(

@@ -114,38 +114,9 @@ def _anchor_path(value, base: Path) -> Path:
     return Path(os.path.abspath(p))
 
 
-def output_root(settings: Optional[Settings] = None, *, absolute: bool = False) -> str:
-    """Return ``output_root`` as a string with a trailing ``/``.
-
-    Resolution rule (the bit that makes notebooks Just Work): a relative
-    ``output_root`` in ``ccc_config.yaml`` is anchored at the config file's
-    directory (the repo root), not at ``cwd``. So a notebook running in
-    ``code/`` and a script running at the repo root both point at the same
-    place. By default this function then returns the path **relative to the
-    current working directory**, so a notebook in ``code/`` sees
-    ``"../scratch/<project>/"`` while a process at the repo root sees
-    ``"scratch/<project>/"``. Pass ``absolute=True`` to get the fully
-    resolved absolute path instead.
-    """
-    s = settings if settings is not None else get_settings()
-    abs_path = Path(s.output_root)
-    if not abs_path.is_absolute():
-        abs_path = Path(os.path.abspath(abs_path))
-    if absolute:
-        text = str(abs_path)
-    else:
-        try:
-            text = os.path.relpath(abs_path, Path.cwd())
-        except ValueError:
-            # Different drives on Windows — fall back to absolute.
-            text = str(abs_path)
-    return text if text.endswith("/") else text + "/"
-
-
 __all__ = [
     "CONFIG_FILENAME",
     "Settings",
     "find_config_file",
     "get_settings",
-    "output_root",
 ]

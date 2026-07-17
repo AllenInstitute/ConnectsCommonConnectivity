@@ -13,7 +13,6 @@ from connects_common_connectivity.config import (
     Settings,
     find_config_file,
     get_settings,
-    output_root,
 )
 from connects_common_connectivity.io import (
     Settings as IOSettings,
@@ -110,28 +109,6 @@ def test_get_settings_is_cached(tmp_path, monkeypatch):
     assert third.output_root == Path(str(tmp_path / "changed"))
 
 
-def test_output_root_helper_appends_trailing_slash(tmp_path, monkeypatch):
-    _write_config(tmp_path, output_root=str(tmp_path / "out"))
-    get_settings.cache_clear()
-    # cwd is tmp_path (autouse fixture), so relpath of tmp_path/out is "out".
-    root = output_root()
-    assert isinstance(root, str)
-    assert root.endswith("/")
-    assert root == "out/"
-
-
-def test_output_root_helper_absolute_flag(tmp_path):
-    settings = Settings(output_root=tmp_path / "explicit")
-    assert output_root(settings, absolute=True) == str(tmp_path / "explicit") + "/"
-
-
-def test_output_root_helper_accepts_explicit_settings(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    explicit = Settings(output_root=tmp_path / "explicit")
-    # Default returns path relative to cwd (tmp_path).
-    assert output_root(explicit) == "explicit/"
-
-
 def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monkeypatch):
     # Config sits at tmp_path; output_root is relative ("scratch/x/").
     _write_config(tmp_path, output_root="scratch/x/")
@@ -144,6 +121,3 @@ def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monk
     # Settings.output_root is absolute, anchored at the config file's dir
     # (abspath, not resolve — symlinks must not be followed).
     assert settings.output_root == Path(os.path.abspath(tmp_path / "scratch" / "x"))
-
-    # output_root() returns the path relative to cwd → "../scratch/x/".
-    assert output_root() == "../scratch/x/"

@@ -74,7 +74,7 @@ Also read `code/etl_examples_readme.ipynb` for a plain-language summary of exist
    - **Global category vocabulary** (`HierarchyCategory`): no `project_id`, no `hierarchy_id`. Category ids (`class`, `subclass`, `cluster`) are intentionally shared across taxonomies — see §11.
    - **Project-scoped *and* taxonomy-scoped**: `ClusterMembership` (project + `hierarchy_id`), `CellToClusterMapping` (project + `mapping_set`).
 
-8. **Output root.** All notebooks write to `OUTPUT_ROOT = "../scratch/em_patchseq_wnm_v1/"`. Define this as a constant in cell 3.
+8. **Output root.** All notebooks obtain the write root with `OUTPUT_ROOT = get_settings().output_root` (imported from `connects_common_connectivity.config`) — an absolute `pathlib.Path` sourced from `ccc_config.yaml`. Define this in cell 3 and build subpaths with `/`, e.g. `OUTPUT_ROOT / "dataset"`.
 
 ---
 
@@ -142,7 +142,7 @@ Each feature set lives in its own subdirectory (`cellfeatures/<feature_set_id>/`
 
 ```python
 write_deltalake(
-    OUTPUT_ROOT + f"cellfeatures/{FEATURE_SET_ID}/", arrow_table,
+    OUTPUT_ROOT / f"cellfeatures/{FEATURE_SET_ID}", arrow_table,
     mode="overwrite",
     predicate=f"project_id = '{PROJECT_ID}'",
     partition_by=["project_id", "feature_set_id"],
@@ -264,8 +264,7 @@ Column order in the wide DataFrame must match the order of `feature_def_objs`. B
 Must match `^(s3://|gs://|https?://|file://).+`. Use:
 
 ```python
-from pathlib import Path
-parquet_path = f"file://{Path(OUTPUT_ROOT).resolve()}/cellfeatures/{FEATURE_SET_ID}/"
+parquet_path = f"file://{OUTPUT_ROOT.resolve()}/cellfeatures/{FEATURE_SET_ID}/"
 ```
 
 ---

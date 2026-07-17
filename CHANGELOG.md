@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Removed `table_path()` from `connects_common_connectivity.config` and its re-export from `connects_common_connectivity.io`. Build table paths from `output_root()` instead, e.g. `Path(output_root()) / "<table>"`.
+- Removed `output_root()` from `connects_common_connectivity.config`. Use `get_settings().output_root`, an absolute `pathlib.Path`, and join subpaths with `/`, e.g. `get_settings().output_root / "<table>"`. Unlike the old helper it returns an absolute `Path` (not a cwd-relative string with a trailing slash).
+- Removed `table_path()` from `connects_common_connectivity.config` and its re-export from `connects_common_connectivity.io`. Build table paths from `get_settings().output_root` instead, e.g. `get_settings().output_root / "<table>"`.
 - Removed the `Settings.describe()` method. Use `repr(settings)` for a readable summary of the resolved settings.
 
 ### Fixed

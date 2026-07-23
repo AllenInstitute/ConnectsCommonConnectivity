@@ -17,6 +17,18 @@ from pathlib import Path
 
 import pytest
 
+from connects_common_connectivity.io.arrow_utils import (
+    attach_linkml_metadata,
+    build_arrow_schema,
+    build_cell_feature_matrix_schema,
+    models_to_table,
+)
+from connects_common_connectivity.io.write_utils import (
+    append_new_dataitems,
+    populate_region_coverage,
+    walk_ancestors,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SEARCH_ROOTS = ["src", "tests", "code", "scripts", "planning"]
 
@@ -88,14 +100,15 @@ def test_no_source_references_shim_paths():
 
 
 def test_public_names_from_io_paths():
-    from connects_common_connectivity.io.arrow_utils import (  # noqa: F401
+    # Imports are performed at module top; assert the names resolve to callables
+    # so the test fails loudly if the public surface ever regresses.
+    for obj in (
         attach_linkml_metadata,
         build_arrow_schema,
         build_cell_feature_matrix_schema,
         models_to_table,
-    )
-    from connects_common_connectivity.io.write_utils import (  # noqa: F401
         append_new_dataitems,
         populate_region_coverage,
         walk_ancestors,
-    )
+    ):
+        assert callable(obj)

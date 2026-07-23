@@ -16,10 +16,10 @@ Example::
 
 from __future__ import annotations
 
-from ..config import Settings, get_settings, table_path
-from .writers import (
+from connects_common_connectivity.config import Settings, get_settings
+from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
-    WriteResult,
+    WrittenResult,
     write_models,
     write_projection_matrix,
 )
@@ -27,9 +27,8 @@ from .writers import (
 __all__ = [
     "get_settings",
     "Settings",
-    "table_path",
     "write_models",
     "write_projection_matrix",
-    "WriteResult",
+    "WrittenResult",
     "WRITABLE_CLASSES",
 ]

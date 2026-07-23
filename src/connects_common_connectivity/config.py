@@ -6,8 +6,6 @@ version-controlled ``ccc_config.yaml`` at the repo root. Every entry point
 :func:`get_settings`, which walks up from ``cwd`` to find that file,
 validates it with pydantic, and returns a cached :class:`Settings`.
 
-No notebook setup cell, no ``%run``, no process-global mutation.
-
 Resolution precedence (highest wins):
 
 1. An explicit ``settings=`` argument passed by a caller.
@@ -43,15 +41,6 @@ class Settings(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
-
-    def describe(self) -> str:
-        """Return a human-readable summary of the resolved settings."""
-        return (
-            f"Settings(output_root={self.output_root!s}, dry_run={self.dry_run})"
-        )
-
-    def __repr__(self) -> str:  # pragma: no cover - trivial
-        return self.describe()
 
 
 def find_config_file(
@@ -125,56 +114,9 @@ def _anchor_path(value, base: Path) -> Path:
     return Path(os.path.abspath(p))
 
 
-def table_path(settings: Settings, table: str) -> Path:
-    """Resolve the on-disk path for a named Delta/Parquet table subdir.
-
-    ``table`` should be one of the canonical subdir names used by the
-    notebooks (e.g. ``"dataset"``, ``"dataitem"``,
-    ``"dataitem_dataset_association"``, ``"cellfeatureset"``,
-    ``"cellfeaturematrix"``, ``"cluster"``, ``"clusterhierarchy"``,
-    ``"clustermembership"``, ``"mappingset"``, ``"celltoclustermapping"``,
-    ``"projectionmeasurementmatrix"``). Callers pass the exact name so
-    nothing concatenates path strings ad hoc.
-    """
-    return Path(settings.output_root) / table
-
-
-def output_root(settings: Optional[Settings] = None, *, absolute: bool = False) -> str:
-    """Return ``output_root`` as a string with a trailing ``/``.
-
-    Resolution rule (the bit that makes notebooks Just Work): a relative
-    ``output_root`` in ``ccc_config.yaml`` is anchored at the config file's
-    directory (the repo root), not at ``cwd``. So a notebook running in
-    ``code/`` and a script running at the repo root both point at the same
-    place. By default this function then returns the path **relative to the
-    current working directory**, so a notebook in ``code/`` sees
-    ``"../scratch/<project>/"`` while a process at the repo root sees
-    ``"scratch/<project>/"``. Pass ``absolute=True`` to get the fully
-    resolved absolute path instead.
-
-    Prefer :func:`table_path` for new code — it returns a typed :class:`Path`
-    for a named table subdir and is cwd-independent.
-    """
-    s = settings if settings is not None else get_settings()
-    abs_path = Path(s.output_root)
-    if not abs_path.is_absolute():
-        abs_path = Path(os.path.abspath(abs_path))
-    if absolute:
-        text = str(abs_path)
-    else:
-        try:
-            text = os.path.relpath(abs_path, Path.cwd())
-        except ValueError:
-            # Different drives on Windows — fall back to absolute.
-            text = str(abs_path)
-    return text if text.endswith("/") else text + "/"
-
-
 __all__ = [
     "CONFIG_FILENAME",
     "Settings",
     "find_config_file",
     "get_settings",
-    "output_root",
-    "table_path",
 ]

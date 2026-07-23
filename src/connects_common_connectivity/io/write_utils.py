@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Iterator, Mapping, Optional, Tuple
 
+import numpy as np
+import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import write_deltalake
@@ -94,8 +96,6 @@ def append_new_dataitems(
     """
     existing_ids: set[str] = set()
     try:
-        import polars as pl
-
         existing_ids = set(
             pl.read_delta(output_path)
             .filter(pl.col("project_id") == project_id)[id_column]
@@ -154,8 +154,6 @@ def populate_region_coverage(pmm: Any, matrix: Any) -> Any:
     region_index = getattr(pmm, "region_index", None)
     if region_index is None:
         raise ValueError("pmm.region_index must be set before populating region_coverage")
-
-    import numpy as np
 
     arr = np.asarray(matrix)
     if arr.ndim != 2:

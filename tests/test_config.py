@@ -6,20 +6,21 @@ import os
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 from connects_common_connectivity.config import (
     CONFIG_FILENAME,
     Settings,
     find_config_file,
     get_settings,
-    output_root,
-    table_path,
+)
+from connects_common_connectivity.io import (
+    Settings as IOSettings,
+    get_settings as io_get_settings,
 )
 
 
 def _write_config(dir_: Path, **values) -> Path:
-    import yaml
-
     path = dir_ / CONFIG_FILENAME
     path.write_text(yaml.safe_dump(values))
     return path
@@ -75,24 +76,6 @@ def test_explicit_settings_wins_over_env_and_file(tmp_path, monkeypatch):
     assert resolved.dry_run is False
 
 
-def test_table_path_joins_and_returns_path(tmp_path):
-    settings = Settings(output_root=tmp_path / "root")
-    p = table_path(settings, "dataset")
-    assert isinstance(p, Path)
-    assert p == tmp_path / "root" / "dataset"
-    # A few of the canonical subdir names used by the notebooks.
-    for name in (
-        "dataitem",
-        "dataitem_dataset_association",
-        "cellfeatureset",
-        "cellfeaturematrix",
-        "cluster",
-        "clustermembership",
-        "projectionmeasurementmatrix",
-    ):
-        assert table_path(settings, name) == tmp_path / "root" / name
-
-
 def test_output_root_is_required(tmp_path):
     _write_config(tmp_path, dry_run=False)  # missing output_root
     get_settings.cache_clear()
@@ -108,15 +91,8 @@ def test_unknown_keys_rejected(tmp_path):
 
 
 def test_io_reexports_settings_helpers():
-    from connects_common_connectivity.io import (
-        Settings as IOSettings,
-        get_settings as io_get_settings,
-        table_path as io_table_path,
-    )
-
     assert IOSettings is Settings
     assert io_get_settings is get_settings
-    assert io_table_path is table_path
 
 
 def test_get_settings_is_cached(tmp_path, monkeypatch):
@@ -133,35 +109,6 @@ def test_get_settings_is_cached(tmp_path, monkeypatch):
     assert third.output_root == Path(str(tmp_path / "changed"))
 
 
-def test_describe_includes_resolved_values(tmp_path):
-    settings = Settings(output_root=tmp_path / "root", dry_run=True)
-    text = settings.describe()
-    assert "root" in text
-    assert "dry_run=True" in text
-
-
-def test_output_root_helper_appends_trailing_slash(tmp_path, monkeypatch):
-    _write_config(tmp_path, output_root=str(tmp_path / "out"))
-    get_settings.cache_clear()
-    # cwd is tmp_path (autouse fixture), so relpath of tmp_path/out is "out".
-    root = output_root()
-    assert isinstance(root, str)
-    assert root.endswith("/")
-    assert root == "out/"
-
-
-def test_output_root_helper_absolute_flag(tmp_path):
-    settings = Settings(output_root=tmp_path / "explicit")
-    assert output_root(settings, absolute=True) == str(tmp_path / "explicit") + "/"
-
-
-def test_output_root_helper_accepts_explicit_settings(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    explicit = Settings(output_root=tmp_path / "explicit")
-    # Default returns path relative to cwd (tmp_path).
-    assert output_root(explicit) == "explicit/"
-
-
 def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monkeypatch):
     # Config sits at tmp_path; output_root is relative ("scratch/x/").
     _write_config(tmp_path, output_root="scratch/x/")
@@ -174,11 +121,3 @@ def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monk
     # Settings.output_root is absolute, anchored at the config file's dir
     # (abspath, not resolve — symlinks must not be followed).
     assert settings.output_root == Path(os.path.abspath(tmp_path / "scratch" / "x"))
-
-    # output_root() returns the path relative to cwd → "../scratch/x/".
-    assert output_root() == "../scratch/x/"
-
-    # table_path joins to an absolute path that works regardless of cwd.
-    tp = table_path(settings, "dataset")
-    assert tp.is_absolute()
-    assert tp == Path(os.path.abspath(tmp_path / "scratch" / "x" / "dataset"))

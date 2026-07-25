@@ -17,6 +17,7 @@ Example::
 from __future__ import annotations
 
 from connects_common_connectivity.config import Settings, get_settings
+from connects_common_connectivity.io.read import read_synapse_table
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
@@ -31,4 +32,5 @@ __all__ = [
     "write_projection_matrix",
     "WrittenResult",
     "WRITABLE_CLASSES",
+    "read_synapse_table",
 ]

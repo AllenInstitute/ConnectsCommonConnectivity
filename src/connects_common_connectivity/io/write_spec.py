@@ -28,6 +28,8 @@ from connects_common_connectivity.models import (
     HierarchyCategory,
     MappingSet,
     ProjectionMeasurementMatrix,
+    SynapseConnectivityLong,
+    SynapseFeatureMatrix,
 )
 
 
@@ -165,6 +167,20 @@ REGISTRY: dict[str, WriteSpec] = {
         subdir="hierarchycategory",
         partition_by=[],
         scope_columns=["id"],
+        write_mode="overwrite_scoped",
+    ),
+#    "SynapseConnectivityLong": WriteSpec(
+#        model_cls=SynapseConnectivityLong,
+#        subdir="synapse",
+#        partition_by=["project_id"],
+#        scope_columns=["project_id", "dataset_id"],
+#        write_mode="overwrite_scoped",
+#    ),
+    "SynapseFeatureMatrix": WriteSpec(
+        model_cls=SynapseFeatureMatrix,
+        subdir="synapsefeaturematrix",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
         write_mode="overwrite_scoped",
     ),
 }

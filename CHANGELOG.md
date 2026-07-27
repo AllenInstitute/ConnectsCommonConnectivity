@@ -9,36 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `connects_common_connectivity.config` with `Settings`,
-  `get_settings()`, and `find_config_file()`. Settings are discovered from
-  `ccc_config.yaml` at or above the current working directory;
-  `CCC_OUTPUT_ROOT` overrides the configured output root, and relative paths
-  are anchored to the config file's directory.
-- Added the curated `connects_common_connectivity.io` API with
-  `write_models()`, `write_projection_matrix()`, `WrittenResult`,
-  `WRITABLE_CLASSES`, `Settings`, and `get_settings()`. `write_models()`
-  accepts one Pydantic model or a non-empty homogeneous iterable, including a
-  one-shot generator, and dispatches writes through the model's registered
-  `WriteSpec`.
-- Added `settings=` and `output_root=` controls to `write_models()` and
-  `write_projection_matrix()`. An explicit output root bypasses config
-  discovery, while `Settings.dry_run=True` validates a write without creating
-  a Delta table and reports zero rows written.
-- Added write-time validation helpers in
-  `connects_common_connectivity.io.write_validation`: `strict_model_for(spec)`
-  derives validation rules from the supplied `WriteSpec`, and
-  `validate_for_write(models, spec)` validates every member of a non-empty,
-  exact-type model sequence while returning the original instances in a new
-  list.
-- Added `WriteSpec` registry entries for `AlgorithmRun` and
-  `HierarchyCategory`, making both classes writable through `write_models()`
-  and discoverable through `WRITABLE_CLASSES`.
-- Added `populate_region_coverage()` in
-  `connects_common_connectivity.io.write_utils` to return a
-  `ProjectionMeasurementMatrix` copy whose region coverage is derived from a
-  two-dimensional NumPy-compatible array.
-- Added `CALCIUM_IMAGING` to the `Modality` enum for calcium-imaging-based
-  functional correlations.
+- Added the `synapse_schema` module with the `SynapseConnectivityLong` and `SynapseFeatureMatrix` classes for per-synapse connectivity: long-form single-synapse rows plus a wide per-synapse feature matrix LEFT-joined on the synapse id.
+- Added `read_synapse_table()` to `connects_common_connectivity.io` for reading the long single-synapse connectivity table, optionally LEFT-joining per-synapse feature columns from a wide feature table.
+- Made `SynapseFeatureMatrix` writable through `write_models()`; it has registered `WriteSpec` entry and appear in `WRITABLE_CLASSES`.
 
 ### Changed
 

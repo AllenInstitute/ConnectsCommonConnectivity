@@ -46,6 +46,7 @@ from connects_common_connectivity.models import (
     Modality,
     ProjectionMeasurementMatrix,
     ProjectionMeasurementType,
+    SynapseFeatureMatrix,
     Unit,
 )
 
@@ -247,6 +248,13 @@ INSTANCE_FACTORIES = {
     ),
     AlgorithmRun: lambda: AlgorithmRun(id="run1", algorithm_name="kmeans"),
     HierarchyCategory: lambda: HierarchyCategory(id="cluster", description="leaf", level="0"),
+    SynapseFeatureMatrix: lambda: SynapseFeatureMatrix(
+        id="sfm1",
+        project_id="p1",
+        dataset_id="ds1",
+        parquet_path="file:///tmp/syn_wide.parquet",
+        synapse_index_column="id",
+    ),
 }
 
 

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the `synapse_schema` module with the `SynapseConnectivityLong` and `SynapseFeatureMatrix` classes for per-synapse connectivity: long-form single-synapse rows plus a wide per-synapse feature matrix LEFT-joined on the synapse id.
+- Added `read_synapse_table()` to `connects_common_connectivity.io` for reading the long single-synapse connectivity table, optionally LEFT-joining per-synapse feature columns from a wide feature table.
+- Made `SynapseFeatureMatrix` writable through `write_models()`; it has registered `WriteSpec` entry and appear in `WRITABLE_CLASSES`.
+
 ### Changed
 
 - Renamed `WriteResult` to `WrittenResult` in `connects_common_connectivity.io` and `connects_common_connectivity.io.writers`. Update any `from connects_common_connectivity.io import WriteResult` to use `WrittenResult`.

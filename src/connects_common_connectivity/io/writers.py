@@ -295,7 +295,8 @@ def write_models(
     ``Cluster``, ``ClusterHierarchy``, ``ClusterMembership``,
     ``MappingSet``, ``CellToClusterMapping``,
     ``CellFeatureSet``, ``CellFeatureDefinition``, ``CellFeatureMatrix``,
-    ``ProjectionMeasurementMatrix``.
+    ``ProjectionMeasurementMatrix``,
+    ``SynapseFeatureMatrix``.
     Use ``WRITABLE_CLASSES`` to enumerate at runtime.
     """
     items = _normalize_models(models)

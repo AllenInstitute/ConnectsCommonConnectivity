@@ -17,6 +17,7 @@ EXPECTED = {
     "write_projection_matrix",
     "WrittenResult",
     "WRITABLE_CLASSES",
+    "read_synapse_table",
 }
 
 

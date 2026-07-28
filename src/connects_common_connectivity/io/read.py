@@ -1,23 +1,8 @@
 """Read helpers for the IO layer.
 
 Where :mod:`connects_common_connectivity.io.writers` owns the write path, this
-module owns the read path. The first reader is :func:`read_synapse_table`,
-which returns the long single-synapse connectivity table and, on request,
-LEFT-joins per-synapse feature columns (position, size, ``synaptictargetlabel``,
-...) from a wide-form feature Parquet.
+module owns the read path. 
 
-The on-disk layout mirrors the ``SynapseConnectivityLong`` /
-``SynapseFeatureMatrix`` schema pair:
-
-- ``<output_root>/synapse/`` — long Delta table, one row per synapse
-  (``id``, ``presynaptic_cell``, ``postsynaptic_cell``, ``dataset_id``,
-  ``project_id``).
-- ``<output_root>/synapsefeatures/<feature_matrix_id>/`` — wide Delta table,
-  one row per synapse keyed by the synapse id, one column per feature.
-
-Feature rows are LEFT-joined on the synapse id, so a synapse that is absent
-from the feature table simply yields null feature columns (e.g. the
-``synaptictargetlabel`` is missing for a subset of synapses).
 """
 
 from __future__ import annotations

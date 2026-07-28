@@ -8,9 +8,8 @@ columns, the partition columns, the id used for dedupe).
 
 The :class:`WriteSpec` for each writable class records this in
 ``required_for_write``. This module turns that list into a real check by
-deriving a strict pydantic subclass of the generated model —
-runtime-only, never mutating ``models.py`` — and re-validating each
-instance through it before any IO.
+deriving a strict pydantic subclass of the generated model and re-validating each
+instance through it before any IO during runtime.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ def _strip_optional(annotation: Any) -> Any:
     origin = get_origin(annotation)
     if origin is Union or origin is UnionType:
         args = tuple(a for a in get_args(annotation) if a is not type(None))
-        if not args:
+        if len(args) == 0:
             return annotation
         if len(args) == 1:
             return args[0]

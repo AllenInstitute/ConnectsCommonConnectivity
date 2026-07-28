@@ -290,12 +290,6 @@ def write_models(
 
     Notes
     -----
-    Writable classes (the registry, in order):
-    ``DataSet``, ``DataItem``, ``DataItemDataSetAssociation``,
-    ``Cluster``, ``ClusterHierarchy``, ``ClusterMembership``,
-    ``MappingSet``, ``CellToClusterMapping``,
-    ``CellFeatureSet``, ``CellFeatureDefinition``, ``CellFeatureMatrix``,
-    ``ProjectionMeasurementMatrix``.
     Use ``WRITABLE_CLASSES`` to enumerate at runtime.
     """
     items = _normalize_models(models)

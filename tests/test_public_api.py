@@ -9,7 +9,6 @@ import importlib
 
 import connects_common_connectivity.io as io_mod
 
-
 EXPECTED = {
     "get_settings",
     "Settings",
@@ -17,6 +16,7 @@ EXPECTED = {
     "write_projection_matrix",
     "WrittenResult",
     "WRITABLE_CLASSES",
+    "DatasetReader",
     "read_synapse_table",
 }
 

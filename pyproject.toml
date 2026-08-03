@@ -1,6 +1,6 @@
 [project]
 name = "connects-common-connectivity"
-version = "0.2.0"
+version = "0.3.0"
 description = "Common connectivity data models and utilities (LinkML + Pydantic) for BRAIN CONNECTS pilot"
 authors = [ { name = "Forrest Collman" } ]
 license = { text = "MIT" }

@@ -65,7 +65,7 @@ def _build_strict_model_cached(
     model_cls: type[BaseModel], required: tuple[str, ...]
 ) -> type[BaseModel]:
     """Build and cache the strict model for one complete validation policy."""
-    if not required:
+    if len(required) == 0:
         return model_cls
 
     overrides: dict[str, Any] = {}
@@ -102,7 +102,7 @@ def validate_for_write(
             "validate_for_write expected a non-empty sequence of pydantic "
             f"models; got {type(models).__name__}"
         )
-    if not models:
+    if len(models) == 0:
         raise ValueError("validate_for_write received an empty sequence")
 
     for index, model in enumerate(models):

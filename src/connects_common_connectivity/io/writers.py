@@ -86,7 +86,7 @@ def _normalize_models(models: BaseModel | Iterable[BaseModel]) -> list[BaseModel
             f"got {type(models).__name__}"
         )
     materialized = list(models)
-    if not materialized:
+    if len(materialized) == 0:
         raise ValueError("write_models received an empty batch")
 
     items: list[BaseModel] = []
@@ -142,7 +142,7 @@ def _group_by_scope(
     the same group iff they have equal values across every column in
     ``scope_columns``. Order of groups is the order of first appearance.
     """
-    if not scope_columns:
+    if len(scope_columns) == 0:
         raise ValueError("scope_columns must be non-empty for overwrite_scoped writes")
 
     cols = [table.column(c).to_pylist() for c in scope_columns]
@@ -192,7 +192,7 @@ def _dispatch_append_new_by_id(
     table: pa.Table, spec: WriteSpec, path: Path
 ) -> WrittenResult:
     """Append only rows whose id is new, scoped to a single ``project_id``."""
-    if not spec.scope_columns:
+    if len(spec.scope_columns) == 0:
         raise ValueError(
             f"{spec.model_cls.__name__}: scope_columns is empty for append_new_by_id "
             f"(expected the id column at index 0)"

@@ -8,6 +8,7 @@ predicate.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
@@ -53,3 +54,18 @@ def test_get_spec_unknown_class_raises():
 
     with pytest.raises(KeyError):
         get_spec(NotRegistered)
+
+
+def test_write_spec_requires_pydantic_model_class():
+    """WriteSpec must reject classes outside the Pydantic model hierarchy."""
+    class NotAModel:
+        pass
+
+    with pytest.raises(ValidationError):
+        WriteSpec(
+            model_cls=NotAModel,
+            subdir="invalid",
+            partition_by=[],
+            scope_columns=["id"],
+            write_mode="overwrite_scoped",
+        )

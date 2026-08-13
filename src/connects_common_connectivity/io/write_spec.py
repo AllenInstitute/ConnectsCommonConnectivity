@@ -36,7 +36,7 @@ class WriteSpec(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    model_cls: type
+    model_cls: type[BaseModel]
     subdir: str
     partition_by: list[str]
     scope_columns: list[str]
@@ -170,7 +170,7 @@ REGISTRY: dict[str, WriteSpec] = {
 }
 
 
-def get_spec(model_or_cls: type | BaseModel) -> WriteSpec:
+def get_spec(model_or_cls: type[BaseModel] | BaseModel) -> WriteSpec:
     """Look up the :class:`WriteSpec` for a model class or instance.
 
     Accepts either the generated pydantic class itself or an instance of it,

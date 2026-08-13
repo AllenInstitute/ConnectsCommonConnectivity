@@ -321,13 +321,38 @@ def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings, re
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "batch_factory",
+    [
+        pytest.param(lambda models: models[0], id="single-model"),
+        pytest.param(list, id="list"),
+        pytest.param(tuple, id="tuple"),
+        pytest.param(lambda models: (model for model in models), id="generator"),
+    ],
+)
+def test_write_models_accepts_supported_input_shapes(tmp_path, batch_factory):
+    """One model, list, tuple, and one-shot generator inputs must all dispatch."""
+    models = [
+        DataSet(id="d1", name="one", project_id="p1"),
+        DataSet(id="d2", name="two", project_id="p1"),
+    ]
+    settings = Settings(output_root=tmp_path, dry_run=True)
+
+    result = write_models(batch_factory(models), settings=settings)
+
+    assert result.class_name == "DataSet"
+    assert result.rows_written == 0
+
+
 def test_write_models_rejects_empty(settings):
+    """The public writer must reject an empty batch before registry lookup or IO."""
     with pytest.raises(ValueError, match="empty"):
         write_models([], settings=settings)
 
 
 def test_write_models_rejects_heterogeneous(settings):
-    with pytest.raises(TypeError, match="homogeneous"):
+    """A batch containing different Pydantic classes must fail with its index."""
+    with pytest.raises(TypeError, match=r"index 1.*DataItem"):
         write_models(
             [
                 DataSet(id="d1", name="d", project_id="p1"),
@@ -335,6 +360,39 @@ def test_write_models_rejects_heterogeneous(settings):
             ],
             settings=settings,
         )
+
+
+def test_write_models_rejects_homogeneous_non_models(settings):
+    """An iterable containing only non-Pydantic objects must fail at its first item."""
+    with pytest.raises(TypeError, match=r"index 0.*object"):
+        write_models(iter([object(), object()]), settings=settings)  # type: ignore[arg-type]
+
+
+def test_write_models_rejects_mixed_model_and_non_model(settings):
+    """A non-Pydantic member later in an otherwise valid model batch must be named."""
+    models = [
+        DataSet(id="d1", name="d", project_id="p1"),
+        object(),
+    ]
+
+    with pytest.raises(TypeError, match=r"index 1.*object"):
+        write_models(models, settings=settings)  # type: ignore[arg-type]
+
+
+def test_write_models_materializes_generator_before_rejecting_later_member(settings):
+    """A one-shot generator must expose a later invalid member during normalization."""
+    yielded: list[str] = []
+
+    def models():
+        yielded.append("DataSet")
+        yield DataSet(id="d1", name="d", project_id="p1")
+        yielded.append("DataItem")
+        yield DataItem(id="i1", name="i", project_id="p1")
+
+    with pytest.raises(TypeError, match=r"index 1.*DataItem"):
+        write_models(models(), settings=settings)
+
+    assert yielded == ["DataSet", "DataItem"]
 
 
 def test_write_models_rejects_unregistered_class(settings):

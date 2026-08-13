@@ -1,9 +1,9 @@
 """Dispatch core for IO-layer Delta writers.
 
-A single public entry point — :func:`write_models` — accepts a homogeneous
-batch of generated pydantic models and routes the write through the
-:class:`~connects_common_connectivity.io.write_spec.WriteSpec` registered
-for that class. The only standalone writer is
+A single public entry point — :func:`write_models` — normalizes one model or
+an iterable into a non-empty, homogeneous exact-type batch, then routes the
+write through the :class:`~connects_common_connectivity.io.write_spec.WriteSpec`
+registered for that concrete class. The only standalone writer is
 :func:`write_projection_matrix`, which exists because its signature is
 genuinely non-uniform (it accepts a dense matrix alongside the model).
 
@@ -13,18 +13,26 @@ discover what is writable via :data:`WRITABLE_CLASSES`.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import pyarrow as pa
 from deltalake import write_deltalake
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import Settings, get_settings
-from connects_common_connectivity.io.arrow_utils import attach_linkml_metadata, build_arrow_schema, models_to_table
+from connects_common_connectivity.io.arrow_utils import (
+    attach_linkml_metadata,
+    build_arrow_schema,
+    models_to_table,
+)
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
-from connects_common_connectivity.io.write_utils import append_new_dataitems, populate_region_coverage
+from connects_common_connectivity.io.write_utils import (
+    append_new_dataitems,
+    populate_region_coverage,
+)
 from connects_common_connectivity.io.write_validation import validate_for_write
 
 # ---------------------------------------------------------------------------
@@ -53,23 +61,9 @@ class WrittenResult:
 # ---------------------------------------------------------------------------
 
 
-WRITABLE_CLASSES: tuple[type, ...] = tuple(
+WRITABLE_CLASSES: tuple[type[BaseModel], ...] = tuple(
     spec.model_cls for spec in REGISTRY.values()
 )
-
-
-# ---------------------------------------------------------------------------
-# Validation hook
-# ---------------------------------------------------------------------------
-
-
-def _validation_hook(models: Sequence[BaseModel], spec: WriteSpec) -> Sequence[BaseModel]:
-    """Strict re-validation against ``spec.required_for_write``.
-
-    Identity-shaped: takes a sequence in, returns a sequence out. Pure
-    pydantic; no I/O.
-    """
-    return validate_for_write(list(models), spec)
 
 
 # ---------------------------------------------------------------------------
@@ -77,11 +71,12 @@ def _validation_hook(models: Sequence[BaseModel], spec: WriteSpec) -> Sequence[B
 # ---------------------------------------------------------------------------
 
 
-def _normalize_models(models: Any) -> list[BaseModel]:
-    """Coerce ``models`` to a list, accepting a single model or any iterable.
+def _normalize_models(models: BaseModel | Iterable[BaseModel]) -> list[BaseModel]:
+    """Normalize one model or iterable to a non-empty exact-type model list.
 
-    Requires homogeneous type. Empty input is rejected — callers always
-    know which class they are writing.
+    Iterable inputs, including one-shot generators, are materialized exactly
+    once. This is the write path's only shape conversion boundary; downstream
+    validation receives the resulting sequence without further coercion.
     """
     if isinstance(models, BaseModel):
         return [models]
@@ -90,16 +85,27 @@ def _normalize_models(models: Any) -> list[BaseModel]:
             f"write_models expected a pydantic model or iterable of models; "
             f"got {type(models).__name__}"
         )
-    items = list(models)
-    if not items:
+    materialized = list(models)
+    if not materialized:
         raise ValueError("write_models received an empty batch")
-    cls = type(items[0])
-    for m in items:
-        if type(m) is not cls:
+
+    items: list[BaseModel] = []
+    batch_type: type[BaseModel] | None = None
+    for index, item in enumerate(materialized):
+        if not isinstance(item, BaseModel):
             raise TypeError(
-                f"write_models requires homogeneous types; got "
-                f"{cls.__name__} and {type(m).__name__}"
+                "write_models expected pydantic models; "
+                f"item at index {index} has type {type(item).__name__}"
             )
+        if batch_type is None:
+            batch_type = type(item)
+        elif type(item) is not batch_type:
+            raise TypeError(
+                "write_models requires homogeneous exact types; "
+                f"item at index {index} has type {type(item).__name__}, "
+                f"expected {batch_type.__name__}"
+            )
+        items.append(item)
     return items
 
 
@@ -251,23 +257,24 @@ def _resolve_output_root(
 
 
 def write_models(
-    models: Any,
+    models: BaseModel | Iterable[BaseModel],
     *,
     settings: Settings | None = None,
     output_root: str | Path | None = None,
 ) -> WrittenResult:
-    """Write a batch of generated pydantic models to the shared Delta lake.
+    """Write generated pydantic models to the shared Delta lake.
 
-    The class is inferred from ``models`` and dispatched through its
-    :class:`WriteSpec` (see :mod:`connects_common_connectivity.io.write_spec`).
-    No per-class wrapper functions exist; renaming this function eight times
-    would add no behavior, only drift surface.
+    This public boundary normalizes input into a non-empty homogeneous batch
+    whose members have one exact concrete type. That type is resolved through
+    the global :class:`WriteSpec` registry, which remains authoritative for
+    write dispatch and validation policy.
 
     Parameters
     ----------
     models:
         A single model instance or a non-empty iterable of instances of the
-        same class. The class must be one of :data:`WRITABLE_CLASSES`.
+        same exact class. Iterables are materialized exactly once, and the
+        concrete class must be one of :data:`WRITABLE_CLASSES`.
     settings:
         Optional explicit settings. Falls back to :func:`get_settings` when
         omitted; an explicit ``settings=`` always wins over the discovered
@@ -296,7 +303,7 @@ def write_models(
     cls = type(items[0])
     spec = get_spec(cls)
 
-    items = list(_validation_hook(items, spec))
+    items = validate_for_write(items, spec)
 
     root, resolved_settings = _resolve_output_root(settings, output_root)
     path = root / spec.subdir

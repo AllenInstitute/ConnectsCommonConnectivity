@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added final write-time validation helpers in
+  `connects_common_connectivity.io.write_validation`: `strict_model_for(spec)`
+  derives validation rules from the supplied `WriteSpec`, and
+  `validate_for_write([model], spec)` validates a non-empty, exact-type model
+  sequence while returning the original instances in a list. `write_models()`
+  continues to select its `WriteSpec` from the write registry.
+
 ### Changed
 
 - Renamed `WriteResult` to `WrittenResult` in `connects_common_connectivity.io` and `connects_common_connectivity.io.writers`. Update any `from connects_common_connectivity.io import WriteResult` to use `WrittenResult`.

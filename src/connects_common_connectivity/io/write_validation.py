@@ -14,14 +14,14 @@ instance through it before any IO during runtime.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
 from types import UnionType
-from typing import Any, Iterable, Sequence, Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 from pydantic import BaseModel, Field, ValidationError, create_model
 
-from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
-
+from connects_common_connectivity.io.write_spec import WriteSpec
 
 __all__ = ["strict_model_for", "validate_for_write"]
 
@@ -45,27 +45,27 @@ def _strip_optional(annotation: Any) -> Any:
     return annotation
 
 
-@lru_cache(maxsize=None)
-def strict_model_for(model_cls: type) -> type[BaseModel]:
-    """Return a pydantic subclass of ``model_cls`` with write-required slots forced.
+def strict_model_for(spec: WriteSpec) -> type[BaseModel]:
+    """Return ``spec.model_cls`` with the supplied write-required slots forced.
 
-    For each name in the registered :attr:`WriteSpec.required_for_write`
-    list, the corresponding field on the returned subclass is required
-    (no default, ``...`` ellipsis). The annotation, validators, and other
-    metadata of the parent class are preserved — only the default is
-    flipped.
+    The supplied spec defines the validation policy. The global registry does
+    not participate in this function. Derived classes use a bounded cache. Its
+    key contains the model class and a sorted tuple of required field names.
+    Equivalent specs reuse a class. Different policies remain isolated.
 
-    Cached on ``model_cls`` so the derived class is built once and reused
-    across calls.
-
-    Important: ``models.py`` is never mutated. The returned class is a
-    runtime-only subclass; assertions on the parent class's
-    ``model_fields`` continue to reflect the schema as generated.
+    The generated parent model is never mutated. If no fields need tightening,
+    this function returns the parent class.
     """
-    spec = REGISTRY.get(model_cls.__name__)
-    required: Sequence[str] = spec.required_for_write if spec else ()
+    required = tuple(sorted(spec.required_for_write))
+    return _build_strict_model_cached(spec.model_cls, required)
+
+
+@lru_cache(maxsize=128)
+def _build_strict_model_cached(
+    model_cls: type[BaseModel], required: tuple[str, ...]
+) -> type[BaseModel]:
+    """Build and cache the strict model for one complete validation policy."""
     if not required:
-        # Nothing to tighten — return the original class.
         return model_cls
 
     overrides: dict[str, Any] = {}
@@ -86,59 +86,59 @@ def strict_model_for(model_cls: type) -> type[BaseModel]:
     return strict
 
 
-def _coerce_iterable(models: Any) -> tuple[bool, list[BaseModel]]:
-    """Return ``(was_iterable, items)`` for the same shape contract as the hook."""
-    if isinstance(models, BaseModel):
-        return False, [models]
-    if isinstance(models, (str, bytes)) or not isinstance(models, Iterable):
-        raise TypeError(
-            f"validate_for_write expected a model or iterable; "
-            f"got {type(models).__name__}"
-        )
-    return True, list(models)
+def validate_for_write(
+    models: Sequence[BaseModel], spec: WriteSpec
+) -> list[BaseModel]:
+    """Validate one normalized non-empty model sequence against ``spec``.
 
-
-def validate_for_write(models: Any, spec: WriteSpec) -> Any:
-    """Re-validate ``models`` through the strict submodel for ``spec.model_cls``.
-
-    Single instance in returns a single instance out; an iterable in
-    returns a list out. No I/O. Pydantic-only. On failure, raises
-    :class:`ValueError` naming the class and the failing slot.
+    This function does not normalize inputs. It rejects single models,
+    generators, strings, bytes, and other non-sequence values. Every member
+    must have exact type ``spec.model_cls``. Strict subclasses are used only
+    for validation. On success, the function returns the original model
+    instances in a new list.
     """
-    was_iter, items = _coerce_iterable(models)
-    if not items:
-        return items if was_iter else None
-
-    cls = type(items[0])
-    if cls is not spec.model_cls:
+    if isinstance(models, (str, bytes)) or not isinstance(models, Sequence):
         raise TypeError(
-            f"validate_for_write: spec.model_cls is {spec.model_cls.__name__!r} "
-            f"but received {cls.__name__!r}"
+            "validate_for_write expected a non-empty sequence of pydantic "
+            f"models; got {type(models).__name__}"
         )
+    if not models:
+        raise ValueError("validate_for_write received an empty sequence")
 
-    strict = strict_model_for(cls)
-    if strict is cls:
-        return items if was_iter else items[0]
+    for index, model in enumerate(models):
+        if type(model) is not spec.model_cls:
+            raise TypeError(
+                "validate_for_write requires exact spec.model_cls members; "
+                f"row {index} has type {type(model).__name__}, "
+                f"expected {spec.model_cls.__name__}"
+            )
 
-    revalidated: list[BaseModel] = []
-    for idx, m in enumerate(items):
+    strict = strict_model_for(spec)
+    if strict is spec.model_cls:
+        return list(models)
+
+    validated: list[BaseModel] = []
+    for index, model in enumerate(models):
         try:
-            revalidated.append(strict.model_validate(m.model_dump()))
+            strict.model_validate(model.model_dump())
         except ValidationError as err:
-            missing = sorted(
+            invalid = sorted(
                 {
                     ".".join(str(p) for p in e.get("loc", ()))
                     for e in err.errors()
-                    if e.get("type")
-                    in ("missing", "none_not_allowed", "string_type", "value_error")
                 }
             )
-            slot_text = ", ".join(missing) if missing else "(see below)"
-            row_id = getattr(m, "id", None)
-            row_hint = f"row {idx}" if row_id is None else f"row {idx} (id={row_id})"
+            slot_text = ", ".join(invalid) if invalid else "(see below)"
+            row_id = getattr(model, "id", None)
+            row_hint = (
+                f"row {index}"
+                if row_id is None
+                else f"row {index} (id={row_id})"
+            )
             raise ValueError(
-                f"{cls.__name__}: missing required_for_write slot(s): "
+                f"{spec.model_cls.__name__}: invalid required_for_write slot(s): "
                 f"{slot_text} at {row_hint}. {err}"
             ) from err
+        validated.append(model)
 
-    return revalidated if was_iter else revalidated[0]
+    return validated

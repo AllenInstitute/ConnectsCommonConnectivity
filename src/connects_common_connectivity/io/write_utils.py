@@ -1,13 +1,16 @@
 """Idempotent write helpers for Delta Lake tables shared across notebooks."""
 from __future__ import annotations
 
-from typing import Any, Iterator, Mapping, Optional, Tuple
+from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
 import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import write_deltalake
+from numpy.typing import ArrayLike
+
+from connects_common_connectivity.models import ProjectionMeasurementMatrix
 
 __all__ = [
     "append_new_dataitems",
@@ -120,7 +123,9 @@ def append_new_dataitems(
     return new_rows.num_rows
 
 
-def populate_region_coverage(pmm: Any, matrix: Any) -> Any:
+def populate_region_coverage(
+    pmm: ProjectionMeasurementMatrix, matrix: ArrayLike
+) -> ProjectionMeasurementMatrix:
     """Return a copy of ``pmm`` with ``region_coverage`` derived from ``matrix``.
 
     ``region_coverage`` is the subset of ``pmm.region_index`` whose
@@ -135,8 +140,8 @@ def populate_region_coverage(pmm: Any, matrix: Any) -> Any:
     matrix:
         Dense numeric array of shape
         ``(len(pmm.data_item_index), len(pmm.region_index))`` — typically a
-        NumPy ``ndarray``, but anything that supports element-wise truthiness
-        plus column-wise ``any()`` works.
+        NumPy ``ndarray``, but any input accepted by :func:`numpy.asarray`
+        works.
 
     Returns
     -------

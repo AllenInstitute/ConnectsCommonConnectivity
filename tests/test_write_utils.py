@@ -1,9 +1,18 @@
-"""Tests for write_utils.append_new_dataitems."""
+"""Tests for IO write utilities."""
 import polars as pl
 import pyarrow as pa
-import pytest
 
-from connects_common_connectivity.io.write_utils import append_new_dataitems
+from connects_common_connectivity.io.write_utils import (
+    append_new_dataitems,
+    populate_region_coverage,
+)
+from connects_common_connectivity.models import (
+    Laterality,
+    Modality,
+    ProjectionMeasurementMatrix,
+    ProjectionMeasurementType,
+    Unit,
+)
 
 
 def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:
@@ -15,6 +24,27 @@ def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:
             "project_id": pa.array([project_id] * len(ids), type=pa.string()),
         }
     )
+
+
+def test_populate_region_coverage_accepts_nested_list():
+    pmm = ProjectionMeasurementMatrix(
+        id="pmm_list",
+        measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
+        modality=Modality.MORPHOLOGY,
+        laterality=Laterality.IPSILATERAL,
+        unit=Unit.MICRONS_LENGTH,
+        data_item_index=["c1", "c2"],
+        region_index=["VISp", "ACA", "MOB"],
+        values="file:///tmp/pmm.delta",
+    )
+
+    enriched = populate_region_coverage(
+        pmm,
+        [[1.0, 0.0, 0.0], [0.0, 0.0, 2.0]],
+    )
+
+    assert enriched.region_coverage == ["VISp", "MOB"]
+    assert pmm.region_coverage in (None, [])
 
 
 # ---------------------------------------------------------------------------
@@ -64,11 +94,15 @@ def test_different_projects_do_not_interfere(tmp_path):
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_a"), project_id="proj_a")
     # proj_b has the same ids — they are independent rows
-    n = append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b")
+    n = append_new_dataitems(
+        path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b"
+    )
     assert n == 2  # treated as new because different project
 
     # Re-run proj_b — still idempotent
-    n2 = append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b")
+    n2 = append_new_dataitems(
+        path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b"
+    )
     assert n2 == 0
 
 

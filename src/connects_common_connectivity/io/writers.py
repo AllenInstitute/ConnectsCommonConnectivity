@@ -20,6 +20,7 @@ from typing import Any
 
 import pyarrow as pa
 from deltalake import write_deltalake
+from numpy.typing import ArrayLike
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import Settings, get_settings
@@ -34,6 +35,7 @@ from connects_common_connectivity.io.write_utils import (
     populate_region_coverage,
 )
 from connects_common_connectivity.io.write_validation import validate_for_write
+from connects_common_connectivity.models import ProjectionMeasurementMatrix
 
 # ---------------------------------------------------------------------------
 # Result type
@@ -332,8 +334,8 @@ def write_models(
 
 
 def write_projection_matrix(
-    pmm: Any,
-    matrix: Any,
+    pmm: ProjectionMeasurementMatrix,
+    matrix: ArrayLike,
     *,
     settings: Settings | None = None,
     output_root: str | Path | None = None,

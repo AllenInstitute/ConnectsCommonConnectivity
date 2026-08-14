@@ -21,7 +21,6 @@ then discuss the static and runtime contracts with the user before editing any f
 - `tests/test_write_utils.py`
 - `tests/test_projection_schema.py`
 - `code/etl_wnm_exc_04_projection_matrix.ipynb`
-- `planning/20260623/prompts/03_writers.md`
 
 ## Reviewer comments
 

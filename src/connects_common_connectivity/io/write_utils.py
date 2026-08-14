@@ -1,4 +1,4 @@
-"""Idempotent write helpers for Delta Lake tables shared across notebooks."""
+"""Write helpers for Delta Lake tables shared across ETL notebooks."""
 from __future__ import annotations
 
 from typing import Iterator, Mapping, Optional, Tuple
@@ -30,7 +30,7 @@ def walk_ancestors(
     consumers can filter at any level without a recursive cluster join.
     The first yielded tuple has ``is_leaf=True``; all ancestors yield
     ``is_leaf=False``. The walk terminates when ``parent_of[current]`` is
-    ``None`` (the root).
+    absent or ``None`` (normally the root).
 
     Parameters
     ----------
@@ -53,6 +53,13 @@ def walk_ancestors(
         If ``leaf_id`` is not a key in ``parent_of`` (the caller should
         validate cluster ids against the registered taxonomy first and
         fail loudly on unknowns).
+
+    Notes
+    -----
+    The mapping is expected to describe an acyclic parent chain. Cycles are
+    not detected and would make iteration non-terminating. After the initial
+    leaf check, a missing ancestor key ends the walk after that ancestor has
+    been yielded.
     """
     if leaf_id not in parent_of:
         raise KeyError(leaf_id)
@@ -71,31 +78,40 @@ def append_new_dataitems(
     project_id: str,
     id_column: str = "id",
 ) -> int:
-    """Append only rows whose ``id`` is not already in the Delta table for this project.
+    """Append candidate rows whose ids are not stored for one project.
 
-    Safe to call from multiple notebooks that share the same ``project_id`` partition
-    (e.g. ``visp_inh_patchseq_01`` and ``visp_exc_patchseq_01`` both write to
-    ``dataitem/`` under ``project_id='visp_patchseq'``). Unlike a scoped overwrite,
-    this function never removes rows written by another notebook.
-
-    Idempotent: re-running with the same rows appends nothing and returns 0.
-    Handles the case where the Delta table does not yet exist.
+    On a sequential call where the existing Delta table can be read, rows
+    whose ``id_column`` value already occurs in the selected ``project_id``
+    partition are omitted. The append does not remove existing rows. If the
+    table does not exist or the read fails for any reason, every candidate row
+    is treated as new.
 
     Parameters
     ----------
     output_path:
-        Path to the Delta table directory.
+        Complete path to the Delta table directory.
     table:
-        PyArrow table of candidate rows to append.
+        Arrow table of candidate rows. It must contain ``id_column`` and a
+        ``project_id`` column whose values match the ``project_id`` argument;
+        duplicate ids within this batch are not removed.
     project_id:
-        Value used to filter existing rows before checking for duplicates.
+        Existing-table partition to inspect before checking candidate ids.
     id_column:
-        Name of the id column to deduplicate on. Defaults to ``"id"``.
+        Candidate and existing-table column used for the id comparison.
 
     Returns
     -------
     int
-        Number of rows actually appended (0 if all were already present).
+        Number of candidate rows submitted to the Delta append, or zero when
+        none remain after the existing-id check.
+
+    Notes
+    -----
+    Repeating a batch is idempotent only for sequential calls where the
+    existing Delta table can be read. This helper provides no transaction
+    spanning the read and append, so concurrent writers can append the same
+    id. A read failure is treated like a missing table and disables duplicate
+    detection for that call.
     """
     existing_ids: set[str] = set()
     try:
@@ -138,10 +154,10 @@ def populate_region_coverage(
         A :class:`ProjectionMeasurementMatrix` instance with ``region_index``
         already populated.
     matrix:
-        Dense numeric array of shape
-        ``(len(pmm.data_item_index), len(pmm.region_index))`` — typically a
-        NumPy ``ndarray``, but any input accepted by :func:`numpy.asarray`
-        works.
+        Two-dimensional numeric array whose columns correspond to
+        ``pmm.region_index``. The row count is not validated. Typically this
+        is a NumPy ``ndarray``, but any input accepted by
+        :func:`numpy.asarray` works.
 
     Returns
     -------
@@ -153,8 +169,8 @@ def populate_region_coverage(
     Raises
     ------
     ValueError
-        If ``pmm.region_index`` is missing or its length does not match
-        ``matrix.shape[1]``.
+        If ``pmm.region_index`` is missing, the matrix is not two-dimensional,
+        or its column count does not match the region index length.
     """
     region_index = getattr(pmm, "region_index", None)
     if region_index is None:

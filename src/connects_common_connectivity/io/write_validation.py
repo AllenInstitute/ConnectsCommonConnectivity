@@ -33,6 +33,19 @@ def _strip_optional(annotation: Any) -> Any:
     a valid value even when ``Field(...)`` makes it required. For write-time
     enforcement we want ``None`` to be a validation error, so we strip the
     ``NoneType`` arm of any top-level union.
+
+    Parameters
+    ----------
+    annotation:
+        Field annotation to tighten. Only a top-level ``typing.Union`` or
+        PEP 604 union is inspected; nested unions and other annotations are
+        returned unchanged.
+
+    Returns
+    -------
+    Any
+        The original annotation when it is not optional, its sole non-null
+        member when one remains, or a union of all remaining members.
     """
     origin = get_origin(annotation)
     if origin is Union or origin is UnionType:
@@ -48,13 +61,29 @@ def _strip_optional(annotation: Any) -> Any:
 def strict_model_for(spec: WriteSpec) -> type[BaseModel]:
     """Return ``spec.model_cls`` with the supplied write-required slots forced.
 
-    The supplied spec defines the validation policy. The global registry does
-    not participate in this function. Derived classes use a bounded cache. Its
-    key contains the model class and a sorted tuple of required field names.
-    Equivalent specs reuse a class. Different policies remain isolated.
+    Parameters
+    ----------
+    spec:
+        Complete validation policy. Its model class becomes the parent, and
+        each field named by ``required_for_write`` becomes required and
+        non-null on the derived class. The global registry is not consulted.
 
-    The generated parent model is never mutated. If no fields need tightening,
-    this function returns the parent class.
+    Returns
+    -------
+    type[BaseModel]
+        A cached strict subclass, or ``spec.model_cls`` itself when no fields
+        require tightening. The generated parent model is never mutated.
+
+    Raises
+    ------
+    ValueError
+        If a required-for-write name is not declared by ``spec.model_cls``.
+
+    Notes
+    -----
+    Cache identity is determined by the model class and sorted required field
+    names, so equivalent policies reuse a class while different policies
+    remain isolated.
     """
     required = tuple(sorted(spec.required_for_write))
     return _build_strict_model_cached(spec.model_cls, required)
@@ -64,7 +93,30 @@ def strict_model_for(spec: WriteSpec) -> type[BaseModel]:
 def _build_strict_model_cached(
     model_cls: type[BaseModel], required: tuple[str, ...]
 ) -> type[BaseModel]:
-    """Build and cache the strict model for one complete validation policy."""
+    """Build the strict model for one canonical validation policy.
+
+    Parameters
+    ----------
+    model_cls:
+        Generated model class to subclass without mutation.
+    required:
+        Canonical tuple of field names to make required and non-null. The
+        caller sorts this tuple so equivalent policies share the cache entry.
+
+    Returns
+    -------
+    type[BaseModel]
+        A derived strict model, or ``model_cls`` when ``required`` is empty.
+
+    Raises
+    ------
+    ValueError
+        If any required field name is absent from ``model_cls``.
+
+    Notes
+    -----
+    The ``lru_cache`` retains up to 128 model-and-policy combinations.
+    """
     if len(required) == 0:
         return model_cls
 
@@ -89,13 +141,39 @@ def _build_strict_model_cached(
 def validate_for_write(
     models: Sequence[BaseModel], spec: WriteSpec
 ) -> list[BaseModel]:
-    """Validate one normalized non-empty model sequence against ``spec``.
+    """Enforce a write spec's model-type and required-field contract.
 
-    This function does not normalize inputs. It rejects single models,
-    generators, strings, bytes, and other non-sequence values. Every member
-    must have exact type ``spec.model_cls``. Strict subclasses are used only
-    for validation. On success, the function returns the original model
-    instances in a new list.
+    Parameters
+    ----------
+    models:
+        A normalized, non-empty sequence whose members must each have exact
+        type ``spec.model_cls``. This boundary does not normalize a single
+        model or materialize an iterable.
+    spec:
+        The write policy for the batch. ``spec.model_cls`` determines the
+        accepted exact type, and ``spec.required_for_write`` identifies fields
+        that must be present and non-null even when the generated model makes
+        them optional.
+
+    Returns
+    -------
+    list[BaseModel]
+        A new list containing the original model instances in input order.
+        Strict derived models are used only for validation and are not
+        returned.
+
+    Raises
+    ------
+    TypeError
+        If ``models`` is not a sequence or a member's exact type differs from
+        ``spec.model_cls``.
+    ValueError
+        If the sequence is empty or a member fails strict required-field
+        validation.
+
+    Notes
+    -----
+    Validation performs no IO and does not mutate the supplied models.
     """
     if isinstance(models, (str, bytes)) or not isinstance(models, Sequence):
         raise TypeError(

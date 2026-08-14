@@ -171,10 +171,25 @@ REGISTRY: dict[str, WriteSpec] = {
 
 
 def get_spec(model_or_cls: type[BaseModel] | BaseModel) -> WriteSpec:
-    """Look up the :class:`WriteSpec` for a model class or instance.
+    """Resolve the registered write policy for a model class name.
 
-    Accepts either the generated pydantic class itself or an instance of it,
-    keyed by ``__name__`` of the class.
+    Parameters
+    ----------
+    model_or_cls:
+        Generated pydantic model class or instance. Lookup uses the exact
+        ``__name__`` string as the registry key; class identity and inheritance
+        do not participate in lookup.
+
+    Returns
+    -------
+    WriteSpec
+        The registry's existing policy object for that class name.
+
+    Raises
+    ------
+    KeyError
+        If no policy is registered under the exact class name. The error lists
+        the currently known registry keys.
     """
     cls = model_or_cls if isinstance(model_or_cls, type) else type(model_or_cls)
     try:

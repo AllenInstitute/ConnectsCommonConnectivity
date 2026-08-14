@@ -48,7 +48,7 @@ class WrittenResult:
 
     ``predicates`` is one entry per scope group for ``overwrite_scoped``
     writes; an empty tuple for ``append_new_by_id`` (no predicate is
-    issued — Delta append + id-dedupe handles idempotency).
+    issued because existing ids are checked before the Delta append).
     """
 
     class_name: str
@@ -79,6 +79,26 @@ def _normalize_models(models: BaseModel | Iterable[BaseModel]) -> list[BaseModel
     Iterable inputs, including one-shot generators, are materialized exactly
     once. This is the write path's only shape conversion boundary; downstream
     validation receives the resulting sequence without further coercion.
+
+    Parameters
+    ----------
+    models:
+        One pydantic model or an iterable whose members all have the same
+        exact pydantic model type. Strings and bytes are not model iterables.
+
+    Returns
+    -------
+    list[BaseModel]
+        A new non-empty list. A single model is wrapped without copying it;
+        iterable members retain their identities and input order.
+
+    Raises
+    ------
+    TypeError
+        If the input is neither a model nor an iterable of models, or if an
+        iterable contains a non-model or mixed exact model types.
+    ValueError
+        If the iterable is empty.
     """
     if isinstance(models, BaseModel):
         return [models]
@@ -112,7 +132,19 @@ def _normalize_models(models: BaseModel | Iterable[BaseModel]) -> list[BaseModel
 
 
 def _format_value(v: Any) -> str:
-    """Render ``v`` as a single-quoted SQL literal for the Delta predicate."""
+    """Render one scope value as a Delta predicate literal.
+
+    Parameters
+    ----------
+    v:
+        Scope value to render. ``None`` represents SQL ``NULL``; every other
+        value is stringified, single-quoted, and has embedded quotes escaped.
+
+    Returns
+    -------
+    str
+        The literal text inserted into a predicate expression.
+    """
     if v is None:
         return "NULL"
     return "'" + str(v).replace("'", "''") + "'"
@@ -125,6 +157,24 @@ def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) ->
     quotes, AND-joined, no extra whitespace beyond the single space around
     each operator. Notebooks that compose predicates by hand use the same
     format; this helper is the canonical implementation.
+
+    Parameters
+    ----------
+    scope_columns:
+        Ordered column names that define one overwrite scope.
+    row_values:
+        Values for those columns in matching positional order.
+
+    Returns
+    -------
+    str
+        The conjunction of one equality expression per column, or an empty
+        string when both sequences are empty.
+
+    Raises
+    ------
+    ValueError
+        If the column and value sequences have different lengths.
     """
     if len(scope_columns) != len(row_values):
         raise ValueError(
@@ -143,6 +193,24 @@ def _group_by_scope(
     Scope groups preserve row order within each group. Two rows belong to
     the same group iff they have equal values across every column in
     ``scope_columns``. Order of groups is the order of first appearance.
+
+    Parameters
+    ----------
+    table:
+        Arrow table containing every requested scope column.
+    scope_columns:
+        Non-empty ordered column names whose combined values define a group.
+
+    Returns
+    -------
+    list[tuple[tuple, pyarrow.Table]]
+        Scope-value tuples paired with the corresponding row subsets. An
+        empty table produces an empty list.
+
+    Raises
+    ------
+    ValueError
+        If ``scope_columns`` is empty.
     """
     if len(scope_columns) == 0:
         raise ValueError("scope_columns must be non-empty for overwrite_scoped writes")
@@ -165,7 +233,40 @@ def _group_by_scope(
 def _dispatch_overwrite_scoped(
     table: pa.Table, spec: WriteSpec, path: Path
 ) -> WrittenResult:
-    """Group by scope, issue one predicated overwrite per group."""
+    """Replace the Delta rows in each scope represented by a prepared batch.
+
+    Parameters
+    ----------
+    table:
+        A write-ready Arrow table containing every column named by
+        ``spec.scope_columns`` and ``spec.partition_by``. Validation, schema
+        alignment, and LinkML metadata attachment must already be complete.
+    spec:
+        The batch's write policy. Its non-empty ``scope_columns`` define the
+        row groups and overwrite predicates; its ``partition_by`` columns are
+        forwarded to every Delta write.
+    path:
+        The complete Delta table directory, including the output root and
+        ``spec.subdir``.
+
+    Returns
+    -------
+    WrittenResult
+        The model class and Delta path, ``"overwrite_scoped"`` mode, one
+        predicate per scope group in first-appearance order, and the total
+        number of rows submitted across all writes.
+
+    Raises
+    ------
+    ValueError
+        If the spec has no scope columns.
+
+    Notes
+    -----
+    This function performs one predicated Delta overwrite per distinct scope
+    tuple. Rows matching each predicate are replaced; other scopes remain
+    untouched.
+    """
     groups = _group_by_scope(table, spec.scope_columns)
     predicates: list[str] = []
     rows_written = 0
@@ -193,7 +294,41 @@ def _dispatch_overwrite_scoped(
 def _dispatch_append_new_by_id(
     table: pa.Table, spec: WriteSpec, path: Path
 ) -> WrittenResult:
-    """Append only rows whose id is new, scoped to a single ``project_id``."""
+    """Append rows with ids not yet stored for one project.
+
+    Parameters
+    ----------
+    table:
+        A write-ready Arrow table for exactly one ``project_id``. Validation,
+        schema alignment, and LinkML metadata attachment must already be
+        complete, and the table must contain the id column named by the first
+        entry in ``spec.scope_columns``.
+    spec:
+        The batch's write policy. Its first scope column is used as the id
+        column for the existing-row check; additional scope columns, if any,
+        do not participate in deduplication.
+    path:
+        The complete Delta table directory, including the output root and
+        ``spec.subdir``.
+
+    Returns
+    -------
+    WrittenResult
+        The model class and Delta path, ``"append_new_by_id"`` mode, no
+        predicates, and the number of rows actually appended.
+
+    Raises
+    ------
+    ValueError
+        If the spec has no scope columns, the table lacks ``project_id``, or
+        the table does not contain exactly one distinct ``project_id``.
+
+    Notes
+    -----
+    This function performs Delta IO through :func:`append_new_dataitems`.
+    Duplicate prevention has that helper's sequential, readable-table
+    guarantees; it does not provide concurrency control.
+    """
     if len(spec.scope_columns) == 0:
         raise ValueError(
             f"{spec.model_cls.__name__}: scope_columns is empty for append_new_by_id "
@@ -236,15 +371,32 @@ def _resolve_output_root(
     settings: Settings | None,
     output_root: str | Path | None,
 ) -> tuple[Path, Settings | None]:
-    """Resolve the effective on-disk root for a single write call.
+    """Resolve the output root and settings state used by one write call.
 
-    Precedence (highest first):
+    Parameters
+    ----------
+    settings:
+        Explicit configuration supplying the output root and write controls
+        such as ``dry_run``. When omitted with no root override, configuration
+        is discovered through :func:`get_settings`.
+    output_root:
+        Per-call root override. The caller later combines this path with
+        ``spec.subdir`` to form the complete Delta table directory. It is
+        mutually exclusive with ``settings``.
 
-    1. Explicit ``output_root=`` (str or :class:`Path`). Used verbatim;
-       passing both ``settings=`` and ``output_root=`` is an error so callers
-       never have to remember a precedence rule.
-    2. Explicit ``settings=`` → ``settings.output_root``.
-    3. :func:`get_settings` → the discovered ``ccc_config.yaml``.
+    Returns
+    -------
+    Path
+        The effective output root later combined with ``spec.subdir``.
+    Settings or None
+        The explicit or discovered settings retained so the caller can honor
+        ``dry_run``. This value is ``None`` when ``output_root`` is explicit,
+        so no settings-based ``dry_run`` policy applies to a root override.
+
+    Raises
+    ------
+    TypeError
+        If both ``settings`` and ``output_root`` are supplied.
     """
     if output_root is not None and settings is not None:
         raise TypeError(
@@ -288,7 +440,8 @@ def write_models(
         notebook/dataset should write to a different location than the
         shared ``ccc_config.yaml`` ``output_root`` (e.g. an isolated test
         dataset). Mutually exclusive with ``settings=`` — passing both
-        raises ``TypeError``.
+        raises ``TypeError``. Because no settings object is resolved for an
+        explicit root, settings-based ``dry_run`` handling does not apply.
 
     Returns
     -------
@@ -297,9 +450,24 @@ def write_models(
         per scope group for ``overwrite_scoped``; empty for
         ``append_new_by_id``), and the number of rows written.
 
+    Raises
+    ------
+    TypeError
+        If the input cannot form one homogeneous exact-type model batch, or
+        if both ``settings`` and ``output_root`` are supplied.
+    ValueError
+        If the batch is empty, fails write-required validation, violates a
+        dispatch invariant, or resolves to an unsupported write mode.
+    KeyError
+        If the batch's exact model class has no registered write spec.
+
     Notes
     -----
-    Use ``WRITABLE_CLASSES`` to enumerate at runtime.
+    Unless settings enable ``dry_run``, this function writes to the Delta
+    table at ``output_root / spec.subdir``. A dry run performs normalization,
+    registry lookup, and validation but no Arrow conversion or Delta IO, and
+    returns zero rows and no predicates. Use ``WRITABLE_CLASSES`` to enumerate
+    supported exact model classes at runtime.
     """
     items = _normalize_models(models)
     cls = type(items[0])
@@ -342,14 +510,39 @@ def write_projection_matrix(
 ) -> WrittenResult:
     """Enrich ``pmm`` with derived ``region_coverage`` and write it.
 
-    The single non-:func:`write_models` public writer, justified by the
-    non-uniform signature: callers must hand in the dense ``matrix``
-    alongside the model so coverage can be derived from it. The input
-    ``pmm`` is not mutated — :func:`populate_region_coverage` returns a
-    new instance.
+    Parameters
+    ----------
+    pmm:
+        Projection metadata whose ``region_index`` defines the matrix column
+        order. The input model is not mutated.
+    matrix:
+        Dense cell-by-region values used to derive ``region_coverage`` before
+        delegating the enriched copy to :func:`write_models`.
+    settings:
+        Optional write configuration with the same resolution and ``dry_run``
+        semantics as :func:`write_models`.
+    output_root:
+        Optional per-call output-root override. Mutually exclusive with
+        ``settings`` and combined with the projection write spec's subdir.
 
-    ``settings`` and ``output_root`` have the same semantics — and the same
-    mutual-exclusion rule — as in :func:`write_models`.
+    Returns
+    -------
+    WrittenResult
+        The result of writing the enriched projection model, including its
+        Delta table path, predicates, and row count.
+
+    Raises
+    ------
+    ValueError
+        If ``region_index`` is absent, the matrix is not two-dimensional, or
+        its column count differs from the region index length.
+    TypeError
+        If both ``settings`` and ``output_root`` are supplied.
+
+    Notes
+    -----
+    The derived copy follows the same validation and Delta IO path as
+    :func:`write_models`.
     """
     enriched = populate_region_coverage(pmm, matrix)
     return write_models(enriched, settings=settings, output_root=output_root)
@@ -370,6 +563,18 @@ def write_cellcellconnectivitylong(
     (b) dispatch is extended to accept a per-call subdir override, those
     notebooks keep using ``write_deltalake`` directly. This stub exists as
     a reminder of that open work.
+
+    Parameters
+    ----------
+    *args:
+        Ignored positional arguments reserved for a future writer contract.
+    **kwargs:
+        Ignored keyword arguments reserved for a future writer contract.
+
+    Raises
+    ------
+    NotImplementedError
+        Always; this model has no registered write path.
     """
     raise NotImplementedError(
         "write_cellcellconnectivitylong is not implemented yet; "

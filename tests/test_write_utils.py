@@ -27,6 +27,7 @@ def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:
 
 
 def test_populate_region_coverage_accepts_nested_list():
+    """Region coverage must derive populated columns without mutating input."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_list",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
@@ -53,12 +54,14 @@ def test_populate_region_coverage_accepts_nested_list():
 
 
 def test_first_write_appends_all(tmp_path):
+    """The first write must append every input row."""
     table = _make_table(["a", "b", "c"])
     n = append_new_dataitems(str(tmp_path / "dataitem"), table, project_id="proj_a")
     assert n == 3
 
 
 def test_first_write_empty_table(tmp_path):
+    """The first empty write must report zero appended rows."""
     table = _make_table([])
     n = append_new_dataitems(str(tmp_path / "dataitem"), table, project_id="proj_a")
     assert n == 0
@@ -70,6 +73,7 @@ def test_first_write_empty_table(tmp_path):
 
 
 def test_idempotent_rerun(tmp_path):
+    """Rewriting identical rows must append nothing."""
     path = str(tmp_path / "dataitem")
     table = _make_table(["a", "b", "c"])
     first = append_new_dataitems(path, table, project_id="proj_a")
@@ -79,6 +83,7 @@ def test_idempotent_rerun(tmp_path):
 
 
 def test_idempotent_partial_rerun(tmp_path):
+    """A partial rerun must append only unseen rows."""
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["a", "b"]), project_id="proj_a")
     n = append_new_dataitems(path, _make_table(["a", "b", "c"]), project_id="proj_a")
@@ -91,6 +96,7 @@ def test_idempotent_partial_rerun(tmp_path):
 
 
 def test_different_projects_do_not_interfere(tmp_path):
+    """Identical row identifiers in different projects must remain independent."""
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_a"), project_id="proj_a")
     # proj_b has the same ids — they are independent rows
@@ -107,7 +113,7 @@ def test_different_projects_do_not_interfere(tmp_path):
 
 
 def test_shared_project_two_sources(tmp_path):
-    """Simulates inh_01 and exc_01 both writing to the same project partition."""
+    """Distinct sources in one project must append without replacing each other."""
     path = str(tmp_path / "dataitem")
     inh_ids = ["100", "200", "300"]
     exc_ids = ["400", "500"]

@@ -41,12 +41,14 @@ SHIM_IMPORT_PATTERN = re.compile(
 
 
 def test_shim_modules_deleted():
+    """Deprecated root-level shim files must remain deleted."""
     pkg = REPO_ROOT / "src" / "connects_common_connectivity"
     assert not (pkg / "arrow_utils.py").exists(), "shim arrow_utils.py must be deleted"
     assert not (pkg / "write_utils.py").exists(), "shim write_utils.py must be deleted"
 
 
 def test_shim_modules_not_importable():
+    """Deprecated root-level shim modules must not be importable."""
     with pytest.raises(ModuleNotFoundError):
         import connects_common_connectivity.arrow_utils  # noqa: F401
     with pytest.raises(ModuleNotFoundError):
@@ -65,6 +67,7 @@ def _iter_source_files():
 
 
 def test_no_source_references_shim_paths():
+    """Source code must not reference deprecated shim import paths."""
     offenders: list[tuple[Path, list[str]]] = []
     for path in _iter_source_files():
         # Skip this test file itself (it intentionally mentions the names).
@@ -100,6 +103,7 @@ def test_no_source_references_shim_paths():
 
 
 def test_public_names_from_io_paths():
+    """Canonical IO module paths must expose the relocated callables."""
     # Imports are performed at module top; assert the names resolve to callables
     # so the test fails loudly if the public surface ever regresses.
     for obj in (

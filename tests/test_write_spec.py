@@ -15,12 +15,14 @@ from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_
 
 
 def test_registry_contains_seed_entries():
+    """The writer registry must contain its foundational model entries."""
     seed = {"DataSet", "DataItem", "DataItemDataSetAssociation"}
     assert seed.issubset(set(REGISTRY))
 
 
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_registry_key_matches_model_cls(key):
+    """Each registry key must match its generated model class."""
     spec = REGISTRY[key]
     cls = getattr(models_module, key, None)
     assert cls is not None, f"models.py has no class named {key!r}"
@@ -32,6 +34,7 @@ def test_registry_key_matches_model_cls(key):
 
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_spec_columns_exist_on_model(key):
+    """Every configured writer column must exist on its model."""
     spec: WriteSpec = REGISTRY[key]
     fields = set(spec.model_cls.model_fields)
     for col in spec.scope_columns + spec.partition_by + spec.required_for_write:
@@ -42,6 +45,7 @@ def test_spec_columns_exist_on_model(key):
 
 
 def test_get_spec_accepts_class_and_instance():
+    """Writer specs must resolve from either a model class or instance."""
     ds_cls = REGISTRY["DataSet"].model_cls
     instance = ds_cls(id="d1", name="example", project_id="p1")
     assert get_spec(ds_cls) is REGISTRY["DataSet"]
@@ -49,6 +53,7 @@ def test_get_spec_accepts_class_and_instance():
 
 
 def test_get_spec_unknown_class_raises():
+    """Spec lookup must reject unregistered classes."""
     class NotRegistered:
         pass
 

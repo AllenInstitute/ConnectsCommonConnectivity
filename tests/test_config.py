@@ -27,12 +27,14 @@ def _write_config(dir_: Path, **values) -> Path:
 
 
 def test_get_settings_raises_actionable_error_when_missing(tmp_path):
+    """Missing config must raise an error that names the expected file."""
     # tmp_path has no ccc_config.yaml anywhere up the tree (we chdir'd into it).
     with pytest.raises(RuntimeError, match=CONFIG_FILENAME):
         get_settings()
 
 
 def test_find_and_load_from_nested_cwd(tmp_path, monkeypatch):
+    """Config discovery must search parent directories from a nested cwd."""
     _write_config(tmp_path, output_root=str(tmp_path / "out"), dry_run=True)
     nested = tmp_path / "a" / "b" / "c"
     nested.mkdir(parents=True)
@@ -49,6 +51,7 @@ def test_find_and_load_from_nested_cwd(tmp_path, monkeypatch):
 
 
 def test_env_overrides_only_output_root(tmp_path, monkeypatch):
+    """The environment must override only the configured output root."""
     _write_config(tmp_path, output_root=str(tmp_path / "from_file"), dry_run=True)
     monkeypatch.setenv("CCC_OUTPUT_ROOT", str(tmp_path / "from_env"))
     get_settings.cache_clear()
@@ -60,6 +63,7 @@ def test_env_overrides_only_output_root(tmp_path, monkeypatch):
 
 
 def test_explicit_settings_wins_over_env_and_file(tmp_path, monkeypatch):
+    """Explicit settings must take precedence over environment and file values."""
     _write_config(tmp_path, output_root=str(tmp_path / "from_file"), dry_run=True)
     monkeypatch.setenv("CCC_OUTPUT_ROOT", str(tmp_path / "from_env"))
     get_settings.cache_clear()
@@ -77,6 +81,7 @@ def test_explicit_settings_wins_over_env_and_file(tmp_path, monkeypatch):
 
 
 def test_output_root_is_required(tmp_path):
+    """Config loading must reject a missing output root."""
     _write_config(tmp_path, dry_run=False)  # missing output_root
     get_settings.cache_clear()
     with pytest.raises(ValidationError, match=r"(?s)output_root.*[Ff]ield required"):
@@ -84,6 +89,7 @@ def test_output_root_is_required(tmp_path):
 
 
 def test_unknown_keys_rejected(tmp_path):
+    """Config loading must reject unknown settings keys."""
     _write_config(tmp_path, output_root=str(tmp_path), nonsense_key=1)
     get_settings.cache_clear()
     with pytest.raises(ValidationError, match=r"(?s)[Ee]xtra inputs are not permitted"):
@@ -91,11 +97,13 @@ def test_unknown_keys_rejected(tmp_path):
 
 
 def test_io_reexports_settings_helpers():
+    """The IO package must re-export the canonical settings helpers."""
     assert IOSettings is Settings
     assert io_get_settings is get_settings
 
 
 def test_get_settings_is_cached(tmp_path, monkeypatch):
+    """Settings must remain cached until the cache is explicitly cleared."""
     _write_config(tmp_path, output_root=str(tmp_path / "out"))
     get_settings.cache_clear()
     first = get_settings()
@@ -110,6 +118,7 @@ def test_get_settings_is_cached(tmp_path, monkeypatch):
 
 
 def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monkeypatch):
+    """Relative output roots must be anchored to the config directory."""
     # Config sits at tmp_path; output_root is relative ("scratch/x/").
     _write_config(tmp_path, output_root="scratch/x/")
     nested = tmp_path / "code"

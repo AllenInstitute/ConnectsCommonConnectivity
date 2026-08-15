@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 
 def test_mapping_set_dataset_to_dataset(models):
+    """Mapping sets must support dataset-to-dataset endpoints."""
     # Cell-to-cell shape: source_dataset + target_dataset (back-compat).
     MappingSet = models["MappingSet"]
     ms = MappingSet(
@@ -24,6 +25,7 @@ def test_mapping_set_dataset_to_dataset(models):
 
 
 def test_mapping_set_dataset_to_hierarchy(models):
+    """Mapping sets must support dataset-to-hierarchy endpoints."""
     # Cell-to-cluster shape: source_dataset + target_hierarchy.
     MappingSet = models["MappingSet"]
     ms = MappingSet(
@@ -41,6 +43,7 @@ def test_mapping_set_dataset_to_hierarchy(models):
 
 
 def test_mapping_set_hierarchy_to_hierarchy(models):
+    """Mapping sets must support hierarchy-to-hierarchy endpoints."""
     # Cluster-to-cluster shape: source_hierarchy + target_hierarchy.
     MappingSet = models["MappingSet"]
     ms = MappingSet(
@@ -58,6 +61,7 @@ def test_mapping_set_hierarchy_to_hierarchy(models):
 
 
 def test_mapping_set_endpoints_optional(models):
+    """Mapping sets must allow all endpoint fields to be omitted."""
     # All four endpoint slots are optional at the schema level (LinkML can't enforce
     # "exactly one of"); convention is enforced per-mapping kind.
     MappingSet = models["MappingSet"]
@@ -72,18 +76,21 @@ def test_mapping_set_endpoints_optional(models):
 
 
 def test_mapping_set_method_name_still_required(models):
+    """Mapping sets must require a method name."""
     MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)method_name.*Field required"):
         MappingSet(id="ms1", project_id="p1")
 
 
 def test_mapping_set_project_id_still_required(models):
+    """Mapping sets must require a project identifier."""
     MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Field required"):
         MappingSet(id="ms1", method_name="m")
 
 
 def test_mapping_set_hierarchy_fields_must_be_strings(models):
+    """Mapping-set hierarchy endpoints must be strings."""
     MappingSet = models["MappingSet"]
     with pytest.raises(ValidationError, match=r"(?s)target_hierarchy.*Input should be a valid string"):
         MappingSet(
@@ -98,6 +105,7 @@ def test_mapping_set_hierarchy_fields_must_be_strings(models):
 
 
 def test_cell_to_cluster_mapping_round_trip(models):
+    """Cell-to-cluster mappings must retain endpoints and scores."""
     CellToClusterMapping = models["CellToClusterMapping"]
     m = CellToClusterMapping(
         id="map_001",
@@ -116,6 +124,7 @@ def test_cell_to_cluster_mapping_round_trip(models):
 
 
 def test_cell_to_cluster_mapping_requires_target_cluster(models):
+    """Cell-to-cluster mappings must require a target cluster."""
     CellToClusterMapping = models["CellToClusterMapping"]
     with pytest.raises(ValidationError, match=r"(?s)target_cluster.*Field required"):
         CellToClusterMapping(

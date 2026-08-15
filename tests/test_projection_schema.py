@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 def test_laterality_enum(models):
+    """The laterality enum must expose all supported directions."""
     Laterality = models["Laterality"]
     assert Laterality.IPSILATERAL.name == "IPSILATERAL"
     assert Laterality.CONTRALATERAL.name == "CONTRALATERAL"
@@ -10,6 +11,7 @@ def test_laterality_enum(models):
 
 
 def test_projection_measurement_matrix_laterality(models):
+    """Projection matrices must require and validate laterality values."""
     PMM = models["ProjectionMeasurementMatrix"]
     Laterality = models["Laterality"]
     Modality = models["Modality"]
@@ -28,6 +30,7 @@ def test_projection_measurement_matrix_laterality(models):
 
 
 def test_region_coverage_on_pmm(models):
+    """Projection matrices must accept optional region-coverage subsets."""
     PMM = models["ProjectionMeasurementMatrix"]
     Laterality = models["Laterality"]
     Modality = models["Modality"]

@@ -5,10 +5,12 @@ import connects_common_connectivity as ccc
 
 
 def test_import():
+    """The package import must expose a version."""
     assert ccc.__version__
 
 
 def test_model_generation():
+    """Model generation must produce constructible brain-region models."""
     models = ccc.generate_pydantic_models()
     assert "BrainRegion" in models
     BrainRegion = models["BrainRegion"]
@@ -18,6 +20,7 @@ def test_model_generation():
 
 
 def test_required_field_enforcement():
+    """Generated models must enforce required project identifiers."""
     models = ccc.generate_pydantic_models()
     DataItem = models["DataItem"]
     # project_id is required; omitting should raise a validation error
@@ -26,6 +29,7 @@ def test_required_field_enforcement():
 
 
 def test_enum_validation():
+    """Generated models must accept enum members and reject invalid values."""
     models = ccc.generate_pydantic_models()
     Modality = models["Modality"]  # Enum
     assert Modality.TRACER.name == "TRACER"
@@ -39,6 +43,7 @@ def test_enum_validation():
 
 
 def test_multivalued_slot_list_type():
+    """Generated multivalued slots must accept and retain lists."""
     models = ccc.generate_pydantic_models()
     BrainRegion = models["BrainRegion"]
     # child_identifiers multivalued; we can pass list
@@ -50,6 +55,7 @@ def test_multivalued_slot_list_type():
 
 
 def test_probability_bounds_and_pattern():
+    """Mapping probabilities must stay within the inclusive unit interval."""
     models = ccc.generate_pydantic_models()
     MappingSet = models["MappingSet"]
     CellToCellMapping = models["CellToCellMapping"]

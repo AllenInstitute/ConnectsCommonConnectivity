@@ -55,6 +55,7 @@ from connects_common_connectivity.models import (
 
 
 def test_build_predicate_format():
+    """Predicates must join scoped equality clauses with SQL conjunctions."""
     assert (
         _build_predicate(["project_id"], ["minnie65"])
         == "project_id = 'minnie65'"
@@ -75,6 +76,7 @@ def test_build_predicate_format():
     ],
 )
 def test_build_predicate_escapes(value, expected_literal):
+    """Predicate values must be escaped as valid SQL string literals."""
     assert _build_predicate(["name"], [value]) == f"name = {expected_literal}"
 
 
@@ -84,6 +86,7 @@ def test_build_predicate_escapes(value, expected_literal):
 
 
 def test_group_by_scope_preserves_first_appearance_order():
+    """Scope grouping must preserve group and row appearance order."""
     table = pa.table(
         {
             "project_id": ["p", "p", "p"],
@@ -105,12 +108,7 @@ def test_group_by_scope_preserves_first_appearance_order():
 
 
 def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
-    """Two DataSet rows with the same ``project_id`` but different ``id`` must coexist.
-
-    Before W2/W3 the notebooks predicated on ``project_id`` only, so a
-    second write wiped the first. The new ``scope_columns=[project_id, id]``
-    keeps each row independent.
-    """
+    """Datasets sharing a project but not an ID must coexist."""
     ds_a = DataSet(id="visp_exc_patchseq", name="exc", project_id="visp_patchseq")
     ds_b = DataSet(id="visp_inh_patchseq", name="inh", project_id="visp_patchseq")
     write_models(ds_a, settings=settings)
@@ -125,6 +123,7 @@ def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
 
 
 def test_overwrite_scoped_is_idempotent(settings, read_delta):
+    """Repeated scoped overwrites must preserve one unchanged row."""
     ds = DataSet(id="d1", name="example", project_id="p1")
     write_models(ds, settings=settings)
     write_models(ds, settings=settings)
@@ -135,6 +134,7 @@ def test_overwrite_scoped_is_idempotent(settings, read_delta):
 
 
 def test_dry_run_does_not_write(tmp_path):
+    """Dry runs must report no writes and create no tables."""
     settings = Settings(output_root=tmp_path, dry_run=True)
     ds = DataSet(id="d1", name="d", project_id="p1")
 
@@ -145,6 +145,7 @@ def test_dry_run_does_not_write(tmp_path):
 
 
 def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, read_delta):
+    """Multi-scope writes must emit one predicate per persisted group."""
     rows_in = [
         DataSet(id="a", name="A", project_id="p1"),
         DataSet(id="b", name="B", project_id="p1"),
@@ -164,6 +165,7 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, rea
 
 
 def test_append_new_by_id_only_appends_unseen(settings, read_delta):
+    """Append-by-ID writes must persist only previously unseen identifiers."""
     items_first = [
         DataItem(id="cell_1", name="cell_1", project_id="p1"),
         DataItem(id="cell_2", name="cell_2", project_id="p1"),
@@ -185,6 +187,7 @@ def test_append_new_by_id_only_appends_unseen(settings, read_delta):
 
 
 def test_append_new_by_id_rejects_mixed_project_ids(settings):
+    """Append-by-ID batches must reject mixed project identifiers."""
     bad = [
         DataItem(id="x", name="x", project_id="p1"),
         DataItem(id="y", name="y", project_id="p2"),
@@ -259,6 +262,7 @@ def _make_instance(cls):
 
 
 def test_every_writable_class_has_a_fixture():
+    """Every writable class must have exactly one current smoke-test fixture."""
     missing = set(WRITABLE_CLASSES) - set(INSTANCE_FACTORIES)
     assert not missing, (
         f"WRITABLE_CLASSES added entries without fixtures: "
@@ -273,6 +277,7 @@ def test_every_writable_class_has_a_fixture():
 
 @pytest.mark.parametrize("cls", WRITABLE_CLASSES, ids=[c.__name__ for c in WRITABLE_CLASSES])
 def test_round_trip_each_writable_class(cls, settings, read_delta):
+    """Every writable class must round-trip one row through its registered table."""
     instance = _make_instance(cls)
     result = write_models(instance, settings=settings)
     assert result.class_name == cls.__name__
@@ -289,6 +294,7 @@ def test_round_trip_each_writable_class(cls, settings, read_delta):
 
 
 def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings, read_delta):
+    """Projection writes must derive coverage without mutating their input."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_test",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
@@ -396,6 +402,7 @@ def test_write_models_materializes_generator_before_rejecting_later_member(setti
 
 
 def test_write_models_rejects_unregistered_class(settings):
+    """The public writer must reject objects outside the model hierarchy."""
     class NotInRegistry:
         pass
 
@@ -404,6 +411,7 @@ def test_write_models_rejects_unregistered_class(settings):
 
 
 def test_write_models_rejects_unregistered_pydantic_model(settings):
+    """The public writer must reject Pydantic models absent from the registry."""
     class UnregisteredModel(BaseModel):
         id: str
 
@@ -470,6 +478,7 @@ def test_write_projection_matrix_output_root_override(tmp_path):
 def test_write_projection_matrix_rejects_both_settings_and_output_root(
     settings, tmp_path
 ):
+    """Projection writes must reject competing output configuration sources."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_x",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,

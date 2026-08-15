@@ -12,6 +12,7 @@ def _write_parquet(path, columns: dict[str, list[str]]) -> None:
 
 
 def test_load_parquet_to_models_happy_path_dataitem(tmp_path):
+    """Valid Parquet rows must load as models with an error-free report."""
     parquet_path = tmp_path / "dataitems.parquet"
     _write_parquet(
         parquet_path,
@@ -39,6 +40,7 @@ def test_load_parquet_to_models_happy_path_dataitem(tmp_path):
 
 
 def test_load_parquet_to_models_reports_missing_required_slot(tmp_path):
+    """Missing required slots must reject the row and appear in the report."""
     parquet_path = tmp_path / "missing_project_id.parquet"
     _write_parquet(
         parquet_path,

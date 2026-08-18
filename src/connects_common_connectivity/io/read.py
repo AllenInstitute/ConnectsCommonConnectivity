@@ -1,8 +1,10 @@
 """Read helpers for the IO layer.
 
 Where :mod:`connects_common_connectivity.io.writers` owns the write path, this
-module owns the read path. 
-
+module owns the read path. It exposes :class:`DatasetReader` for assembling
+wide, dataset-centric tables from the Delta tables under a Common Connectivity
+root, and :func:`read_synapse_table` for reading the long single-synapse table
+with optional feature columns.
 """
 
 from __future__ import annotations
@@ -54,6 +56,23 @@ class DatasetReader:
     Feature sets and cluster hierarchies are discovered by overlap with the
     data items associated with a dataset. This is necessary because neither
     schema directly references a :class:`DataSet`.
+
+    The dataset and data-item/dataset association tables are read eagerly at
+    construction; the remaining tables are read lazily by the ``discover`` and
+    ``read`` methods.
+
+    Parameters
+    ----------
+    dataset_root:
+        Filesystem root holding the Delta tables. The path is expanded and
+        resolved, and must already exist as a directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``dataset_root`` is not an existing directory, or if either of the
+        required ``dataset`` or ``dataitem_dataset_association`` tables is
+        missing beneath it.
     """
 
     def __init__(self, dataset_root: str | Path) -> None:
@@ -71,7 +90,15 @@ class DatasetReader:
         )
 
     def display_dataset_names(self) -> pl.DataFrame:
-        """Return available dataset IDs and their descriptive metadata."""
+        """Return available dataset IDs and their descriptive metadata.
+
+        Returns
+        -------
+        polars.DataFrame
+            One row per dataset record, restricted to whichever of ``id``,
+            ``name``, ``project_id``, and ``modality`` are present in the
+            dataset table, sorted by ``project_id`` then ``id``.
+        """
         columns = [
             column
             for column in ("id", "name", "project_id", "modality")
@@ -80,7 +107,28 @@ class DatasetReader:
         return self._datasets.select(columns).sort(["project_id", "id"])
 
     def dataset_dataitem_ids(self, dataset_name: str) -> pl.DataFrame:
-        """Return the distinct data-item IDs associated with a dataset."""
+        """Return the distinct data-item IDs associated with a dataset.
+
+        Associations are matched on both the dataset ID and the dataset's
+        ``project_id``, so IDs are scoped to the correct project.
+
+        Parameters
+        ----------
+        dataset_name:
+            The ``id`` of the dataset to resolve.
+
+        Returns
+        -------
+        polars.DataFrame
+            A single ``dataitem_id`` column of unique IDs, sorted ascending.
+
+        Raises
+        ------
+        KeyError
+            If ``dataset_name`` matches no dataset record.
+        ValueError
+            If ``dataset_name`` is ambiguous across projects.
+        """
         dataset = self._dataset_record(dataset_name)
         return (
             self._associations.filter(
@@ -93,7 +141,37 @@ class DatasetReader:
         )
 
     def discover_featuresets(self, dataset_name: str) -> pl.DataFrame:
-        """Return feature sets whose matrices overlap the dataset's items."""
+        """Return feature sets whose matrices overlap the dataset's items.
+
+        Each project-scoped cell-feature matrix is read and its index column is
+        joined against the dataset's data items; a feature set is reported only
+        when at least one row overlaps.
+
+        Parameters
+        ----------
+        dataset_name:
+            The ``id`` of the dataset to resolve.
+
+        Returns
+        -------
+        polars.DataFrame
+            Rows keyed by ``feature_set_id`` (sorted), with the originating
+            ``matrix_id``, ``description``, ``extraction_method``,
+            ``feature_definition_ids``, and ``cell_index_column``. Empty (with
+            the same schema) when no matrices exist for the project or none
+            overlap.
+
+        Raises
+        ------
+        KeyError
+            If ``dataset_name`` matches no dataset record.
+        ValueError
+            If a matrix lacks a ``feature_set_id`` or ``cell_index_column``, or
+            references a missing feature set.
+        FileNotFoundError
+            If the ``cellfeatureset`` table or a referenced feature matrix is
+            missing.
+        """
         dataset = self._dataset_record(dataset_name)
         items = self.dataset_dataitem_ids(dataset_name)
         matrices = self._read_table(CELL_FEATURE_MATRIX_SUBDIR)
@@ -166,11 +244,42 @@ class DatasetReader:
         ).sort("feature_set_id")
 
     def display_featuresets(self, dataset_name: str) -> pl.DataFrame:
-        """Display feature sets related to a dataset."""
+        """Display feature sets related to a dataset.
+
+        Thin alias for :meth:`discover_featuresets`; see it for the full
+        contract, columns, and raised exceptions.
+        """
         return self.discover_featuresets(dataset_name)
 
     def discover_clustersets(self, dataset_name: str) -> pl.DataFrame:
-        """Return cluster hierarchies with memberships for dataset items."""
+        """Return cluster hierarchies with memberships for dataset items.
+
+        Cluster memberships scoped to the dataset's project are joined against
+        the dataset's data items to find the referenced hierarchies, which are
+        then resolved against the cluster-hierarchy table.
+
+        Parameters
+        ----------
+        dataset_name:
+            The ``id`` of the dataset to resolve.
+
+        Returns
+        -------
+        polars.DataFrame
+            Rows keyed by ``clusterset_id`` (sorted), with ``run``, ``root``,
+            and ``clusters``. Empty (with the same schema) when no memberships
+            exist for the project or none reference the dataset's items.
+
+        Raises
+        ------
+        KeyError
+            If ``dataset_name`` matches no dataset record.
+        ValueError
+            If a membership references a hierarchy ID absent from the
+            cluster-hierarchy table.
+        FileNotFoundError
+            If the ``clusterhierarchy`` table is missing.
+        """
         dataset = self._dataset_record(dataset_name)
         items = self.dataset_dataitem_ids(dataset_name).rename(
             {"dataitem_id": "item"}
@@ -213,7 +322,11 @@ class DatasetReader:
         )
 
     def display_clustersets(self, dataset_name: str) -> pl.DataFrame:
-        """Display cluster hierarchies related to a dataset."""
+        """Display cluster hierarchies related to a dataset.
+
+        Thin alias for :meth:`discover_clustersets`; see it for the full
+        contract, columns, and raised exceptions.
+        """
         return self.discover_clustersets(dataset_name)
 
     def read_dataset(
@@ -225,9 +338,37 @@ class DatasetReader:
     ) -> pl.DataFrame:
         """Return one wide row per data item in ``dataset_name``.
 
-        ``None`` selects every related feature or cluster set. A string selects
-        one set, an iterable selects several, and an empty iterable selects
-        none.
+        The dataset's data items form the base rows; selected feature sets and
+        cluster sets are each LEFT-joined on ``dataitem_id``, so items without a
+        matching feature or cluster row keep null values.
+
+        Parameters
+        ----------
+        dataset_name:
+            The ``id`` of the dataset to read.
+        featuresets:
+            Which discovered feature sets to append. ``None`` selects every
+            related set, a string selects one by ``feature_set_id``, an iterable
+            selects several, and an empty iterable selects none.
+        clustersets:
+            Which discovered cluster sets to append, using the same selection
+            semantics as ``featuresets`` but keyed by ``clusterset_id``. Cluster
+            columns are named ``<clusterset_id>_level_<level>``.
+
+        Returns
+        -------
+        polars.DataFrame
+            One row per data item, sorted by ``dataitem_id``, widened with the
+            selected feature and cluster columns.
+
+        Raises
+        ------
+        KeyError
+            If ``dataset_name`` is unknown, or a requested feature/cluster set
+            name is not among those discovered for the dataset.
+        ValueError
+            If ``dataset_name`` is ambiguous across projects, or if selected
+            feature sets contribute duplicate (colliding) feature columns.
         """
         dataset = self._dataset_record(dataset_name)
         result = self.dataset_dataitem_ids(dataset_name)
@@ -289,6 +430,16 @@ class DatasetReader:
         return result.sort("dataitem_id")
 
     def _dataset_record(self, dataset_name: str) -> dict[str, Any]:
+        """Return the single dataset row matching ``dataset_name`` as a dict.
+
+        Raises
+        ------
+        KeyError
+            If no dataset has the given ``id`` (the message lists available
+            IDs).
+        ValueError
+            If more than one dataset shares the ``id`` across projects.
+        """
         matches = self._datasets.filter(pl.col("id") == dataset_name)
         if matches.is_empty():
             available = self._datasets["id"].unique().sort().to_list()
@@ -310,6 +461,16 @@ class DatasetReader:
         *,
         required: bool = False,
     ) -> pl.DataFrame | None:
+        """Read a Delta table by subdirectory under the dataset root.
+
+        Returns the table as a DataFrame, or ``None`` when the subdirectory is
+        absent and ``required`` is ``False``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``required`` is ``True`` and the subdirectory does not exist.
+        """
         path = self.dataset_root / subdir
         if not path.exists():
             if required:
@@ -323,6 +484,30 @@ class DatasetReader:
         index_column: str,
         project_id: str,
     ) -> pl.DataFrame:
+        """Read a feature matrix table, filtered to ``project_id``.
+
+        Parameters
+        ----------
+        feature_set_id:
+            Subdirectory name under ``cellfeatures/`` identifying the matrix.
+        index_column:
+            Column expected to hold the cell/data-item index.
+        project_id:
+            Project scope; applied only if the matrix carries a ``project_id``
+            column.
+
+        Returns
+        -------
+        polars.DataFrame
+            The (optionally project-filtered) feature matrix.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the feature matrix directory does not exist.
+        ValueError
+            If ``index_column`` is not present in the matrix.
+        """
         path = self.dataset_root / CELL_FEATURES_SUBDIR / feature_set_id
         if not path.exists():
             raise FileNotFoundError(
@@ -345,6 +530,32 @@ class DatasetReader:
         project_id: str,
         items: pl.DataFrame,
     ) -> pl.DataFrame:
+        """Build the per-item feature frame to LEFT-join into a wide table.
+
+        The matrix index column is renamed to ``dataitem_id``, inner-joined to
+        ``items`` to keep only the dataset's rows, and stripped of the
+        ``project_id``/``feature_set_id`` metadata columns.
+
+        Parameters
+        ----------
+        feature_row:
+            A discovered feature-set row providing ``feature_set_id`` and
+            ``cell_index_column``.
+        project_id:
+            Project scope passed through to :meth:`_read_feature_matrix`.
+        items:
+            Single-column ``dataitem_id`` frame restricting the returned rows.
+
+        Returns
+        -------
+        polars.DataFrame
+            Feature columns keyed by ``dataitem_id`` for the dataset's items.
+
+        Raises
+        ------
+        ValueError
+            If the matrix holds multiple rows for the same data-item ID.
+        """
         feature_set_id = str(feature_row["feature_set_id"])
         index_column = str(feature_row["cell_index_column"])
         frame = self._read_feature_matrix(
@@ -384,6 +595,36 @@ class DatasetReader:
         project_id: str,
         items: pl.DataFrame,
     ) -> pl.DataFrame:
+        """Build the per-item cluster frame to LEFT-join into a wide table.
+
+        Memberships scoped to the project and hierarchy are joined to the
+        dataset's items and to the cluster table for level information, then
+        pivoted so each hierarchy level becomes a column named
+        ``<hierarchy_id>_level_<level>``.
+
+        Parameters
+        ----------
+        hierarchy_id:
+            The cluster hierarchy to materialize.
+        project_id:
+            Project scope for the membership and cluster tables.
+        items:
+            Single-column ``dataitem_id`` frame restricting the returned rows.
+
+        Returns
+        -------
+        polars.DataFrame
+            Cluster assignments keyed by ``dataitem_id``, one column per level.
+
+        Raises
+        ------
+        ValueError
+            If a membership references an unknown cluster or a cluster without a
+            level, or if an item is assigned multiple clusters at the same
+            level.
+        FileNotFoundError
+            If the ``clustermembership`` or ``cluster`` table is missing.
+        """
         memberships = self._read_table(CLUSTER_MEMBERSHIP_SUBDIR, required=True)
         clusters = self._read_table(CLUSTER_SUBDIR, required=True)
         item_keys = items.rename({"dataitem_id": "item"})
@@ -451,6 +692,33 @@ class DatasetReader:
         id_column: str,
         label: str,
     ) -> pl.DataFrame:
+        """Filter ``available`` down to the ``requested`` selection.
+
+        ``None`` returns ``available`` unchanged. A string selects one row, and
+        an iterable selects several; duplicate requests are de-duplicated while
+        preserving order.
+
+        Parameters
+        ----------
+        available:
+            Frame of discovered rows to select from.
+        requested:
+            The selection, keyed by ``id_column`` values.
+        id_column:
+            Column holding the selectable IDs.
+        label:
+            Human-readable noun used in error messages (e.g. ``"feature set"``).
+
+        Returns
+        -------
+        polars.DataFrame
+            The subset of ``available`` matching ``requested``.
+
+        Raises
+        ------
+        KeyError
+            If any requested name is absent from ``id_column``.
+        """
         if requested is None:
             return available
         names = [requested] if isinstance(requested, str) else list(requested)

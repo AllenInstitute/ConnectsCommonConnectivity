@@ -112,6 +112,10 @@ class Modality(str, Enum):
     """
     Expansion microscopy based connectivity mapping.
     """
+    CALCIUM_IMAGING = "CALCIUM_IMAGING"
+    """
+    Calcium imaging based functional correlations.
+    """
     OTHER = "OTHER"
     """
     Other modality.

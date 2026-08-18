@@ -1,32 +1,28 @@
 import pytest
 from pydantic import ValidationError
 
-import connects_common_connectivity as ccc
-
-
-def _models():
-    return ccc.generate_pydantic_models()
-
-
 # ---------------------------------------------------------------------------
 # Cluster — no longer ProjectScoped (taxonomies are global reference artifacts)
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_has_no_project_id_field():
-    Cluster = _models()["Cluster"]
+def test_cluster_has_no_project_id_field(models):
+    """Cluster models must not define a project identifier field."""
+    Cluster = models["Cluster"]
     assert "project_id" not in Cluster.model_fields
 
 
-def test_cluster_constructs_without_project_id():
-    Cluster = _models()["Cluster"]
+def test_cluster_constructs_without_project_id(models):
+    """Clusters must construct without a project identifier."""
+    Cluster = models["Cluster"]
     cluster = Cluster(id="c1")
     assert cluster.id == "c1"
 
 
-def test_cluster_rejects_project_id():
+def test_cluster_rejects_project_id(models):
+    """Clusters must reject project identifiers as extra input."""
     # Pydantic config is extra='forbid', so passing project_id raises rather than silently dropping.
-    Cluster = _models()["Cluster"]
+    Cluster = models["Cluster"]
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Extra inputs are not permitted"):
         Cluster(id="c1", project_id="visp_patchseq")
 
@@ -36,20 +32,23 @@ def test_cluster_rejects_project_id():
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_membership_project_id_required():
-    ClusterMembership = _models()["ClusterMembership"]
+def test_cluster_membership_project_id_required(models):
+    """Cluster memberships must require a project identifier."""
+    ClusterMembership = models["ClusterMembership"]
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Field required"):
         ClusterMembership(item="cell_1", cluster="c1")
 
 
-def test_cluster_membership_hierarchy_id_optional():
-    ClusterMembership = _models()["ClusterMembership"]
+def test_cluster_membership_hierarchy_id_optional(models):
+    """Cluster memberships must allow an omitted hierarchy identifier."""
+    ClusterMembership = models["ClusterMembership"]
     cm = ClusterMembership(item="cell_1", cluster="c1", project_id="visp_patchseq")
     assert cm.hierarchy_id is None
 
 
-def test_cluster_membership_hierarchy_id_round_trip():
-    ClusterMembership = _models()["ClusterMembership"]
+def test_cluster_membership_hierarchy_id_round_trip(models):
+    """Cluster memberships must retain a supplied hierarchy identifier."""
+    ClusterMembership = models["ClusterMembership"]
     cm = ClusterMembership(
         item="cell_1",
         cluster="c1",
@@ -59,8 +58,9 @@ def test_cluster_membership_hierarchy_id_round_trip():
     assert cm.hierarchy_id == "visp_met_types_v1"
 
 
-def test_cluster_membership_hierarchy_id_must_be_string():
-    ClusterMembership = _models()["ClusterMembership"]
+def test_cluster_membership_hierarchy_id_must_be_string(models):
+    """Cluster membership hierarchy identifiers must be strings."""
+    ClusterMembership = models["ClusterMembership"]
     with pytest.raises(ValidationError, match=r"(?s)hierarchy_id.*Input should be a valid string"):
         ClusterMembership(
             item="cell_1",
@@ -75,27 +75,31 @@ def test_cluster_membership_hierarchy_id_must_be_string():
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_hierarchy_id_optional():
-    Cluster = _models()["Cluster"]
+def test_cluster_hierarchy_id_optional(models):
+    """Clusters must allow an omitted hierarchy identifier."""
+    Cluster = models["Cluster"]
     cluster = Cluster(id="c1")
     assert cluster.hierarchy_id is None
 
 
-def test_cluster_hierarchy_id_round_trip():
-    Cluster = _models()["Cluster"]
+def test_cluster_hierarchy_id_round_trip(models):
+    """Clusters must retain a supplied hierarchy identifier."""
+    Cluster = models["Cluster"]
     cluster = Cluster(id="c1", hierarchy_id="visp_met_types_v1")
     assert cluster.hierarchy_id == "visp_met_types_v1"
 
 
-def test_cluster_hierarchy_id_must_be_string():
-    Cluster = _models()["Cluster"]
+def test_cluster_hierarchy_id_must_be_string(models):
+    """Cluster hierarchy identifiers must be strings."""
+    Cluster = models["Cluster"]
     with pytest.raises(ValidationError, match=r"(?s)hierarchy_id.*Input should be a valid string"):
         Cluster(id="c1", hierarchy_id=123)
 
 
-def test_cluster_still_has_no_project_id_after_hierarchy_id_added():
+def test_cluster_still_has_no_project_id_after_hierarchy_id_added(models):
+    """Adding hierarchy identifiers must not make clusters project-scoped."""
     # Regression guard: hierarchy_id was added without re-introducing ProjectScoped on Cluster.
-    Cluster = _models()["Cluster"]
+    Cluster = models["Cluster"]
     assert "project_id" not in Cluster.model_fields
     with pytest.raises(ValidationError, match=r"(?s)project_id.*Extra inputs are not permitted"):
         Cluster(id="c1", project_id="visp_patchseq")
@@ -106,39 +110,45 @@ def test_cluster_still_has_no_project_id_after_hierarchy_id_added():
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_hierarchy_constructs_with_id_run_root_clusters():
-    ClusterHierarchy = _models()["ClusterHierarchy"]
+def test_cluster_hierarchy_constructs_with_id_run_root_clusters(models):
+    """Cluster hierarchies must retain identifiers, roots, and cluster lists."""
+    ClusterHierarchy = models["ClusterHierarchy"]
     h = ClusterHierarchy(id="h1", run="run1", root="root", clusters=["root", "c1"])
     assert h.id == "h1"
     assert h.root == "root"
     assert h.clusters == ["root", "c1"]
 
 
-def test_cluster_hierarchy_requires_id():
-    ClusterHierarchy = _models()["ClusterHierarchy"]
+def test_cluster_hierarchy_requires_id(models):
+    """Cluster hierarchies must require an identifier."""
+    ClusterHierarchy = models["ClusterHierarchy"]
     with pytest.raises(ValidationError, match=r"(?s)id.*Field required"):
         ClusterHierarchy(run="run1", root="root", clusters=["root"])
 
 
-def test_algorithm_run_requires_algorithm_name():
-    AlgorithmRun = _models()["AlgorithmRun"]
+def test_algorithm_run_requires_algorithm_name(models):
+    """Algorithm runs must require an algorithm name."""
+    AlgorithmRun = models["AlgorithmRun"]
     with pytest.raises(ValidationError, match=r"(?s)algorithm_name.*Field required"):
         AlgorithmRun(id="run1")
 
 
-def test_algorithm_run_constructs_without_input_dataset():
-    AlgorithmRun = _models()["AlgorithmRun"]
+def test_algorithm_run_constructs_without_input_dataset(models):
+    """Algorithm runs must allow an omitted input dataset."""
+    AlgorithmRun = models["AlgorithmRun"]
     run = AlgorithmRun(id="run1", algorithm_name="hierarchical")
     assert run.input_dataset is None
 
 
-def test_hierarchy_category_requires_id():
-    HierarchyCategory = _models()["HierarchyCategory"]
+def test_hierarchy_category_requires_id(models):
+    """Hierarchy categories must require an identifier."""
+    HierarchyCategory = models["HierarchyCategory"]
     with pytest.raises(ValidationError, match=r"(?s)id.*Field required"):
         HierarchyCategory(description="leaf")
 
 
-def test_hierarchy_category_level_optional():
-    HierarchyCategory = _models()["HierarchyCategory"]
+def test_hierarchy_category_level_optional(models):
+    """Hierarchy categories must allow an omitted level."""
+    HierarchyCategory = models["HierarchyCategory"]
     cat = HierarchyCategory(id="cluster")
     assert cat.level is None

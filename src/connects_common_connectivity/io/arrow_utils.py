@@ -11,9 +11,12 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Iterable, List, Dict, Union, get_origin, get_args
 import hashlib
+import re
 from datetime import datetime, date
 
 import pyarrow as pa
+
+from connects_common_connectivity import __version__
 
 try:
     from pydantic import BaseModel  # type: ignore
@@ -209,11 +212,7 @@ def attach_linkml_metadata(table: pa.Table, *, linkml_class: str, linkml_schema_
     meta = dict(table.schema.metadata or {})
     meta.setdefault(b"linkml_class", linkml_class.encode())
     if linkml_schema_version is None:
-        try:  # pragma: no cover
-            from connects_common_connectivity import __version__  # type: ignore
-            linkml_schema_version = __version__
-        except Exception:
-            linkml_schema_version = None
+        linkml_schema_version = __version__
     if linkml_schema_version:
         meta.setdefault(b"linkml_schema_version", str(linkml_schema_version).encode())
     meta.setdefault(b"schema_fingerprint", _schema_fingerprint(table.schema).encode())
@@ -250,7 +249,6 @@ def _numpy_typestr_to_arrow(dtype_str: str) -> pa.DataType:
         return pa.string()
     kind = dtype_str[1] if dtype_str[0] in ('<', '>', '|', '=') else dtype_str[0]
     # Extract item size digits
-    import re
     m = re.search(r'(\d+)$', dtype_str)
     size = int(m.group(1)) if m else None
     # Map kind

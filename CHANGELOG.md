@@ -9,95 +9,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added final write-time validation helpers in
+- Added `connects_common_connectivity.config` with `Settings`,
+  `get_settings()`, and `find_config_file()`. Settings are discovered from
+  `ccc_config.yaml` at or above the current working directory;
+  `CCC_OUTPUT_ROOT` overrides the configured output root, and relative paths
+  are anchored to the config file's directory.
+- Added the curated `connects_common_connectivity.io` API with
+  `write_models()`, `write_projection_matrix()`, `WrittenResult`,
+  `WRITABLE_CLASSES`, `Settings`, and `get_settings()`. `write_models()`
+  accepts one Pydantic model or a non-empty homogeneous iterable, including a
+  one-shot generator, and dispatches writes through the model's registered
+  `WriteSpec`.
+- Added `settings=` and `output_root=` controls to `write_models()` and
+  `write_projection_matrix()`. An explicit output root bypasses config
+  discovery, while `Settings.dry_run=True` validates a write without creating
+  a Delta table and reports zero rows written.
+- Added write-time validation helpers in
   `connects_common_connectivity.io.write_validation`: `strict_model_for(spec)`
   derives validation rules from the supplied `WriteSpec`, and
-  `validate_for_write([model], spec)` validates a non-empty, exact-type model
-  sequence while returning the original instances in a list. `write_models()`
-  continues to select its `WriteSpec` from the write registry.
+  `validate_for_write(models, spec)` validates every member of a non-empty,
+  exact-type model sequence while returning the original instances in a new
+  list.
+- Added `WriteSpec` registry entries for `AlgorithmRun` and
+  `HierarchyCategory`, making both classes writable through `write_models()`
+  and discoverable through `WRITABLE_CLASSES`.
+- Added `populate_region_coverage()` in
+  `connects_common_connectivity.io.write_utils` to return a
+  `ProjectionMeasurementMatrix` copy whose region coverage is derived from a
+  two-dimensional NumPy-compatible array.
+- Added `CALCIUM_IMAGING` to the `Modality` enum for calcium-imaging-based
+  functional correlations.
 
 ### Changed
 
-- Renamed `WriteResult` to `WrittenResult` in `connects_common_connectivity.io` and `connects_common_connectivity.io.writers`. Update any `from connects_common_connectivity.io import WriteResult` to use `WrittenResult`.
+- Migrated registry-backed writes in the `code/etl_*.ipynb` notebooks to
+  `write_models()` and `write_projection_matrix()`. The notebooks now obtain
+  their shared output root from `get_settings().output_root`; wide matrix
+  Parquet files and `CellCellConnectivityLong` writes remain on direct Delta
+  APIs pending registry support.
 
 ### Deprecated
 
 ### Removed
 
-- Removed `output_root()` from `connects_common_connectivity.config`. Use `get_settings().output_root`, an absolute `pathlib.Path`, and join subpaths with `/`, e.g. `get_settings().output_root / "<table>"`. Unlike the old helper it returns an absolute `Path` (not a cwd-relative string with a trailing slash).
-- Removed `table_path()` from `connects_common_connectivity.config` and its re-export from `connects_common_connectivity.io`. Build table paths from `get_settings().output_root` instead, e.g. `get_settings().output_root / "<table>"`.
-- Removed the `Settings.describe()` method. Use `repr(settings)` for a readable summary of the resolved settings.
-
-### Fixed
-
-### Security
-
-## [0.2.0] - 2026-06-23
-
-### Added
-
-- Added `connects_common_connectivity.config` with `Settings`,
-  `get_settings()`, `find_config_file()`, `output_root()`, and
-  `table_path()`. Settings are discovered from a `ccc_config.yaml` at (or
-  above) the cwd; `CCC_OUTPUT_ROOT` overrides `output_root`. Relative
-  `output_root` values are anchored at the config file's directory so a
-  notebook in `code/` and a script at the repo root resolve to the same
-  place.
-- Added curated public API at `connects_common_connectivity.io`:
-  `write_models()` (single dispatch core for all generated pydantic
-  models), `write_projection_matrix()`, `WriteResult`,
-  `WRITABLE_CLASSES`, and re-exports of `get_settings`, `Settings`, and
-  `table_path`. The surface is pinned by `__all__`.
-- Added write-time validation: `write_models()` now re-validates each
-  model through a runtime-derived strict subclass that flips
-  `WriteSpec.required_for_write` slots to non-optional, raising
-  `ValueError` before any IO if a write-required slot is missing or
-  `None`. Public helpers `strict_model_for()` and `validate_for_write()`
-  live in `connects_common_connectivity.io.write_validation`.
-- Added `WriteSpec` registry entries for `AlgorithmRun` and
-  `HierarchyCategory` (both project-agnostic, scope=`["id"]`,
-  `overwrite_scoped`). These classes are now writable through
-  `write_models(...)` and surface in `WRITABLE_CLASSES`.
-- Added an `output_root=` keyword to `write_models()` and
-  `write_projection_matrix()` for per-call overrides of the on-disk root.
-  Accepts a `str` or `Path` and writes to `<output_root>/<spec.subdir>/`,
-  bypassing `ccc_config.yaml` for that call. Mutually exclusive with
-  `settings=` (passing both raises `TypeError`). Lets a single notebook
-  redirect its writes (e.g. an isolated test dataset) without mutating
-  process-global config or environment variables.
-- Added `populate_region_coverage()` in
-  `connects_common_connectivity.io.write_utils` for deriving
-  `ProjectionMeasurementMatrix.region_coverage` from a dense matrix.
-- Added `CALCIUM_IMAGING` value to the `Modality` enum for calcium
-  imaging based functional correlations.
-
-### Changed
-
-- Migrated `code/etl_*.ipynb` notebooks to the curated IO API:
-  hardcoded `OUTPUT_ROOT = "../scratch/..."` strings are replaced with
-  `output_root()` from `connects_common_connectivity.config`, and
-  hand-rolled `write_deltalake(..., mode=..., predicate=..., partition_by=...)`
-  calls for every registry-backed model are replaced with `write_models(...)`
-  (and `write_projection_matrix(...)` for projection-matrix metadata rows).
-  Wide cell-feature / projection-matrix parquets and `CellCellConnectivityLong`
-  writes remain on raw `write_deltalake` pending registry support.
-- Moved `connects_common_connectivity.arrow_utils` and
-  `connects_common_connectivity.write_utils` under
-  `connects_common_connectivity.io.*`.
-
-### Removed
-
-- Removed the deprecated re-export shims
-  `connects_common_connectivity.arrow_utils` and
-  `connects_common_connectivity.write_utils`. Import from
-  `connects_common_connectivity.io.arrow_utils` /
-  `connects_common_connectivity.io.write_utils` instead.
+- Removed the top-level `connects_common_connectivity.arrow_utils` and
+  `connects_common_connectivity.write_utils` modules. Import them from
+  `connects_common_connectivity.io.arrow_utils` and
+  `connects_common_connectivity.io.write_utils`, respectively.
 
 ### Fixed
 
 - Fixed `DataSet` writes to scope on `(project_id, id)` instead of
-  `project_id` alone, so sibling notebooks sharing a `project_id` (e.g.
-  patchseq exc/inh) no longer overwrite each other's `DataSet` rows.
-- Fixed `write_models()` to honor `Settings.dry_run=True`: writes are now
-  skipped, `rows_written` is reported as `0`, and no Delta table
-  directories are created.
+  `project_id` alone, so sibling notebooks sharing a project no longer
+  overwrite one another's `DataSet` rows.
+
+### Security

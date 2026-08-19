@@ -16,25 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Migrated registry-backed writes in the `code/etl_*.ipynb` notebooks to
-  `write_models()` and `write_projection_matrix()`. The notebooks now obtain
-  their shared output root from `get_settings().output_root`; wide matrix
-  Parquet files and `CellCellConnectivityLong` writes remain on direct Delta
-  APIs pending registry support.
-
 ### Deprecated
 
 ### Removed
 
-- Removed the top-level `connects_common_connectivity.arrow_utils` and
-  `connects_common_connectivity.write_utils` modules. Import them from
-  `connects_common_connectivity.io.arrow_utils` and
-  `connects_common_connectivity.io.write_utils`, respectively.
-
 ### Fixed
-
-- Fixed `DataSet` writes to scope on `(project_id, id)` instead of
-  `project_id` alone, so sibling notebooks sharing a project no longer
-  overwrite one another's `DataSet` rows.
 
 ### Security

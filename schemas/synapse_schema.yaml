@@ -1,0 +1,105 @@
+id: https://brain-connects.org/ic3-synapse-schema
+name: synapse_schema
+description: |-
+  Long-form single-synapse connectivity plus a wide-form per-synapse feature
+  matrix. Where CellCellConnectivityLong holds one aggregate value per cell-cell
+  connection, this module disaggregates down to the individual synapse: one row
+  per synapse, so the presynaptic/postsynaptic DataItem pair is intentionally
+  NOT unique (its multiplicity is the number of synapses making up a connection).
+imports:
+  - base_schema
+  - core_schema
+  - zarr_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+  skos: http://www.w3.org/2004/02/skos/core#
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+classes:
+  SynapseConnectivityLong:
+    description: |-
+      Long-form single-synapse connectivity. One row is the existence of one
+      synapse between a presynaptic and a postsynaptic DataItem. The
+      (presynaptic_cell, postsynaptic_cell) pair is NOT unique across rows.
+      Per-synapse features (position, size, target label, ...) live in a
+      separate SynapseFeatureMatrix, LEFT-joined on the synapse on read.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - presynaptic_cell
+      - postsynaptic_cell
+      - dataset_id
+    slot_usage:
+      id:
+        range: string
+        identifier: true
+        required: true
+        description: Unique synapse identifier from the source segmentation (stored as-is, never cast).
+      presynaptic_cell:
+        range: DataItem
+        inlined: false
+        required: true
+        description: Presynaptic DataItem (root id) of this synapse.
+      postsynaptic_cell:
+        range: DataItem
+        inlined: false
+        required: true
+        description: Postsynaptic DataItem (root id) of this synapse.
+      dataset_id:
+        range: DataSet
+        inlined: false
+        required: true
+        description: DataSet the presynaptic/postsynaptic DataItem ids belong to.
+
+  SynapseFeatureMatrix:
+    description: |-
+      Pointer to a wide-form Parquet of per-synapse features. One column
+      (synapse_index_column) is the SynapseConnectivityLong id; every other
+      column is a feature value (e.g. ctr_pt_position_x, size,
+      synaptictargetlabel). Features are LEFT-joined to the long synapse table
+      on synapse id, so a synapse need not have every feature (e.g. the target
+      label is missing for a subset of synapses).
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - description
+      - dataset_id
+      - parquet_path
+      - synapse_index_column
+    slot_usage:
+      id:
+        range: string
+        required: true
+        description: Identifier for this per-synapse feature matrix.
+      dataset_id:
+        range: DataSet
+        inlined: false
+        description: DataSet the synapses in this matrix belong to.
+      parquet_path:
+        range: ParquetDataset
+        required: true
+        description: Path to the wide-form per-synapse feature Parquet dataset.
+      synapse_index_column:
+        range: string
+        description: Column of the Parquet holding the SynapseConnectivityLong id.
+
+slots:
+  presynaptic_cell:
+    description: The presynaptic DataItem for a synapse.
+    range: DataItem
+    inlined: false
+  postsynaptic_cell:
+    description: The postsynaptic DataItem for a synapse.
+    range: DataItem
+    inlined: false
+  synapse_index_column:
+    description: Name of the column in the feature Parquet that holds the synapse id.
+    range: string
+  parquet_path:
+    description: "Path to a parquet dataset; must include a protocol prefix (s3://, gs://, https://, file://)."
+    pattern: ^(s3://|gs://|https?://|file://).+
+    range: string

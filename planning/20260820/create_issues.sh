@@ -268,10 +268,15 @@ EOF
 
 # ---------------------------------------------------------------- phases
 setup() {
-  echo "== labels =="
-  run gh label create schema   --repo "$REPO" --color 1D76DB --description "Schema (LinkML) changes" --force
-  run gh label create io       --repo "$REPO" --color 0E8A16 --description "io package (read/write layer)" --force
-  run gh label create research --repo "$REPO" --color 5319E7 --description "External alignment / research" --force
+  echo "== labels (all 7 used by the issues; --force = create or update) =="
+  run gh label create schema            --repo "$REPO" --color 1D76DB --description "Schema (LinkML) changes" --force
+  run gh label create io                --repo "$REPO" --color 0E8A16 --description "io package (read/write layer)" --force
+  run gh label create research          --repo "$REPO" --color 5319E7 --description "External alignment / research" --force
+  run gh label create bug               --repo "$REPO" --color D73A4A --description "Something isn't working" --force
+  run gh label create enhancement       --repo "$REPO" --color A2EEEF --description "New feature or request" --force
+  run gh label create documentation     --repo "$REPO" --color 0075CA --description "Improvements or additions to documentation" --force
+  run gh label create question          --repo "$REPO" --color D876E3 --description "Further information is requested" --force
+  run gh label create "good first issue" --repo "$REPO" --color 7057FF --description "Good for newcomers" --force
 
   echo "== milestones =="
   for t in "${MILESTONES[@]}"; do

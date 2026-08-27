@@ -4,7 +4,11 @@ Source: `2026-08-20_todo_triage.md` + `2026-08-20_work_packages.md` + review dis
 
 Rev 3 changes: renumbered in WP order (= submission order), bodies rewritten to a uniform Problem/Fix/Context template, old I1 split into #1 (bug) + #28 (scoping question). Old→new mapping at the bottom.
 
-Before opening: create labels `schema`, `io`, `research` (repo has GitHub defaults only). Optional: one milestone per WP for grouping (lighter than epics, consistent with the no-epics decision).
+**Pre-submission setup (decided):**
+1. Create labels `schema`, `io`, `research` (repo has GitHub defaults only; `bug`, `enhancement`, `documentation`, `question`, `good first issue` already exist).
+2. Create milestones WP1–WP13 (one per work package; editable later). #27 (docs) and #28 (design question) get no milestone.
+3. Submit issues 1→28 in order, assigning label(s) + milestone at creation.
+4. Edit pass: replace draft `#N` cross-refs with real GitHub issue links.
 
 **Cross-references:** `#N` below are draft numbers — GitHub will assign its own (PRs #5/#6 already consumed numbers). Submit in order 1→28, record the real numbers, then do one edit pass replacing draft refs with real links.
 
@@ -179,7 +183,6 @@ Labels: `question`, `research`, `schema` *(old I22)*
 Labels: `question`, `research` *(old I23)*
 
 > **Task:** compare CCM schemas to the [BKP explorer ingest template](https://github.com/AllenInstitute/BkpPlotGenerator/blob/main/docs/Ingest-Template/README.md#visualization-files) — similarities, differences, and use-case contrast (fast vis-app serving vs cross-modality commonality). CCM→BKP export is owned by another team; this is for understanding.
-> ⚠️ **Wording still to be revised by YY before submission.**
 
 ### 24. aind-data-schema: explore incorporation
 Labels: `question`, `research` *(old I24)*
@@ -263,4 +266,6 @@ Labels: `question`, `schema` *(old I1, question half)*
 
 2026-08-20 (rev 2): I1 project scoping left as open question (common cross-modality features are the goal); I2 confirmed per-taxonomy vocabulary → discriminator; I3 reclassified io-layer (`required_for_write`), schema stays Optional — schema=standard, io=one wrapper; I7 = measurement-context semantics, rerun ETL not migrate; I18 kept separate from I8; I20 = test conventions + skill referencing `test_suite_analysis_2026-08-15.md`; I21 folded into I25; I22 pin-commit-as-version + migration script; links added to I22/I23/I24; new I27 (synapse→cell-cell aggregation) and I28 (README).
 
-2026-08-27 (rev 3): renumbered in WP order = submission order; uniform Problem/Fix/Context template; draft-history notes moved out of bodies; old I1 split into #1 (bug) + #28 (scoping question); cross-ref plan = submit 1→28 then one edit pass replacing draft numbers with real GitHub links; explicit "Blocked by #6" on #25/#27; #23 wording still pending YY.
+2026-08-27 (rev 3): renumbered in WP order = submission order; uniform Problem/Fix/Context template; draft-history notes moved out of bodies; old I1 split into #1 (bug) + #28 (scoping question); cross-ref plan = submit 1→28 then one edit pass replacing draft numbers with real GitHub links; explicit "Blocked by #6" on #25/#27.
+
+2026-08-27 (rev 3, final review): #23 wording approved as-is; milestones confirmed — one per WP1–WP13; labels `schema`/`io`/`research` to be created before submission.

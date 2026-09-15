@@ -22,14 +22,16 @@ NOTE: This is intentionally minimal and synchronous. For large tables consider c
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
+import argparse
 import json
 import sys
 
 import pyarrow.parquet as pq
 import pyarrow as pa
+import yaml
 from linkml_runtime import SchemaView  # type: ignore
 
-from . import generate_pydantic_models, get_schema_path
+from connects_common_connectivity import generate_pydantic_models, get_schema_path
 
 
 def _coerce_list(raw: Any) -> List[Any]:
@@ -258,7 +260,6 @@ def _flatten_instance(obj: Any, hierarchy_slots: Optional[List[Tuple[str, Option
 
 if __name__ == "__main__":  # pragma: no cover
     # Basic CLI
-    import argparse
     ap = argparse.ArgumentParser(description="Generic Parquet→LinkML loader")
     ap.add_argument("schema", help="Aggregator schema filename (e.g. connectivity_schema.yaml)")
     ap.add_argument("class_name", help="LinkML class to instantiate")
@@ -303,7 +304,6 @@ if __name__ == "__main__":  # pragma: no cover
                 for row in serializable:
                     f.write(json.dumps(row) + "\n")
         else:
-            import yaml
             with open(args.out, "w", encoding="utf-8") as f:
                 yaml.safe_dump(serializable, f, sort_keys=False)
         print(f"Wrote {args.out} ({args.format})")

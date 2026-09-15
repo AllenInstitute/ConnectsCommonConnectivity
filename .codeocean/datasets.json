@@ -18,6 +18,10 @@
 			"mount": "microns1412"
 		},
 		{
+			"id": "aafc99cc-92ee-4d04-b152-92f1063a3268",
+			"mount": "v1dd_1196"
+		},
+		{
 			"id": "aff09b9b-5cdc-49ef-8e39-358a8ead98d8",
 			"mount": "visp-patchseq-taxonomy-info"
 		}

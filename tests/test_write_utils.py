@@ -1,8 +1,18 @@
-"""Tests for write_utils.append_new_dataitems."""
+"""Tests for IO write utilities."""
+import polars as pl
 import pyarrow as pa
-import pytest
 
-from connects_common_connectivity.write_utils import append_new_dataitems
+from connects_common_connectivity.io.write_utils import (
+    append_new_dataitems,
+    populate_region_coverage,
+)
+from connects_common_connectivity.models import (
+    Laterality,
+    Modality,
+    ProjectionMeasurementMatrix,
+    ProjectionMeasurementType,
+    Unit,
+)
 
 
 def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:
@@ -16,18 +26,42 @@ def _make_table(ids: list[str], project_id: str = "proj_a") -> pa.Table:
     )
 
 
+def test_populate_region_coverage_accepts_nested_list():
+    """Region coverage must derive populated columns without mutating input."""
+    pmm = ProjectionMeasurementMatrix(
+        id="pmm_list",
+        measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
+        modality=Modality.MORPHOLOGY,
+        laterality=Laterality.IPSILATERAL,
+        unit=Unit.MICRONS_LENGTH,
+        data_item_index=["c1", "c2"],
+        region_index=["VISp", "ACA", "MOB"],
+        values="file:///tmp/pmm.delta",
+    )
+
+    enriched = populate_region_coverage(
+        pmm,
+        [[1.0, 0.0, 0.0], [0.0, 0.0, 2.0]],
+    )
+
+    assert enriched.region_coverage == ["VISp", "MOB"]
+    assert pmm.region_coverage in (None, [])
+
+
 # ---------------------------------------------------------------------------
 # First write (table does not exist yet)
 # ---------------------------------------------------------------------------
 
 
 def test_first_write_appends_all(tmp_path):
+    """The first write must append every input row."""
     table = _make_table(["a", "b", "c"])
     n = append_new_dataitems(str(tmp_path / "dataitem"), table, project_id="proj_a")
     assert n == 3
 
 
 def test_first_write_empty_table(tmp_path):
+    """The first empty write must report zero appended rows."""
     table = _make_table([])
     n = append_new_dataitems(str(tmp_path / "dataitem"), table, project_id="proj_a")
     assert n == 0
@@ -39,6 +73,7 @@ def test_first_write_empty_table(tmp_path):
 
 
 def test_idempotent_rerun(tmp_path):
+    """Rewriting identical rows must append nothing."""
     path = str(tmp_path / "dataitem")
     table = _make_table(["a", "b", "c"])
     first = append_new_dataitems(path, table, project_id="proj_a")
@@ -48,10 +83,11 @@ def test_idempotent_rerun(tmp_path):
 
 
 def test_idempotent_partial_rerun(tmp_path):
+    """A partial rerun must append only unseen rows."""
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["a", "b"]), project_id="proj_a")
     n = append_new_dataitems(path, _make_table(["a", "b", "c"]), project_id="proj_a")
-    assert n == 1  # only "c" is new
+    assert n == 1, f"expected only 'c' to be new; appended {n} rows"
 
 
 # ---------------------------------------------------------------------------
@@ -60,19 +96,24 @@ def test_idempotent_partial_rerun(tmp_path):
 
 
 def test_different_projects_do_not_interfere(tmp_path):
+    """Identical row identifiers in different projects must remain independent."""
     path = str(tmp_path / "dataitem")
     append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_a"), project_id="proj_a")
     # proj_b has the same ids — they are independent rows
-    n = append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b")
+    n = append_new_dataitems(
+        path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b"
+    )
     assert n == 2  # treated as new because different project
 
     # Re-run proj_b — still idempotent
-    n2 = append_new_dataitems(path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b")
+    n2 = append_new_dataitems(
+        path, _make_table(["x", "y"], project_id="proj_b"), project_id="proj_b"
+    )
     assert n2 == 0
 
 
 def test_shared_project_two_sources(tmp_path):
-    """Simulates inh_01 and exc_01 both writing to the same project partition."""
+    """Distinct sources in one project must append without replacing each other."""
     path = str(tmp_path / "dataitem")
     inh_ids = ["100", "200", "300"]
     exc_ids = ["400", "500"]
@@ -94,7 +135,5 @@ def test_shared_project_two_sources(tmp_path):
     assert n_inh2 == 0
 
     # Total rows for the shared project
-    import polars as pl
-
     total = pl.read_delta(path).filter(pl.col("project_id") == "visp_patchseq").shape[0]
     assert total == 5

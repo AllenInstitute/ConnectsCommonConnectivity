@@ -1,0 +1,132 @@
+"""Tests for the package-wide config module."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+import yaml
+from pydantic import ValidationError
+from connects_common_connectivity.config import (
+    CONFIG_FILENAME,
+    Settings,
+    find_config_file,
+    get_settings,
+)
+from connects_common_connectivity.io import (
+    Settings as IOSettings,
+    get_settings as io_get_settings,
+)
+
+
+def _write_config(dir_: Path, **values) -> Path:
+    path = dir_ / CONFIG_FILENAME
+    path.write_text(yaml.safe_dump(values))
+    return path
+
+
+def test_get_settings_raises_actionable_error_when_missing(tmp_path):
+    """Missing config must raise an error that names the expected file."""
+    # tmp_path has no ccc_config.yaml anywhere up the tree (we chdir'd into it).
+    with pytest.raises(RuntimeError, match=CONFIG_FILENAME):
+        get_settings()
+
+
+def test_find_and_load_from_nested_cwd(tmp_path, monkeypatch):
+    """Config discovery must search parent directories from a nested cwd."""
+    _write_config(tmp_path, output_root=str(tmp_path / "out"), dry_run=True)
+    nested = tmp_path / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    get_settings.cache_clear()
+
+    found = find_config_file()
+    assert found == (tmp_path / CONFIG_FILENAME).resolve()
+
+    settings = get_settings()
+    assert isinstance(settings, Settings)
+    assert settings.output_root == Path(str(tmp_path / "out"))
+    assert settings.dry_run is True
+
+
+def test_env_overrides_only_output_root(tmp_path, monkeypatch):
+    """The environment must override only the configured output root."""
+    _write_config(tmp_path, output_root=str(tmp_path / "from_file"), dry_run=True)
+    monkeypatch.setenv("CCC_OUTPUT_ROOT", str(tmp_path / "from_env"))
+    get_settings.cache_clear()
+
+    settings = get_settings()
+    assert settings.output_root == Path(str(tmp_path / "from_env"))
+    # dry_run still comes from the file; env cannot express it.
+    assert settings.dry_run is True
+
+
+def test_explicit_settings_wins_over_env_and_file(tmp_path, monkeypatch):
+    """Explicit settings must take precedence over environment and file values."""
+    _write_config(tmp_path, output_root=str(tmp_path / "from_file"), dry_run=True)
+    monkeypatch.setenv("CCC_OUTPUT_ROOT", str(tmp_path / "from_env"))
+    get_settings.cache_clear()
+
+    explicit = Settings(output_root=tmp_path / "explicit", dry_run=False)
+
+    # Simulate the caller-side precedence pattern documented for writers/readers.
+    def writer(settings=None):
+        return settings or get_settings()
+
+    resolved = writer(settings=explicit)
+    assert resolved is explicit
+    assert resolved.output_root == tmp_path / "explicit"
+    assert resolved.dry_run is False
+
+
+def test_output_root_is_required(tmp_path):
+    """Config loading must reject a missing output root."""
+    _write_config(tmp_path, dry_run=False)  # missing output_root
+    get_settings.cache_clear()
+    with pytest.raises(ValidationError, match=r"(?s)output_root.*[Ff]ield required"):
+        get_settings()
+
+
+def test_unknown_keys_rejected(tmp_path):
+    """Config loading must reject unknown settings keys."""
+    _write_config(tmp_path, output_root=str(tmp_path), nonsense_key=1)
+    get_settings.cache_clear()
+    with pytest.raises(ValidationError, match=r"(?s)[Ee]xtra inputs are not permitted"):
+        get_settings()
+
+
+def test_io_reexports_settings_helpers():
+    """The IO package must re-export the canonical settings helpers."""
+    assert IOSettings is Settings
+    assert io_get_settings is get_settings
+
+
+def test_get_settings_is_cached(tmp_path, monkeypatch):
+    """Settings must remain cached until the cache is explicitly cleared."""
+    _write_config(tmp_path, output_root=str(tmp_path / "out"))
+    get_settings.cache_clear()
+    first = get_settings()
+    # Mutating the file should not change the cached result.
+    _write_config(tmp_path, output_root=str(tmp_path / "changed"))
+    second = get_settings()
+    assert first is second
+    # After clearing, discovery re-runs.
+    get_settings.cache_clear()
+    third = get_settings()
+    assert third.output_root == Path(str(tmp_path / "changed"))
+
+
+def test_relative_output_root_in_config_is_anchored_at_config_dir(tmp_path, monkeypatch):
+    """Relative output roots must be anchored to the config directory."""
+    # Config sits at tmp_path; output_root is relative ("scratch/x/").
+    _write_config(tmp_path, output_root="scratch/x/")
+    nested = tmp_path / "code"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+    get_settings.cache_clear()
+
+    settings = get_settings()
+    # Settings.output_root is absolute, anchored at the config file's dir
+    # (abspath, not resolve — symlinks must not be followed).
+    assert settings.output_root == Path(os.path.abspath(tmp_path / "scratch" / "x"))

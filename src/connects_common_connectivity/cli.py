@@ -19,14 +19,16 @@ import tarfile
 from pathlib import Path
 from typing import Iterable, List
 
-from . import __version__, get_schema_path
+import pyarrow.parquet as pq  # type: ignore
+import yaml  # type: ignore
+from linkml_runtime import SchemaView  # type: ignore
+from linkml_runtime.loaders import yaml_loader  # type: ignore
 
-try:
-    from linkml_runtime import SchemaView  # type: ignore
-    from linkml_runtime.loaders import yaml_loader  # type: ignore
-except Exception:  # pragma: no cover
-    SchemaView = None  # type: ignore
-    yaml_loader = None  # type: ignore
+from connects_common_connectivity import (
+    __version__,
+    generate_pydantic_models,
+    get_schema_path,
+)
 
 
 def _add_common_args(p: argparse.ArgumentParser) -> None:
@@ -83,10 +85,6 @@ def _iter_input_files(paths: Iterable[str]) -> Iterable[Path]:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:  # pragma: no cover - minimal runtime smoke tests
-    if SchemaView is None or yaml_loader is None:
-        print("linkml_runtime not available; install package with core dependencies.", file=sys.stderr)
-        return 2
-
     spath = get_schema_path(args.schema)
     sv = SchemaView(spath)
     errors = 0
@@ -150,17 +148,6 @@ def build_parser() -> argparse.ArgumentParser:
     etl_p.add_argument("--parent-col")
 
     def _cmd_etl(args: argparse.Namespace) -> int:  # pragma: no cover
-        from . import generate_pydantic_models, get_schema_path
-        try:
-            import pyarrow.parquet as pq  # type: ignore
-        except Exception as e:  # noqa: BLE001
-            print(f"pyarrow is required for ETL: {e}", file=sys.stderr)
-            return 2
-        try:
-            from linkml_runtime import SchemaView  # type: ignore
-        except Exception as e:  # noqa: BLE001
-            print(f"linkml_runtime missing: {e}", file=sys.stderr)
-            return 2
         models = generate_pydantic_models(args.schema)
         BrainRegion = models["BrainRegion"]
         table = pq.read_table(args.parquet_path)
@@ -207,7 +194,6 @@ def build_parser() -> argparse.ArgumentParser:
                 errors += 1
                 if errors < 5:
                     print(f"Row {i} error: {e}", file=sys.stderr)
-        import yaml  # type: ignore
         output = yaml.safe_dump([r.model_dump() for r in regions], sort_keys=False) if args.format == "yaml" else "\n".join(r.model_dump_json() for r in regions)
         if args.out:
             Path(args.out).write_text(output, encoding="utf-8")

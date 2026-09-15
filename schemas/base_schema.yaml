@@ -26,6 +26,8 @@ enums:
         description: X-ray microscopy based connectivity mapping.
       EXPANSION_MICROSCOPY:
         description: Expansion microscopy based connectivity mapping.
+      CALCIUM_IMAGING:
+        description: Calcium imaging based functional correlations.
       OTHER:
         description: Other modality.
   ProjectionMeasurementType:

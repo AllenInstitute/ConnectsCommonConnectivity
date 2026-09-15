@@ -19,25 +19,16 @@ import tarfile
 from pathlib import Path
 from typing import Iterable, List
 
+import pyarrow.parquet as pq  # type: ignore
 import yaml  # type: ignore
+from linkml_runtime import SchemaView  # type: ignore
+from linkml_runtime.loaders import yaml_loader  # type: ignore
 
 from connects_common_connectivity import (
     __version__,
     generate_pydantic_models,
     get_schema_path,
 )
-
-try:
-    import pyarrow.parquet as pq  # type: ignore
-except Exception:  # pragma: no cover
-    pq = None  # type: ignore
-
-try:
-    from linkml_runtime import SchemaView  # type: ignore
-    from linkml_runtime.loaders import yaml_loader  # type: ignore
-except Exception:  # pragma: no cover
-    SchemaView = None  # type: ignore
-    yaml_loader = None  # type: ignore
 
 
 def _add_common_args(p: argparse.ArgumentParser) -> None:
@@ -94,10 +85,6 @@ def _iter_input_files(paths: Iterable[str]) -> Iterable[Path]:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:  # pragma: no cover - minimal runtime smoke tests
-    if SchemaView is None or yaml_loader is None:
-        print("linkml_runtime not available; install package with core dependencies.", file=sys.stderr)
-        return 2
-
     spath = get_schema_path(args.schema)
     sv = SchemaView(spath)
     errors = 0
@@ -161,12 +148,6 @@ def build_parser() -> argparse.ArgumentParser:
     etl_p.add_argument("--parent-col")
 
     def _cmd_etl(args: argparse.Namespace) -> int:  # pragma: no cover
-        if pq is None:
-            print("pyarrow is required for ETL", file=sys.stderr)
-            return 2
-        if SchemaView is None:
-            print("linkml_runtime missing", file=sys.stderr)
-            return 2
         models = generate_pydantic_models(args.schema)
         BrainRegion = models["BrainRegion"]
         table = pq.read_table(args.parquet_path)

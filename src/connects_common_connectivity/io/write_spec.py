@@ -171,34 +171,34 @@ REGISTRY: dict[str, WriteSpec] = {
 
 
 def get_spec(model_or_cls: type[BaseModel] | BaseModel) -> WriteSpec:
-    """Resolve the registered write policy for a model class name.
+    """Resolve the registered write policy for an exact model class.
 
     Parameters
     ----------
     model_or_cls:
-        Generated pydantic model class or instance. Lookup uses the exact
-        ``__name__`` string as the registry key; class identity and inheritance
-        do not participate in lookup.
+        Generated pydantic model class or instance. Instances are resolved to
+        their concrete type. The registry entry must match that exact class;
+        subclasses and unrelated classes with the same name are rejected.
 
     Returns
     -------
     WriteSpec
-        The registry's existing policy object for that class name.
+        The registry's existing policy object for the exact class.
 
     Raises
     ------
     KeyError
-        If no policy is registered under the exact class name. The error lists
-        the currently known registry keys.
+        If no policy is registered for the exact class. The error lists the
+        currently known registry keys.
     """
     cls = model_or_cls if isinstance(model_or_cls, type) else type(model_or_cls)
-    try:
-        return REGISTRY[cls.__name__]
-    except KeyError as err:
+    spec = REGISTRY.get(cls.__name__)
+    if spec is None or spec.model_cls is not cls:
         raise KeyError(
-            f"No WriteSpec registered for {cls.__name__!r}. "
+            f"No WriteSpec registered for exact class {cls!r}. "
             f"Known: {sorted(REGISTRY)}"
-        ) from err
+        )
+    return spec
 
 
 __all__ = ["WriteSpec", "REGISTRY", "get_spec"]

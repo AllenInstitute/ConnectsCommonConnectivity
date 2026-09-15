@@ -8,7 +8,7 @@ predicate.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
@@ -59,6 +59,15 @@ def test_get_spec_unknown_class_raises():
 
     with pytest.raises(KeyError):
         get_spec(NotRegistered)
+
+
+def test_get_spec_same_named_class_raises():
+    """Spec lookup must require identity, not only a matching class name."""
+    class DataSet(BaseModel):
+        pass
+
+    with pytest.raises(KeyError, match="exact class"):
+        get_spec(DataSet)
 
 
 def test_write_spec_requires_pydantic_model_class():

@@ -15,6 +15,7 @@ RUN pip install -U --no-cache-dir \
     linkml==1.9.5 \
     linkml-runtime==1.9.5 \
     matplotlib==3.10.7 \
+    nbdime==4.0.4 \
     pandas==2.3.3 \
     polars==1.34.0 \
     pyarrow==22.0.0 \
@@ -24,5 +25,8 @@ RUN pip install -U --no-cache-dir \
     seaborn==0.13.2 \
     standard-transform==1.4.1 \
     umap-learn==0.5.9.post2
+
+# --global works at build time (no repo yet); repo .gitattributes maps *.ipynb to these drivers
+RUN nbdime config-git --enable --global
 
 RUN pip install -U --no-cache-dir uv

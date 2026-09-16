@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added project scoping to `ProjectionMeasurementMatrix`, `SingleCellReconstruction`, and `BrainRegionAssociation`.
+- Added taxonomy-local `hierarchy_id` values to `HierarchyCategory`.
 - Added `DatasetReader` to `connects_common_connectivity.io` for listing datasets, discovering related cell feature sets and cluster hierarchies, and reading one wide Polars table per dataset with feature and cluster-level columns.
 - Added the `synapse_schema` module with the `SynapseConnectivityLong` and `SynapseFeatureMatrix` classes for per-synapse connectivity: long-form single-synapse rows plus a wide per-synapse feature matrix LEFT-joined on the synapse id.
 - Added `read_synapse_table()` to `connects_common_connectivity.io` for reading the long single-synapse connectivity table, optionally LEFT-joining per-synapse feature columns from a wide feature table.
@@ -21,5 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+
+- Fixed generated `CellFeatureMeasurement` models to include `feature_set_id` and `unit`, and to accept valid NumPy dtype strings.
+- Fixed `HierarchyCategory.level` to generate as an integer and prevented category writes from colliding across taxonomies.
 
 ### Security

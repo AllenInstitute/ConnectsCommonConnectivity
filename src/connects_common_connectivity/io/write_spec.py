@@ -28,7 +28,6 @@ from connects_common_connectivity.models import (
     HierarchyCategory,
     MappingSet,
     ProjectionMeasurementMatrix,
-    SynapseConnectivityLong,
     SynapseFeatureMatrix,
 )
 
@@ -145,12 +144,8 @@ REGISTRY: dict[str, WriteSpec] = {
     "ProjectionMeasurementMatrix": WriteSpec(
         model_cls=ProjectionMeasurementMatrix,
         subdir="projectionmeasurementmatrix",
-        # ProjectionMeasurementMatrix is not ProjectScoped (schema gap noted
-        # in etl_wnm_exc_04). The notebook predicate is therefore ``id IN (...)``
-        # only, with no partition columns. Once the schema gains
-        # ``ProjectScoped``, partition_by/scope_columns should be widened.
-        partition_by=[],
-        scope_columns=["id"],
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
         write_mode="overwrite_scoped",
     ),
     # AlgorithmRun and HierarchyCategory are project-agnostic taxonomy metadata
@@ -165,9 +160,10 @@ REGISTRY: dict[str, WriteSpec] = {
     "HierarchyCategory": WriteSpec(
         model_cls=HierarchyCategory,
         subdir="hierarchycategory",
-        partition_by=[],
-        scope_columns=["id"],
+        partition_by=["hierarchy_id"],
+        scope_columns=["hierarchy_id", "id"],
         write_mode="overwrite_scoped",
+        required_for_write=["hierarchy_id"],
     ),
 #    "SynapseConnectivityLong": WriteSpec(
 #        model_cls=SynapseConnectivityLong,

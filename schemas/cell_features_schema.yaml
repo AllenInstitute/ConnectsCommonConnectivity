@@ -103,6 +103,7 @@ classes:
       - id
       - dataitem_id
       - feature_id
+      - feature_set_id
       - dtype
       - value_float
       - value_int
@@ -110,6 +111,7 @@ classes:
       - value_string
       - value_bytes
       - value_datetime
+      - unit
     slot_usage:
       dataitem_id:
         range: DataItem
@@ -122,7 +124,7 @@ classes:
         description: Denormalized reference to the feature set (helps partitioning and joins).
       dtype:
         range: string
-        pattern: '^([<>|=])[tbiufcmMOSUV]\\d+$'
+        pattern: '^([<>|=])[tbiufcmMOSUV]\d+$'
         description: "NumPy typestr of the stored value (see arrays.interface)."
       value_float:
         range: float
@@ -154,7 +156,7 @@ slots:
     range: CellFeatureDefinition
   data_type:
     description: "NumPy typestr (byteorder + code + bytes), e.g., '<i2', '<f4', '|u1'."
-    pattern: '^([<>|=])[tbiufcmMOSUV]\\d+$'
+    pattern: '^([<>|=])[tbiufcmMOSUV]\d+$'
   feature_index:
     description: Ordered list of features indexing a matrix.
   feature_values:

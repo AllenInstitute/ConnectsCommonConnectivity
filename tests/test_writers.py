@@ -238,6 +238,7 @@ INSTANCE_FACTORIES = {
     ),
     ProjectionMeasurementMatrix: lambda: ProjectionMeasurementMatrix(
         id="pmm1",
+        project_id="p1",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
         modality=Modality.MORPHOLOGY,
         laterality=Laterality.IPSILATERAL,
@@ -247,7 +248,9 @@ INSTANCE_FACTORIES = {
         values="file:///tmp/pmm.delta",
     ),
     AlgorithmRun: lambda: AlgorithmRun(id="run1", algorithm_name="kmeans"),
-    HierarchyCategory: lambda: HierarchyCategory(id="cluster", description="leaf", level="0"),
+    HierarchyCategory: lambda: HierarchyCategory(
+        id="cluster", hierarchy_id="h1", description="leaf", level=0
+    ),
     SynapseFeatureMatrix: lambda: SynapseFeatureMatrix(
         id="sfm1",
         project_id="p1",
@@ -305,6 +308,7 @@ def test_write_projection_matrix_enriches_and_does_not_mutate_input(settings, re
     """Projection writes must derive coverage without mutating their input."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_test",
+        project_id="p1",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
         modality=Modality.MORPHOLOGY,
         laterality=Laterality.IPSILATERAL,
@@ -468,6 +472,7 @@ def test_write_projection_matrix_output_root_override(tmp_path):
     alt_root = tmp_path / "pmm_alt"
     pmm = ProjectionMeasurementMatrix(
         id="pmm_alt",
+        project_id="p1",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
         modality=Modality.MORPHOLOGY,
         laterality=Laterality.IPSILATERAL,
@@ -489,6 +494,7 @@ def test_write_projection_matrix_rejects_both_settings_and_output_root(
     """Projection writes must reject competing output configuration sources."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_x",
+        project_id="p1",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
         modality=Modality.MORPHOLOGY,
         laterality=Laterality.IPSILATERAL,

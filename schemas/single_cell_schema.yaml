@@ -16,6 +16,8 @@ default_prefix: cc
 classes:
   SingleCellReconstruction:
     description: Single cell reconstruction data with CCF registration and morphology features.
+    mixins:
+      - ProjectScoped
     slots:
       - id
       - ccf_registered_file

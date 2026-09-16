@@ -19,3 +19,4 @@ imports:
   - single_cell_schema
   - mappings_schema
   - cell_cell_schema
+  - synapse_schema

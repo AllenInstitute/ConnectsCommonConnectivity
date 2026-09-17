@@ -22,6 +22,8 @@ classes:
       For rabies injections they could be distribution of input cells.
       For antereograde injections they could be fluorescence intensity of outputs
       For retrograde injections they could be cell body counts of inputs. 
+    mixins:
+      - ProjectScoped
     slots:
       - id
       - description

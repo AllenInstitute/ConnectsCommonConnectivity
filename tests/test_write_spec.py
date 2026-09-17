@@ -20,6 +20,18 @@ def test_registry_contains_seed_entries():
     assert seed.issubset(set(REGISTRY))
 
 
+def test_milestone_scopes_use_taxonomy_and_project_identity():
+    """Hierarchy categories and projection matrices must not collide across scopes."""
+    hierarchy = REGISTRY["HierarchyCategory"]
+    assert hierarchy.partition_by == ["hierarchy_id"]
+    assert hierarchy.scope_columns == ["hierarchy_id", "id"]
+    assert hierarchy.required_for_write == ["hierarchy_id"]
+
+    projection = REGISTRY["ProjectionMeasurementMatrix"]
+    assert projection.partition_by == ["project_id"]
+    assert projection.scope_columns == ["project_id", "id"]
+
+
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_registry_key_matches_model_cls(key):
     """Each registry key must match its generated model class."""

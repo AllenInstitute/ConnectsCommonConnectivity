@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+
 def test_laterality_enum(models):
     """The laterality enum must expose all supported directions."""
     Laterality = models["Laterality"]
@@ -18,14 +19,20 @@ def test_projection_measurement_matrix_laterality(models):
     PMType = models["ProjectionMeasurementType"]
     # laterality is required; omitting it should raise
     with pytest.raises(ValidationError, match=r"(?s)laterality.*Field required"):
-        PMM(id="P1", measurement_type=PMType.NUMBER_OF_TIPS, modality=Modality.MORPHOLOGY)
+        PMM(id="P1", project_id="project-1", measurement_type=PMType.NUMBER_OF_TIPS,
+            modality=Modality.MORPHOLOGY)
     # Valid laterality values accepted
-    pmm = PMM(id="P1", measurement_type=PMType.NUMBER_OF_TIPS,
+    pmm = PMM(id="P1", project_id="project-1", measurement_type=PMType.NUMBER_OF_TIPS,
               modality=Modality.MORPHOLOGY, laterality=Laterality.IPSILATERAL)
-    assert str(pmm.laterality) in {Laterality.IPSILATERAL.value, Laterality.IPSILATERAL.name, str(Laterality.IPSILATERAL)}
+    assert pmm.project_id == "project-1"
+    assert str(pmm.laterality) in {
+        Laterality.IPSILATERAL.value,
+        Laterality.IPSILATERAL.name,
+        str(Laterality.IPSILATERAL),
+    }
     # Invalid laterality should raise
     with pytest.raises(ValidationError, match=r"(?s)laterality.*Input should be"):
-        PMM(id="P2", measurement_type=PMType.NUMBER_OF_TIPS,
+        PMM(id="P2", project_id="project-1", measurement_type=PMType.NUMBER_OF_TIPS,
             modality=Modality.MORPHOLOGY, laterality="NOT_VALID")
 
 
@@ -36,15 +43,32 @@ def test_region_coverage_on_pmm(models):
     Modality = models["Modality"]
     PMType = models["ProjectionMeasurementType"]
     # region_coverage is optional — PMM without it should validate
-    pmm_no_cov = PMM(id="P1", measurement_type=PMType.NUMBER_OF_TIPS,
+    pmm_no_cov = PMM(id="P1", project_id="project-1", measurement_type=PMType.NUMBER_OF_TIPS,
                       modality=Modality.MORPHOLOGY, laterality=Laterality.IPSILATERAL,
                       region_index=["R1", "R2", "R3"])
     assert pmm_no_cov.region_coverage is None
     # PMM with region_coverage as subset of region_index
-    pmm_with_cov = PMM(id="P2", measurement_type=PMType.NUMBER_OF_TIPS,
+    pmm_with_cov = PMM(id="P2", project_id="project-1", measurement_type=PMType.NUMBER_OF_TIPS,
                         modality=Modality.MORPHOLOGY, laterality=Laterality.CONTRALATERAL,
                         region_index=["R1", "R2", "R3"],
                         region_coverage=["R1", "R2"])
     assert isinstance(pmm_with_cov.region_coverage, list)
     assert len(pmm_with_cov.region_coverage) == 2
     assert set(pmm_with_cov.region_coverage).issubset(set(pmm_with_cov.region_index))
+
+
+def test_project_scoped_reconstruction_and_region_association(models):
+    """Project-owned reconstruction and region association rows require scoping."""
+    SingleCellReconstruction = models["SingleCellReconstruction"]
+    BrainRegionAssociation = models["BrainRegionAssociation"]
+
+    reconstruction = SingleCellReconstruction(id="cell-1", project_id="project-1")
+    association = BrainRegionAssociation(
+        project_id="project-1", dataitem_id="cell-1", brainregion_id="VISp"
+    )
+    assert reconstruction.project_id == association.project_id == "project-1"
+
+    with pytest.raises(ValidationError, match=r"(?s)project_id.*Field required"):
+        SingleCellReconstruction(id="cell-1")
+    with pytest.raises(ValidationError, match=r"(?s)project_id.*Field required"):
+        BrainRegionAssociation(dataitem_id="cell-1", brainregion_id="VISp")

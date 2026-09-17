@@ -150,5 +150,21 @@ def test_hierarchy_category_requires_id(models):
 def test_hierarchy_category_level_optional(models):
     """Hierarchy categories must allow an omitted level."""
     HierarchyCategory = models["HierarchyCategory"]
-    cat = HierarchyCategory(id="cluster")
+    cat = HierarchyCategory(id="cluster", hierarchy_id="taxonomy-a")
     assert cat.level is None
+
+
+def test_hierarchy_category_is_scoped_per_taxonomy(models):
+    """Category identifiers may be reused across taxonomies with integer levels."""
+    HierarchyCategory = models["HierarchyCategory"]
+    first = HierarchyCategory(id="class", hierarchy_id="taxonomy-a", level=1)
+    second = HierarchyCategory(id="class", hierarchy_id="taxonomy-b", level=2)
+    assert first.hierarchy_id != second.hierarchy_id
+    assert isinstance(first.level, int)
+
+
+def test_hierarchy_category_rejects_non_integer_level(models):
+    """Hierarchy category levels must use the same integer type as clusters."""
+    HierarchyCategory = models["HierarchyCategory"]
+    with pytest.raises(ValidationError, match=r"(?s)level.*integer"):
+        HierarchyCategory(id="class", hierarchy_id="taxonomy-a", level="leaf")

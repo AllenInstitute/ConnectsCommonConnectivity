@@ -57,6 +57,8 @@ classes:
         description: Collected annotation values for descendant regions, Descendants meaning anything down the tree from this node. Useful when relabelling an annotation volume which is often labelled with the voxel farthest down the tree. 
   BrainRegionAssociation:
     description: "An association between a DataItem and a BrainRegion"
+    mixins:
+      - ProjectScoped
     slots:
       - brainregion_id
       - dataitem_id

@@ -13,6 +13,7 @@ Implements the schema corrections in the WP1 identity and scoping milestone. The
 
 - Partitions projection-matrix metadata by `project_id` and scopes overwrites by `(project_id, id)`.
 - Partitions hierarchy categories by `hierarchy_id` and requires it at write time.
+- Updates the Tasic and VISp MET-type taxonomy notebooks to populate `hierarchy_id`, use integer taxonomy-local levels, and scope verification queries by hierarchy.
 - Updates the WNM excitatory projection notebook to populate `project_id` on both projection-matrix metadata rows.
 
 `BrainRegionAssociation` is not registered with the current overwrite writer. Its natural-key merge behavior and write-time relationship requirements remain part of #13/#14, avoiding unsafe overwrite semantics in this PR.
@@ -21,7 +22,7 @@ Implements the schema corrections in the WP1 identity and scoping milestone. The
 
 ```bash
 uv run pytest tests -q
-# 195 passed
+# 196 passed
 ```
 
 Added regression coverage for:
@@ -29,10 +30,11 @@ Added regression coverage for:
 - generated `CellFeatureMeasurement.feature_set_id` and `.unit` fields;
 - valid and malformed NumPy dtype strings;
 - taxonomy-local hierarchy category ids and integer levels;
+- persistence of the same hierarchy category id under two different hierarchies;
 - project scoping on projection matrices, reconstructions, and brain-region associations;
 - hierarchy and projection writer partition/scope columns.
 
-The modified Python files pass targeted Ruff checks, the notebook is valid JSON with all code cells compiling, and repeated model generation is byte-for-byte reproducible.
+The modified Python files pass targeted Ruff checks, the notebooks are valid JSON with all code cells compiling, and repeated model generation is byte-for-byte reproducible.
 
 ## Reviewer focus
 

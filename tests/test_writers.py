@@ -134,6 +134,43 @@ def test_overwrite_scoped_is_idempotent(settings, read_delta):
     assert rows["name"].to_list() == ["example"], "row content drifted across rewrites"
 
 
+def test_same_hierarchy_category_id_coexists_across_hierarchies(settings, read_delta):
+    """Category IDs shared by taxonomies must retain hierarchy-local metadata."""
+    categories = [
+        HierarchyCategory(
+            id="class",
+            hierarchy_id="tasic_2018_visp_taxonomy",
+            description="Top-level transcriptomic class.",
+            level=2,
+        ),
+        HierarchyCategory(
+            id="class",
+            hierarchy_id="visp_met_types_taxonomy",
+            description="Top-level MET-type class.",
+            level=1,
+        ),
+    ]
+
+    for category in categories:
+        write_models(category, settings=settings)
+
+    rows = read_delta(settings.output_root / "hierarchycategory").sort("hierarchy_id")
+    assert rows.select("hierarchy_id", "id", "description", "level").to_dicts() == [
+        {
+            "hierarchy_id": "tasic_2018_visp_taxonomy",
+            "id": "class",
+            "description": "Top-level transcriptomic class.",
+            "level": 2,
+        },
+        {
+            "hierarchy_id": "visp_met_types_taxonomy",
+            "id": "class",
+            "description": "Top-level MET-type class.",
+            "level": 1,
+        },
+    ]
+
+
 def test_dry_run_does_not_write(tmp_path):
     """Dry runs must report no writes and create no tables."""
     settings = Settings(output_root=tmp_path, dry_run=True)

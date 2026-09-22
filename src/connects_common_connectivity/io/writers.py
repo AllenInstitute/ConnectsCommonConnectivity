@@ -458,7 +458,8 @@ def write_models(
         shared ``ccc_config.yaml`` ``output_root`` (e.g. an isolated test
         dataset). When ``settings=`` is also supplied, this value overrides
         only ``settings.output_root``; controls such as ``dry_run`` remain
-        active. Otherwise, discovered controls remain active. If no config is
+        active. Otherwise, discovered controls remain active, including
+        ``dry_run=True`` suppressing the isolated write. If no config is
         discoverable, this root is used with default controls. Omitting both
         settings and this root raises a configuration error.
 

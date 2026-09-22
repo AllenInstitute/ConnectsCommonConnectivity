@@ -23,7 +23,7 @@ from deltalake import DeltaTable, write_deltalake
 from numpy.typing import ArrayLike
 from pydantic import BaseModel
 
-from connects_common_connectivity.config import Settings, get_settings
+from connects_common_connectivity.config import ConfigNotFoundError, Settings, get_settings
 from connects_common_connectivity.io.arrow_utils import (
     attach_linkml_metadata,
     build_arrow_schema,
@@ -398,8 +398,8 @@ def _resolve_output_root(
     ----------
     settings:
         Explicit configuration supplying the output root and write controls
-        such as ``dry_run``. When omitted with no root override, configuration
-        is discovered through :func:`get_settings`.
+        such as ``dry_run``. When omitted, configuration is discovered through
+        :func:`get_settings`.
     output_root:
         Per-call root override. The caller later combines this path with
         ``spec.subdir`` to form the complete Delta table directory. When
@@ -411,9 +411,19 @@ def _resolve_output_root(
         The effective output root later combined with ``spec.subdir``.
     Settings
         The explicit or discovered settings retained so the caller can honor
-        ``dry_run``.
+        ``dry_run``. When an explicit root is the only available configuration,
+        settings controls use their defaults.
     """
-    resolved = settings or get_settings()
+    if settings is not None:
+        resolved = settings
+    elif output_root is None:
+        resolved = get_settings()
+    else:
+        try:
+            resolved = get_settings()
+        except ConfigNotFoundError:
+            resolved = Settings(output_root=Path(output_root))
+
     root = Path(output_root) if output_root is not None else Path(resolved.output_root)
     return root, resolved
 
@@ -438,10 +448,9 @@ def write_models(
         same exact class. Iterables are materialized exactly once, and the
         concrete class must be one of :data:`WRITABLE_CLASSES`.
     settings:
-        Optional explicit settings. Falls back to :func:`get_settings` when
-        omitted; an explicit ``settings=`` always wins over the discovered
-        config (matches the precedence documented in
-        :mod:`connects_common_connectivity.config`).
+        Optional explicit settings. An explicit ``settings=`` always wins over
+        discovered configuration, while ``output_root=`` can override only its
+        root.
     output_root:
         Optional per-call override of the on-disk root under which the
         canonical ``spec.subdir`` is written. Use this when a single
@@ -449,7 +458,9 @@ def write_models(
         shared ``ccc_config.yaml`` ``output_root`` (e.g. an isolated test
         dataset). When ``settings=`` is also supplied, this value overrides
         only ``settings.output_root``; controls such as ``dry_run`` remain
-        active.
+        active. Otherwise, discovered controls remain active. If no config is
+        discoverable, this root is used with default controls. Omitting both
+        settings and this root raises a configuration error.
 
     Returns
     -------

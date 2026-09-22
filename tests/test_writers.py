@@ -18,7 +18,7 @@ import pytest
 import yaml
 from pydantic import BaseModel
 
-from connects_common_connectivity.config import Settings
+from connects_common_connectivity.config import ConfigNotFoundError, Settings
 from connects_common_connectivity.io.write_spec import REGISTRY
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
@@ -574,6 +574,37 @@ def test_write_models_rejects_unregistered_pydantic_model(settings):
 # ---------------------------------------------------------------------------
 # Per-call output_root override
 # ---------------------------------------------------------------------------
+
+
+def test_write_models_output_root_works_without_discoverable_config(tmp_path):
+    """An explicit root uses default controls when no config is discoverable."""
+    output_root = tmp_path / "isolated_dataset"
+    ds = DataSet(id="d_isolated", name="isolated", project_id="p_isolated")
+
+    result = write_models(ds, output_root=output_root)
+
+    assert result.path == output_root / "dataset"
+    rows = pl.read_delta(str(output_root / "dataset")).filter(
+        pl.col("id") == "d_isolated"
+    )
+    assert rows.shape[0] == 1
+
+
+def test_write_models_without_settings_or_output_root_requires_config():
+    """A write with no configuration source must retain the discovery error."""
+    ds = DataSet(id="d_missing", name="missing", project_id="p_missing")
+
+    with pytest.raises(ConfigNotFoundError, match="ccc_config.yaml"):
+        write_models(ds)
+
+
+def test_write_models_output_root_does_not_hide_malformed_config(tmp_path):
+    """An explicit root must not suppress errors from a discovered config."""
+    (tmp_path / "ccc_config.yaml").write_text("- invalid\n")
+    ds = DataSet(id="d_invalid", name="invalid", project_id="p_invalid")
+
+    with pytest.raises(RuntimeError, match="expected a YAML mapping"):
+        write_models(ds, output_root=tmp_path / "isolated_dataset")
 
 
 def test_write_models_output_root_override_writes_to_given_path(tmp_path):

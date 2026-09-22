@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-from deltalake import write_deltalake
+from deltalake import DeltaTable, write_deltalake
 from numpy.typing import ArrayLike
 from pydantic import BaseModel
 
@@ -30,10 +30,7 @@ from connects_common_connectivity.io.arrow_utils import (
     models_to_table,
 )
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
-from connects_common_connectivity.io.write_utils import (
-    append_new_dataitems,
-    populate_region_coverage,
-)
+from connects_common_connectivity.io.write_utils import populate_region_coverage
 from connects_common_connectivity.io.write_validation import validate_for_write
 from connects_common_connectivity.models import ProjectionMeasurementMatrix
 
@@ -47,8 +44,7 @@ class WrittenResult:
     """Return value of a single :func:`write_models` invocation.
 
     ``predicates`` is one entry per scope group for ``overwrite_scoped``
-    writes; an empty tuple for ``append_new_by_id`` (no predicate is
-    issued because existing ids are checked before the Delta append).
+    writes and the identity predicate for a ``merge_scoped`` write.
     """
 
     class_name: str
@@ -185,6 +181,37 @@ def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) ->
     return " AND ".join(parts)
 
 
+def _build_merge_predicate(merge_on: Sequence[str]) -> str:
+    """Build the source-to-target equality predicate for a Delta merge."""
+    if not merge_on:
+        raise ValueError("merge_on must be non-empty for merge_scoped writes")
+    return " AND ".join(
+        f"target.{column} = source.{column}" for column in merge_on
+    )
+
+
+def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
+    """Keep the final input row for each merge key in stable survivor order."""
+    if not merge_on:
+        raise ValueError("merge_on must be non-empty for merge_scoped writes")
+
+    missing = [column for column in merge_on if column not in table.column_names]
+    if missing:
+        raise ValueError(f"merge_on columns missing from table: {missing!r}")
+
+    key_columns = [table.column(column).to_pylist() for column in merge_on]
+    keys = list(zip(*key_columns))
+    for row_index, key in enumerate(keys):
+        if any(value is None for value in key):
+            raise ValueError(
+                f"merge_on columns must be non-null; row {row_index} has key {key!r}"
+            )
+
+    last_index_by_key = {key: index for index, key in enumerate(keys)}
+    survivor_indices = sorted(last_index_by_key.values())
+    return table.take(pa.array(survivor_indices, type=pa.int64()))
+
+
 def _group_by_scope(
     table: pa.Table, scope_columns: Sequence[str]
 ) -> list[tuple[tuple, pa.Table]]:
@@ -291,22 +318,18 @@ def _dispatch_overwrite_scoped(
     )
 
 
-def _dispatch_append_new_by_id(
+def _dispatch_merge_scoped(
     table: pa.Table, spec: WriteSpec, path: Path
 ) -> WrittenResult:
-    """Append rows with ids not yet stored for one project.
+    """Upsert rows by the identity columns declared in ``spec.merge_on``.
 
     Parameters
     ----------
     table:
-        A write-ready Arrow table for exactly one ``project_id``. Validation,
-        schema alignment, and LinkML metadata attachment must already be
-        complete, and the table must contain the id column named by the first
-        entry in ``spec.scope_columns``.
+        A write-ready Arrow table. Validation, schema alignment, and LinkML
+        metadata attachment must already be complete.
     spec:
-        The batch's write policy. Its first scope column is used as the id
-        column for the existing-row check; additional scope columns, if any,
-        do not participate in deduplication.
+        The batch's write policy. ``merge_on`` defines complete row identity.
     path:
         The complete Delta table directory, including the output root and
         ``spec.subdir``.
@@ -314,51 +337,49 @@ def _dispatch_append_new_by_id(
     Returns
     -------
     WrittenResult
-        The model class and Delta path, ``"append_new_by_id"`` mode, no
-        predicates, and the number of rows actually appended.
+        The model class and Delta path, ``"merge_scoped"`` mode, its identity
+        predicate, and the number of deduplicated source rows submitted.
 
     Raises
     ------
     ValueError
-        If the spec has no scope columns, the table lacks ``project_id``, or
-        the table does not contain exactly one distinct ``project_id``.
+        If the spec has no merge keys, a merge key column is absent, or a
+        merge key value is null.
 
     Notes
     -----
-    This function performs Delta IO through :func:`append_new_dataitems`.
-    Duplicate prevention has that helper's sequential, readable-table
-    guarantees; it does not provide concurrency control.
+    The incoming batch is deduplicated before IO, with the final input row
+    winning for each repeated key. Existing rows absent from the source are
+    never deleted.
     """
-    if len(spec.scope_columns) == 0:
-        raise ValueError(
-            f"{spec.model_cls.__name__}: scope_columns is empty for append_new_by_id "
-            f"(expected the id column at index 0)"
+    source = _deduplicate_on_keys(table, spec.merge_on)
+    predicate = _build_merge_predicate(spec.merge_on)
+    if not DeltaTable.is_deltatable(str(path)):
+        write_deltalake(
+            str(path),
+            source,
+            mode="error",
+            partition_by=spec.partition_by or None,
         )
-    id_column = spec.scope_columns[0]
-
-    if "project_id" not in table.column_names:
-        raise ValueError(
-            f"{spec.model_cls.__name__}: append_new_by_id requires a 'project_id' "
-            f"column on every row (got columns {table.column_names!r})"
+    else:
+        (
+            DeltaTable(str(path))
+            .merge(
+                source=source,
+                predicate=predicate,
+                source_alias="source",
+                target_alias="target",
+            )
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute()
         )
-    project_ids = set(table.column("project_id").to_pylist())
-    if len(project_ids) != 1:
-        raise ValueError(
-            f"{spec.model_cls.__name__}: append_new_by_id requires a single "
-            f"project_id per call (got {sorted(project_ids)!r}). Split the "
-            f"batch upstream."
-        )
-    (project_id,) = project_ids
-
-    rows_written = append_new_dataitems(
-        str(path), table, project_id=project_id, id_column=id_column
-    )
     return WrittenResult(
         class_name=spec.model_cls.__name__,
         path=path,
-        mode="append_new_by_id",
-        predicates=(),
-        rows_written=rows_written,
+        mode="merge_scoped",
+        predicates=(predicate,),
+        rows_written=source.num_rows,
     )
 
 
@@ -381,8 +402,8 @@ def _resolve_output_root(
         is discovered through :func:`get_settings`.
     output_root:
         Per-call root override. The caller later combines this path with
-        ``spec.subdir`` to form the complete Delta table directory. It is
-        mutually exclusive with ``settings``.
+        ``spec.subdir`` to form the complete Delta table directory. When
+        settings are also supplied, this overrides only their output root.
 
     Returns
     -------
@@ -390,22 +411,11 @@ def _resolve_output_root(
         The effective output root later combined with ``spec.subdir``.
     Settings or None
         The explicit or discovered settings retained so the caller can honor
-        ``dry_run``. This value is ``None`` when ``output_root`` is explicit,
-        so no settings-based ``dry_run`` policy applies to a root override.
-
-    Raises
-    ------
-    TypeError
-        If both ``settings`` and ``output_root`` are supplied.
+        ``dry_run``. This value is ``None`` only when an explicit root is used
+        without settings, which avoids unnecessary config discovery.
     """
-    if output_root is not None and settings is not None:
-        raise TypeError(
-            "Pass either settings= or output_root=, not both. "
-            "output_root= is the per-call override; settings= carries the "
-            "full Settings object."
-        )
     if output_root is not None:
-        return Path(output_root), None
+        return Path(output_root), settings
     resolved = settings or get_settings()
     return Path(resolved.output_root), resolved
 
@@ -439,22 +449,21 @@ def write_models(
         canonical ``spec.subdir`` is written. Use this when a single
         notebook/dataset should write to a different location than the
         shared ``ccc_config.yaml`` ``output_root`` (e.g. an isolated test
-        dataset). Mutually exclusive with ``settings=`` — passing both
-        raises ``TypeError``. Because no settings object is resolved for an
-        explicit root, settings-based ``dry_run`` handling does not apply.
+        dataset). When ``settings=`` is also supplied, this value overrides
+        only ``settings.output_root``; controls such as ``dry_run`` remain
+        active.
 
     Returns
     -------
     WrittenResult
         Class name, on-disk path, dispatch mode, the predicates issued (one
-        per scope group for ``overwrite_scoped``; empty for
-        ``append_new_by_id``), and the number of rows written.
+        per scope group for ``overwrite_scoped`` or the identity predicate for
+        ``merge_scoped``), and the number of source rows written.
 
     Raises
     ------
     TypeError
-        If the input cannot form one homogeneous exact-type model batch, or
-        if both ``settings`` and ``output_root`` are supplied.
+        If the input cannot form one homogeneous exact-type model batch.
     ValueError
         If the batch is empty, fails write-required validation, violates a
         dispatch invariant, or resolves to an unsupported write mode.
@@ -493,8 +502,8 @@ def write_models(
 
     if spec.write_mode == "overwrite_scoped":
         return _dispatch_overwrite_scoped(table, spec, path)
-    if spec.write_mode == "append_new_by_id":
-        return _dispatch_append_new_by_id(table, spec, path)
+    if spec.write_mode == "merge_scoped":
+        return _dispatch_merge_scoped(table, spec, path)
     raise ValueError(
         f"{cls.__name__}: unsupported write_mode {spec.write_mode!r}. "
         f"Add a dispatch branch in writers.py."
@@ -522,8 +531,8 @@ def write_projection_matrix(
         Optional write configuration with the same resolution and ``dry_run``
         semantics as :func:`write_models`.
     output_root:
-        Optional per-call output-root override. Mutually exclusive with
-        ``settings`` and combined with the projection write spec's subdir.
+        Optional per-call output-root override. When settings are also
+        supplied, only their output root is overridden.
 
     Returns
     -------
@@ -536,9 +545,6 @@ def write_projection_matrix(
     ValueError
         If ``region_index`` is absent, the matrix is not two-dimensional, or
         its column count differs from the region index length.
-    TypeError
-        If both ``settings`` and ``output_root`` are supplied.
-
     Notes
     -----
     The derived copy follows the same validation and Delta IO path as

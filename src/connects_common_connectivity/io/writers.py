@@ -391,7 +391,7 @@ def _dispatch_merge_scoped(
 def _resolve_output_root(
     settings: Settings | None,
     output_root: str | Path | None,
-) -> tuple[Path, Settings | None]:
+) -> tuple[Path, Settings]:
     """Resolve the output root and settings state used by one write call.
 
     Parameters
@@ -409,15 +409,13 @@ def _resolve_output_root(
     -------
     Path
         The effective output root later combined with ``spec.subdir``.
-    Settings or None
+    Settings
         The explicit or discovered settings retained so the caller can honor
-        ``dry_run``. This value is ``None`` only when an explicit root is used
-        without settings, which avoids unnecessary config discovery.
+        ``dry_run``.
     """
-    if output_root is not None:
-        return Path(output_root), settings
     resolved = settings or get_settings()
-    return Path(resolved.output_root), resolved
+    root = Path(output_root) if output_root is not None else Path(resolved.output_root)
+    return root, resolved
 
 
 def write_models(
@@ -487,7 +485,7 @@ def write_models(
     root, resolved_settings = _resolve_output_root(settings, output_root)
     path = root / spec.subdir
 
-    if resolved_settings is not None and resolved_settings.dry_run:
+    if resolved_settings.dry_run:
         return WrittenResult(
             class_name=spec.model_cls.__name__,
             path=path,

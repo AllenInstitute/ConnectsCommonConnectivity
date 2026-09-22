@@ -15,6 +15,7 @@ import numpy as np
 import polars as pl
 import pyarrow as pa
 import pytest
+import yaml
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import Settings
@@ -576,7 +577,12 @@ def test_write_models_rejects_unregistered_pydantic_model(settings):
 
 
 def test_write_models_output_root_override_writes_to_given_path(tmp_path):
-    """Passing output_root= writes under that root, bypassing get_settings()."""
+    """Passing output_root= overrides the root from discovered settings."""
+    config = {
+        "output_root": str(tmp_path / "configured"),
+        "dry_run": False,
+    }
+    (tmp_path / "ccc_config.yaml").write_text(yaml.safe_dump(config))
     alt_root = tmp_path / "alt_dataset"
     ds = DataSet(id="d_alt", name="alt", project_id="p_alt")
 
@@ -591,10 +597,11 @@ def test_write_models_output_root_override_writes_to_given_path(tmp_path):
 
 def test_write_models_output_root_accepts_string(tmp_path):
     """str and Path are both accepted for output_root."""
+    settings = Settings(output_root=tmp_path / "configured")
     alt_root = tmp_path / "string_root"
     ds = DataSet(id="d_str", name="s", project_id="p_str")
 
-    result = write_models(ds, output_root=str(alt_root))
+    result = write_models(ds, settings=settings, output_root=str(alt_root))
 
     assert result.path == alt_root / "dataset"
 
@@ -612,8 +619,26 @@ def test_write_models_output_root_preserves_settings_dry_run(tmp_path):
     assert not (alt_root / "dataset").exists()
 
 
+def test_write_models_output_root_preserves_discovered_dry_run(tmp_path):
+    """A root override must retain dry-run controls from discovered settings."""
+    config = {
+        "output_root": str(tmp_path / "configured"),
+        "dry_run": True,
+    }
+    (tmp_path / "ccc_config.yaml").write_text(yaml.safe_dump(config))
+    alt_root = tmp_path / "other"
+    ds = DataSet(id="d_discovered", name="x", project_id="p_x")
+
+    result = write_models(ds, output_root=alt_root)
+
+    assert result.path == alt_root / "dataset"
+    assert result.rows_written == 0
+    assert not (alt_root / "dataset").exists()
+
+
 def test_write_projection_matrix_output_root_override(tmp_path):
     """write_projection_matrix forwards output_root through write_models."""
+    settings = Settings(output_root=tmp_path / "configured")
     alt_root = tmp_path / "pmm_alt"
     pmm = ProjectionMeasurementMatrix(
         id="pmm_alt",
@@ -628,7 +653,9 @@ def test_write_projection_matrix_output_root_override(tmp_path):
     )
     matrix = np.array([[1.0, 0.0], [0.0, 2.0]])
 
-    result = write_projection_matrix(pmm, matrix, output_root=alt_root)
+    result = write_projection_matrix(
+        pmm, matrix, settings=settings, output_root=alt_root
+    )
 
     assert result.path == alt_root / "projectionmeasurementmatrix"
 

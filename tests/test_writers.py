@@ -19,13 +19,14 @@ import yaml
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import ConfigNotFoundError, Settings
-from connects_common_connectivity.io.write_spec import REGISTRY
+from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
     _build_merge_predicate,
     _build_predicate,
     _deduplicate_on_keys,
+    _dispatch_overwrite_scoped,
     _group_by_scope,
     write_models,
     write_projection_matrix,
@@ -128,6 +129,53 @@ def test_group_by_scope_preserves_first_appearance_order():
     # The first 'b' group should hold rows 0 and 2 (preserved order).
     first_sub = groups[0][1]
     assert first_sub.column("value").to_pylist() == [1, 3]
+
+
+def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
+    tmp_path, monkeypatch
+):
+    """The retained bulk-table dispatcher must issue one overwrite per scope."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p", "p"],
+            "dataset_id": ["a", "b", "a"],
+            "value": [1, 2, 3],
+        }
+    )
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="synapse",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "dataset_id"],
+        write_mode="overwrite_scoped",
+    )
+    calls = []
+
+    def record_write(path, batch, **kwargs):
+        calls.append((path, batch.to_pylist(), kwargs))
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake", record_write
+    )
+
+    path = tmp_path / "synapse"
+    result = _dispatch_overwrite_scoped(table, spec, path)
+
+    assert result.mode == "overwrite_scoped"
+    assert result.predicates == (
+        "project_id = 'p' AND dataset_id = 'a'",
+        "project_id = 'p' AND dataset_id = 'b'",
+    )
+    assert result.rows_written == 3
+    assert [call[1] for call in calls] == [
+        [
+            {"project_id": "p", "dataset_id": "a", "value": 1},
+            {"project_id": "p", "dataset_id": "a", "value": 3},
+        ],
+        [{"project_id": "p", "dataset_id": "b", "value": 2}],
+    ]
+    assert all(call[2]["mode"] == "overwrite" for call in calls)
+    assert all(call[2]["partition_by"] == ["project_id"] for call in calls)
 
 
 # ---------------------------------------------------------------------------

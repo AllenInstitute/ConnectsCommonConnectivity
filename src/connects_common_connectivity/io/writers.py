@@ -256,6 +256,8 @@ def _group_by_scope(
 # Dispatch branches
 # ---------------------------------------------------------------------------
 
+# No live registry entry currently uses this branch. It is retained for the
+# deferred bulk SynapseConnectivityLong registration, which must avoid MERGE.
 
 def _dispatch_overwrite_scoped(
     table: pa.Table, spec: WriteSpec, path: Path

@@ -1,6 +1,7 @@
 ## What changed
 
 - Added `merge_scoped` writes with registry-declared `merge_on` keys for the 15 currently writable identity-bearing metadata and association classes.
+- All 15 live registry entries now use `merge_scoped`; there are currently zero live `overwrite_scoped` entries. The overwrite dispatcher is intentionally retained for the deferred bulk `SynapseConnectivityLong` registration, where MERGE would be wasteful at 10^7 rows, and remains directly tested until that registration is enabled.
 - Implemented pure Delta MERGE upserts: matching rows are updated, new rows are inserted, and rows absent from the incoming batch are retained.
 - Deduplicated incoming batches on their complete merge key with deterministic last-row-wins behavior.
 - Replaced `DataItem`'s append-only dispatch with merge-scoped upserts, so existing metadata can be updated instead of silently ignored.

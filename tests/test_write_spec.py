@@ -13,6 +13,24 @@ from pydantic import BaseModel, ValidationError
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
 
+EXPECTED_MERGE_KEYS = {
+    "DataSet": ["project_id", "id"],
+    "DataItem": ["project_id", "id"],
+    "DataItemDataSetAssociation": ["project_id", "dataset_id", "dataitem_id"],
+    "Cluster": ["hierarchy_id", "id"],
+    "ClusterHierarchy": ["id"],
+    "ClusterMembership": ["project_id", "hierarchy_id", "item", "cluster"],
+    "MappingSet": ["project_id", "id"],
+    "CellToClusterMapping": ["project_id", "id"],
+    "CellFeatureSet": ["project_id", "id"],
+    "CellFeatureDefinition": ["project_id", "feature_set_id", "id"],
+    "CellFeatureMatrix": ["project_id", "id"],
+    "ProjectionMeasurementMatrix": ["project_id", "id"],
+    "AlgorithmRun": ["id"],
+    "HierarchyCategory": ["hierarchy_id", "id"],
+    "SynapseFeatureMatrix": ["project_id", "id"],
+}
+
 
 def test_registry_contains_seed_entries():
     """The writer registry must contain its foundational model entries."""
@@ -32,6 +50,23 @@ def test_milestone_scopes_use_taxonomy_and_project_identity():
     assert projection.scope_columns == ["project_id", "id"]
 
 
+def test_registered_metadata_classes_use_declared_merge_keys():
+    """Every WP2 metadata writer must declare its complete row identity."""
+    assert set(REGISTRY) == set(EXPECTED_MERGE_KEYS)
+    for class_name, merge_on in EXPECTED_MERGE_KEYS.items():
+        spec = REGISTRY[class_name]
+        assert spec.write_mode == "merge_scoped"
+        assert spec.merge_on == merge_on
+
+    assert REGISTRY["DataItem"].scope_columns == ["project_id", "id"]
+
+
+def test_cluster_membership_merge_keys_are_required_only_for_write():
+    """Nullable schema keys must be tightened at the IO boundary."""
+    spec = REGISTRY["ClusterMembership"]
+    assert spec.required_for_write == ["hierarchy_id", "item", "cluster"]
+
+
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_registry_key_matches_model_cls(key):
     """Each registry key must match its generated model class."""
@@ -49,7 +84,12 @@ def test_spec_columns_exist_on_model(key):
     """Every configured writer column must exist on its model."""
     spec: WriteSpec = REGISTRY[key]
     fields = set(spec.model_cls.model_fields)
-    for col in spec.scope_columns + spec.partition_by + spec.required_for_write:
+    for col in (
+        spec.scope_columns
+        + spec.partition_by
+        + spec.required_for_write
+        + spec.merge_on
+    ):
         assert col in fields, (
             f"{spec.model_cls.__name__}: column {col!r} is not a field "
             f"(have: {sorted(fields)})"
@@ -94,4 +134,29 @@ def test_write_spec_requires_pydantic_model_class():
             partition_by=[],
             scope_columns=["id"],
             write_mode="overwrite_scoped",
+        )
+
+
+def test_merge_scoped_requires_merge_keys():
+    """A merge writer without an identity must be rejected at registration."""
+    with pytest.raises(ValidationError, match="merge_on"):
+        WriteSpec(
+            model_cls=models_module.DataSet,
+            subdir="dataset",
+            partition_by=["project_id"],
+            scope_columns=["project_id", "id"],
+            write_mode="merge_scoped",
+        )
+
+
+def test_non_merge_mode_rejects_merge_keys():
+    """Merge keys must not be silently ignored by another write mode."""
+    with pytest.raises(ValidationError, match="merge_on"):
+        WriteSpec(
+            model_cls=models_module.DataSet,
+            subdir="dataset",
+            partition_by=["project_id"],
+            scope_columns=["project_id", "id"],
+            write_mode="overwrite_scoped",
+            merge_on=["project_id", "id"],
         )

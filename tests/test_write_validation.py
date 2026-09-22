@@ -14,6 +14,7 @@ from connects_common_connectivity.io.writers import write_models
 from connects_common_connectivity.models import (
     CellFeatureDefinition,
     Cluster,
+    ClusterMembership,
     DataSet,
 )
 
@@ -112,6 +113,27 @@ def test_missing_slot_names_class_in_error():
     bad = CellFeatureDefinition(id="f1", project_id="p1")  # feature_set_id missing
     with pytest.raises(ValueError, match="CellFeatureDefinition"):
         validate_for_write([bad], spec)
+
+
+@pytest.mark.parametrize(
+    "missing_field,values",
+    [
+        ("item", {"item": None, "cluster": "c1"}),
+        ("cluster", {"item": "cell_1", "cluster": None}),
+    ],
+)
+def test_cluster_membership_merge_keys_are_required_for_write(
+    missing_field, values
+):
+    """Nullable schema fields used as merge keys must fail before IO."""
+    membership = ClusterMembership(
+        project_id="p1",
+        hierarchy_id="h1",
+        **values,
+    )
+
+    with pytest.raises(ValueError, match=missing_field):
+        validate_for_write([membership], REGISTRY["ClusterMembership"])
 
 
 # ---------------------------------------------------------------------------

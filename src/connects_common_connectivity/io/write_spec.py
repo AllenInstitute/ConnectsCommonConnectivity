@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from connects_common_connectivity.models import (
     AlgorithmRun,
@@ -41,9 +41,19 @@ class WriteSpec(BaseModel):
     subdir: str
     partition_by: list[str]
     scope_columns: list[str]
-    write_mode: Literal["overwrite_scoped", "append_new_by_id"]
-    required_for_write: list[str] = []
-    cross_field_rules: list[str] = []
+    write_mode: Literal["overwrite_scoped", "merge_scoped"]
+    merge_on: list[str] = Field(default_factory=list)
+    required_for_write: list[str] = Field(default_factory=list)
+    cross_field_rules: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_merge_on(self) -> WriteSpec:
+        """Require merge keys exactly when the selected mode consumes them."""
+        if self.write_mode == "merge_scoped" and not self.merge_on:
+            raise ValueError("merge_on must be non-empty for merge_scoped writes")
+        if self.write_mode != "merge_scoped" and self.merge_on:
+            raise ValueError("merge_on is only valid for merge_scoped writes")
+        return self
 
 
 REGISTRY: dict[str, WriteSpec] = {
@@ -55,21 +65,24 @@ REGISTRY: dict[str, WriteSpec] = {
         # sharing a project_id (e.g. patchseq exc/inh) do not overwrite each
         # other.
         scope_columns=["project_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "DataItem": WriteSpec(
         model_cls=DataItem,
         subdir="dataitem",
         partition_by=["project_id"],
-        scope_columns=["id"],
-        write_mode="append_new_by_id",
+        scope_columns=["project_id", "id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "DataItemDataSetAssociation": WriteSpec(
         model_cls=DataItemDataSetAssociation,
         subdir="dataitem_dataset_association",
         partition_by=["project_id"],
         scope_columns=["project_id", "dataset_id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "dataset_id", "dataitem_id"],
     ),
     # Cluster taxonomy is project-agnostic in the schema — Cluster and
     # ClusterHierarchy do not carry project_id. Scope is the hierarchy id
@@ -80,7 +93,8 @@ REGISTRY: dict[str, WriteSpec] = {
         subdir="cluster",
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["hierarchy_id", "id"],
         required_for_write=["hierarchy_id"],
     ),
     "ClusterHierarchy": WriteSpec(
@@ -88,22 +102,25 @@ REGISTRY: dict[str, WriteSpec] = {
         subdir="clusterhierarchy",
         partition_by=[],
         scope_columns=["id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["id"],
     ),
     "ClusterMembership": WriteSpec(
         model_cls=ClusterMembership,
         subdir="clustermembership",
         partition_by=["project_id", "hierarchy_id"],
         scope_columns=["project_id", "hierarchy_id"],
-        write_mode="overwrite_scoped",
-        required_for_write=["hierarchy_id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "hierarchy_id", "item", "cluster"],
+        required_for_write=["hierarchy_id", "item", "cluster"],
     ),
     "MappingSet": WriteSpec(
         model_cls=MappingSet,
         subdir="mappingset",
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "CellToClusterMapping": WriteSpec(
         model_cls=CellToClusterMapping,
@@ -112,21 +129,24 @@ REGISTRY: dict[str, WriteSpec] = {
         # Notebooks predicate on (project_id, mapping_set), which is the
         # mapping-set foreign key on the row.
         scope_columns=["project_id", "mapping_set"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "CellFeatureSet": WriteSpec(
         model_cls=CellFeatureSet,
         subdir="cellfeatureset",
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "CellFeatureDefinition": WriteSpec(
         model_cls=CellFeatureDefinition,
         subdir="cellfeaturedefinition",
         partition_by=["project_id", "feature_set_id"],
         scope_columns=["project_id", "feature_set_id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "feature_set_id", "id"],
         required_for_write=["feature_set_id"],
     ),
     "CellFeatureMatrix": WriteSpec(
@@ -139,14 +159,16 @@ REGISTRY: dict[str, WriteSpec] = {
         # is built from raw dataframes in the notebook, not from a model
         # instance, so it does not flow through ``write_models`` and stays
         # outside the registry.
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     "ProjectionMeasurementMatrix": WriteSpec(
         model_cls=ProjectionMeasurementMatrix,
         subdir="projectionmeasurementmatrix",
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
     # AlgorithmRun and HierarchyCategory are project-agnostic taxonomy metadata
     # (no project_id slot). Notebook predicates are id-only, matching scope=["id"].
@@ -155,14 +177,16 @@ REGISTRY: dict[str, WriteSpec] = {
         subdir="algorithmrun",
         partition_by=[],
         scope_columns=["id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["id"],
     ),
     "HierarchyCategory": WriteSpec(
         model_cls=HierarchyCategory,
         subdir="hierarchycategory",
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["hierarchy_id", "id"],
         required_for_write=["hierarchy_id"],
     ),
 #    "SynapseConnectivityLong": WriteSpec(
@@ -177,7 +201,8 @@ REGISTRY: dict[str, WriteSpec] = {
         subdir="synapsefeaturematrix",
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
-        write_mode="overwrite_scoped",
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
     ),
 }
 

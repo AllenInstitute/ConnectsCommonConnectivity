@@ -4,8 +4,7 @@ Covers:
 
 * The patchseq regression — overlapping ``project_id`` writes do not wipe
   each other (the original motivating bug).
-* Idempotency, multi-scope-group dispatch, predicate construction.
-* Append-new-by-id semantics.
+* Idempotency, merge dispatch, predicate construction, and batch deduplication.
 * A per-class round-trip smoke test for every entry in ``WRITABLE_CLASSES``.
 * ``write_projection_matrix`` enrichment + write.
 """
@@ -23,7 +22,9 @@ from connects_common_connectivity.io.write_spec import REGISTRY
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
+    _build_merge_predicate,
     _build_predicate,
+    _deduplicate_on_keys,
     _group_by_scope,
     write_models,
     write_projection_matrix,
@@ -81,6 +82,31 @@ def test_build_predicate_escapes(value, expected_literal):
     assert _build_predicate(["name"], [value]) == f"name = {expected_literal}"
 
 
+def test_build_merge_predicate_uses_all_declared_keys():
+    """Merge predicates must compare every identity column through aliases."""
+    assert _build_merge_predicate(["project_id", "id"]) == (
+        "target.project_id = source.project_id AND target.id = source.id"
+    )
+
+
+def test_deduplicate_on_keys_keeps_last_row_in_stable_order():
+    """Later source rows must deterministically replace earlier duplicate keys."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p", "p"],
+            "id": ["a", "b", "a"],
+            "value": [1, 2, 3],
+        }
+    )
+
+    deduplicated = _deduplicate_on_keys(table, ["project_id", "id"])
+
+    assert deduplicated.to_pylist() == [
+        {"project_id": "p", "id": "b", "value": 2},
+        {"project_id": "p", "id": "a", "value": 3},
+    ]
+
+
 # ---------------------------------------------------------------------------
 # _group_by_scope
 # ---------------------------------------------------------------------------
@@ -123,8 +149,8 @@ def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
     )
 
 
-def test_overwrite_scoped_is_idempotent(settings, read_delta):
-    """Repeated scoped overwrites must preserve one unchanged row."""
+def test_merge_scoped_is_idempotent(settings, read_delta):
+    """Repeated merges must preserve one unchanged row."""
     ds = DataSet(id="d1", name="example", project_id="p1")
     write_models(ds, settings=settings)
     write_models(ds, settings=settings)
@@ -182,15 +208,17 @@ def test_dry_run_does_not_write(tmp_path):
     assert not (tmp_path / "dataset").exists(), "dry_run must not create tables"
 
 
-def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, read_delta):
-    """Multi-scope writes must emit one predicate per persisted group."""
+def test_merge_batch_uses_one_identity_predicate(settings, read_delta):
+    """One merge transaction must handle all identities in a batch."""
     rows_in = [
         DataSet(id="a", name="A", project_id="p1"),
         DataSet(id="b", name="B", project_id="p1"),
     ]
     result = write_models(rows_in, settings=settings)
     assert isinstance(result, WrittenResult)
-    assert len(result.predicates) == 2
+    assert result.predicates == (
+        "target.project_id = source.project_id AND target.id = source.id",
+    )
     assert result.rows_written == 2
     # Both end up in the table.
     rows = read_delta(settings.output_root / "dataset")
@@ -198,40 +226,114 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, rea
 
 
 # ---------------------------------------------------------------------------
-# append_new_by_id semantics (DataItem)
+# merge_scoped semantics
 # ---------------------------------------------------------------------------
 
 
-def test_append_new_by_id_only_appends_unseen(settings, read_delta):
-    """Append-by-ID writes must persist only previously unseen identifiers."""
+def test_merge_scoped_inserts_and_updates_dataitems(settings, read_delta):
+    """DataItem writes must insert unseen IDs and update existing metadata."""
     items_first = [
         DataItem(id="cell_1", name="cell_1", project_id="p1"),
         DataItem(id="cell_2", name="cell_2", project_id="p1"),
     ]
     r1 = write_models(items_first, settings=settings)
-    assert r1.mode == "append_new_by_id"
-    assert r1.predicates == ()
+    assert r1.mode == "merge_scoped"
     assert r1.rows_written == 2
 
     items_second = [
-        DataItem(id="cell_2", name="cell_2", project_id="p1"),  # already there
+        DataItem(id="cell_2", name="updated", project_id="p1"),
         DataItem(id="cell_3", name="cell_3", project_id="p1"),  # new
     ]
     r2 = write_models(items_second, settings=settings)
-    assert r2.rows_written == 1
+    assert r2.rows_written == 2
 
-    rows = read_delta(settings.output_root / "dataitem")
+    rows = read_delta(settings.output_root / "dataitem").sort("id")
     assert sorted(rows["id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
+    assert rows.filter(pl.col("id") == "cell_2")["name"].item() == "updated"
 
 
-def test_append_new_by_id_rejects_mixed_project_ids(settings):
-    """Append-by-ID batches must reject mixed project identifiers."""
-    bad = [
-        DataItem(id="x", name="x", project_id="p1"),
-        DataItem(id="y", name="y", project_id="p2"),
+def test_merge_scoped_preserves_shared_scope_contributions(settings, read_delta):
+    """A later writer must not delete associations from an earlier writer."""
+    first = [
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_1"
+        ),
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_2"
+        ),
     ]
-    with pytest.raises(ValueError, match="single project_id"):
-        write_models(bad, settings=settings)
+    second = [
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_3"
+        )
+    ]
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+
+    rows = read_delta(settings.output_root / "dataitem_dataset_association")
+    assert sorted(rows["dataitem_id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
+
+
+def test_merge_scoped_preserves_shared_hierarchy_memberships(settings, read_delta):
+    """Excitatory and inhibitory writers must coexist in one hierarchy scope."""
+    excitatory = [
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="exc_1",
+            cluster="met_a",
+        ),
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="exc_1",
+            cluster="root",
+        ),
+    ]
+    inhibitory = [
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="inh_1",
+            cluster="met_b",
+        ),
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="inh_1",
+            cluster="root",
+        ),
+    ]
+
+    write_models(excitatory, settings=settings)
+    write_models(inhibitory, settings=settings)
+
+    rows = read_delta(settings.output_root / "clustermembership")
+    assert sorted(rows.select("item", "cluster").rows()) == [
+        ("exc_1", "met_a"),
+        ("exc_1", "root"),
+        ("inh_1", "met_b"),
+        ("inh_1", "root"),
+    ]
+
+
+def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
+    """Duplicate source identities must keep the final input row."""
+    items = [
+        DataItem(id="cell_1", name="first", project_id="p1"),
+        DataItem(id="cell_2", name="other", project_id="p1"),
+        DataItem(id="cell_1", name="last", project_id="p1"),
+    ]
+
+    result = write_models(items, settings=settings)
+
+    assert result.rows_written == 2
+    rows = read_delta(settings.output_root / "dataitem").sort("id")
+    assert rows.select("id", "name").to_dicts() == [
+        {"id": "cell_1", "name": "last"},
+        {"id": "cell_2", "name": "other"},
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -497,11 +599,17 @@ def test_write_models_output_root_accepts_string(tmp_path):
     assert result.path == alt_root / "dataset"
 
 
-def test_write_models_rejects_both_settings_and_output_root(settings, tmp_path):
-    """Passing both settings= and output_root= raises (no precedence to memorize)."""
+def test_write_models_output_root_preserves_settings_dry_run(tmp_path):
+    """A root override must not discard dry-run controls from settings."""
+    settings = Settings(output_root=tmp_path / "configured", dry_run=True)
+    alt_root = tmp_path / "other"
     ds = DataSet(id="d_x", name="x", project_id="p_x")
-    with pytest.raises(TypeError, match="either settings= or output_root="):
-        write_models(ds, settings=settings, output_root=tmp_path / "other")
+
+    result = write_models(ds, settings=settings, output_root=alt_root)
+
+    assert result.path == alt_root / "dataset"
+    assert result.rows_written == 0
+    assert not (alt_root / "dataset").exists()
 
 
 def test_write_projection_matrix_output_root_override(tmp_path):
@@ -525,10 +633,10 @@ def test_write_projection_matrix_output_root_override(tmp_path):
     assert result.path == alt_root / "projectionmeasurementmatrix"
 
 
-def test_write_projection_matrix_rejects_both_settings_and_output_root(
-    settings, tmp_path
-):
-    """Projection writes must reject competing output configuration sources."""
+def test_write_projection_matrix_output_root_preserves_dry_run(tmp_path):
+    """Projection root overrides must retain settings-based dry-run controls."""
+    settings = Settings(output_root=tmp_path / "configured", dry_run=True)
+    alt_root = tmp_path / "other"
     pmm = ProjectionMeasurementMatrix(
         id="pmm_x",
         project_id="p1",
@@ -541,7 +649,11 @@ def test_write_projection_matrix_rejects_both_settings_and_output_root(
         values="file:///tmp/pmm_x.delta",
     )
     matrix = np.array([[1.0]])
-    with pytest.raises(TypeError, match="either settings= or output_root="):
-        write_projection_matrix(
-            pmm, matrix, settings=settings, output_root=tmp_path / "other"
-        )
+
+    result = write_projection_matrix(
+        pmm, matrix, settings=settings, output_root=alt_root
+    )
+
+    assert result.path == alt_root / "projectionmeasurementmatrix"
+    assert result.rows_written == 0
+    assert not (alt_root / "projectionmeasurementmatrix").exists()

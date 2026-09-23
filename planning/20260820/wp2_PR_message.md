@@ -8,7 +8,7 @@
 - Replaced `DataItem`'s append-only dispatch with merge-scoped upserts, so existing metadata can be updated instead of silently ignored.
 - Enforced nullable `ClusterMembership.item`, `.cluster`, and `.hierarchy_id` fields at the IO boundary through `required_for_write`; the LinkML schema remains optional.
 - Preserved discovered `dry_run` and other settings when `output_root` overrides only the write destination, including calls that omit an explicit `settings` argument.
-- Removed the VISp patch-seq notebooks' manual read-union-rewrite workarounds. The notebooks now submit only their own association and membership rows and verify persisted merge-key uniqueness.
+- Removed the VISp patch-seq notebooks' manual read-union-rewrite workarounds. The notebooks now submit only their own association and membership rows, verify persisted merge-key uniqueness, and assert that merge keys present before each write remain afterward.
 - Refreshed outputs for the Tasic, VISp MET-type, and six VISp patch-seq notebooks from the Code Ocean acceptance run.
 - Kept the standalone `append_new_dataitems` helper for compatibility; `write_models(DataItem)` no longer uses it.
 
@@ -19,6 +19,8 @@ This PR is based on `wp1-schema-scope` and should be reviewed against that branc
 `overwrite_scoped` replaced every row in a declared scope. Multiple patch-seq notebooks contribute disjoint rows to the same `(project_id, dataset_id)` association scope and `(project_id, hierarchy_id)` membership scope, so later notebooks silently deleted earlier contributions. The observed inhibitory association count shrank from 2,759 to 520 to 495, and excitatory/inhibitory MET memberships could overwrite one another.
 
 Identity-bearing metadata also needed true update behavior: the previous `append_new_by_id` path skipped an existing `DataItem` instead of applying revised metadata. Delta MERGE makes these incremental workflows transactional at the table-operation level while leaving deletion explicit and separate.
+
+The multi-writer guarantee in this milestone is limited to sequential notebook execution. Each MERGE commit is atomic and later sequential writes preserve earlier contributions, but two writers committing to the same Delta table concurrently can still encounter an optimistic-concurrency conflict. WP2 adds neither automatic retries nor distributed concurrency tests, so closing #15 does not claim that concurrent writes are guaranteed to succeed.
 
 A MERGE predicate built only from `target.col = source.col` equalities gives the Delta planner no literal to compare against file statistics, so it scans every target file. Restating the batch's distinct partition values as literals restores file skipping. Measured on a ten-file table partitioned by `(project_id, hierarchy_id)`, a single-partition merge scanned all ten files with the equality-only predicate and one file with the added constraint. Only columns that are both partition columns and merge keys are constrained: a target row outside the batch's value set for such a column can never satisfy the equality join, so the narrowing removes no candidate match.
 

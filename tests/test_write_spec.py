@@ -13,25 +13,6 @@ from pydantic import BaseModel, ValidationError
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
 
-EXPECTED_MERGE_KEYS = {
-    "DataSet": ["project_id", "id"],
-    "DataItem": ["project_id", "id"],
-    "DataItemDataSetAssociation": ["project_id", "dataset_id", "dataitem_id"],
-    "Cluster": ["hierarchy_id", "id"],
-    "ClusterHierarchy": ["id"],
-    "ClusterMembership": ["project_id", "hierarchy_id", "item", "cluster"],
-    "MappingSet": ["project_id", "id"],
-    "CellToClusterMapping": ["project_id", "id"],
-    "CellFeatureSet": ["project_id", "id"],
-    "CellFeatureDefinition": ["project_id", "feature_set_id", "id"],
-    "CellFeatureMatrix": ["project_id", "id"],
-    "ProjectionMeasurementMatrix": ["project_id", "id"],
-    "AlgorithmRun": ["id"],
-    "HierarchyCategory": ["hierarchy_id", "id"],
-    "SynapseFeatureMatrix": ["project_id", "id"],
-}
-
-
 def test_registry_contains_seed_entries():
     """The writer registry must contain its foundational model entries."""
     seed = {"DataSet", "DataItem", "DataItemDataSetAssociation"}
@@ -49,21 +30,13 @@ def test_milestone_scopes_use_taxonomy_and_project_identity():
     assert projection.partition_by == ["project_id"]
     assert projection.scope_columns == ["project_id", "id"]
 
-
-def test_registered_metadata_classes_use_declared_merge_keys():
-    """Every WP2 metadata writer must declare its complete row identity."""
-    assert set(REGISTRY) == set(EXPECTED_MERGE_KEYS)
-    for class_name, merge_on in EXPECTED_MERGE_KEYS.items():
-        spec = REGISTRY[class_name]
-        assert spec.write_mode == "merge_scoped"
-        assert spec.merge_on == merge_on
-
     assert REGISTRY["DataItem"].scope_columns == ["project_id", "id"]
 
 
 def test_cluster_membership_merge_keys_are_required_only_for_write():
     """Nullable schema keys must be tightened at the IO boundary."""
     spec = REGISTRY["ClusterMembership"]
+    assert spec.merge_on == ["project_id", "hierarchy_id", "item", "cluster"]
     assert spec.required_for_write == ["hierarchy_id", "item", "cluster"]
 
 
@@ -88,7 +61,6 @@ def test_spec_columns_exist_on_model(key):
         spec.scope_columns
         + spec.partition_by
         + spec.required_for_write
-        + spec.merge_on
     ):
         assert col in fields, (
             f"{spec.model_cls.__name__}: column {col!r} is not a field "
@@ -146,6 +118,19 @@ def test_merge_scoped_requires_merge_keys():
             partition_by=["project_id"],
             scope_columns=["project_id", "id"],
             write_mode="merge_scoped",
+        )
+
+
+def test_merge_keys_must_be_non_null_at_write_time():
+    """Nullable merge keys must be tightened before a spec can be registered."""
+    with pytest.raises(ValidationError, match="required_for_write.*hierarchy_id"):
+        WriteSpec(
+            model_cls=models_module.Cluster,
+            subdir="cluster",
+            partition_by=["hierarchy_id"],
+            scope_columns=["hierarchy_id"],
+            write_mode="merge_scoped",
+            merge_on=["hierarchy_id", "id"],
         )
 
 

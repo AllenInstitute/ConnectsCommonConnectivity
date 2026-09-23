@@ -24,15 +24,6 @@ IDs under concurrent use.
 Future decision: deprecate and remove the helper, make it delegate to the registry
 writer, or explicitly document it as a low-level sequential-only API.
 
-## `WrittenResult.rows_written` semantics for MERGE
-
-For `merge_scoped`, `rows_written` reports the number of deduplicated source rows
-submitted to Delta. It does not distinguish inserted, updated, or unchanged rows,
-although delta-rs returns those metrics internally.
-
-Future decision: preserve this simple cross-mode count or expose structured merge
-metrics in `WrittenResult` without changing the meaning of the existing field.
-
 ## Repository-wide Ruff backlog
 
 The WP2-touched Python files pass targeted Ruff checks. A repository-wide

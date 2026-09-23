@@ -16,6 +16,7 @@ import polars as pl
 import pyarrow as pa
 import pytest
 import yaml
+from deltalake.table import TableMerger
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import ConfigNotFoundError, Settings
@@ -129,8 +130,20 @@ def test_partition_prune_predicate_skips_high_cardinality_columns():
     )
 
 
-def test_merge_scoped_predicate_prunes_untouched_partitions(settings, read_delta):
+def test_merge_scoped_predicate_prunes_untouched_partitions(
+    settings, read_delta, monkeypatch
+):
     """A merge must scan only the partitions its source batch touches."""
+    merge_metrics = {}
+    original_execute = TableMerger.execute
+
+    def capture_metrics(merger):
+        metrics = original_execute(merger)
+        merge_metrics.update(metrics)
+        return metrics
+
+    monkeypatch.setattr(TableMerger, "execute", capture_metrics)
+
     write_models(
         [
             ClusterMembership(
@@ -166,6 +179,8 @@ def test_merge_scoped_predicate_prunes_untouched_partitions(settings, read_delta
         "AND target.project_id IN ('visp_patchseq') "
         "AND target.hierarchy_id IN ('met_types')",
     )
+    assert merge_metrics["num_target_files_scanned"] == 1
+    assert merge_metrics["num_target_files_skipped_during_scan"] == 3
     rows = read_delta(settings.output_root / "clustermembership")
     assert rows.height == 13, "pruned merge must not drop rows in other partitions"
 

@@ -9,7 +9,8 @@ make a new class writable through :func:`write_models`.
 
 from __future__ import annotations
 
-from typing import Literal
+from types import UnionType
+from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -30,6 +31,14 @@ from connects_common_connectivity.models import (
     ProjectionMeasurementMatrix,
     SynapseFeatureMatrix,
 )
+
+
+def _allows_none(annotation: Any) -> bool:
+    """Return whether a field annotation accepts ``None``."""
+    if annotation is type(None):
+        return True
+    origin = get_origin(annotation)
+    return origin in (Union, UnionType) and type(None) in get_args(annotation)
 
 
 class WriteSpec(BaseModel):
@@ -53,6 +62,30 @@ class WriteSpec(BaseModel):
             raise ValueError("merge_on must be non-empty for merge_scoped writes")
         if self.write_mode != "merge_scoped" and self.merge_on:
             raise ValueError("merge_on is only valid for merge_scoped writes")
+
+        missing_keys = [
+            name for name in self.merge_on if name not in self.model_cls.model_fields
+        ]
+        if missing_keys:
+            raise ValueError(
+                f"merge_on fields are not declared by {self.model_cls.__name__}: "
+                f"{missing_keys!r}"
+            )
+
+        unsafe_keys = []
+        for name in self.merge_on:
+            field = self.model_cls.model_fields[name]
+            schema_enforces_non_null = (
+                field.is_required() and not _allows_none(field.annotation)
+            )
+            if not schema_enforces_non_null and name not in self.required_for_write:
+                unsafe_keys.append(name)
+        if unsafe_keys:
+            raise ValueError(
+                "merge_on fields must be non-null at write time; make each field "
+                "schema-required and non-nullable or add it to required_for_write: "
+                f"{unsafe_keys!r}"
+            )
         return self
 
 

@@ -45,6 +45,9 @@ class WrittenResult:
 
     ``predicates`` is one entry per scope group for ``overwrite_scoped``
     writes and the identity predicate for a ``merge_scoped`` write.
+    ``rows_written`` is the number of rows written to storage. For
+    ``merge_scoped``, this is the sum of inserted and changed rows; matched
+    rows whose values are unchanged are excluded.
     """
 
     class_name: str
@@ -187,6 +190,74 @@ def _build_merge_predicate(merge_on: Sequence[str]) -> str:
         raise ValueError("merge_on must be non-empty for merge_scoped writes")
     return " AND ".join(
         f"target.{column} = source.{column}" for column in merge_on
+    )
+
+
+# Above this many distinct values the literal list costs more to plan than the
+# file skipping saves, so the column is left unconstrained.
+_MAX_PRUNE_LITERALS = 100
+
+
+def _build_partition_prune_predicate(
+    table: pa.Table,
+    partition_by: Sequence[str],
+    merge_on: Sequence[str],
+) -> str | None:
+    """Build a literal partition constraint that narrows a merge's target scan.
+
+    A merge predicate built only from ``target.c = source.c`` equalities gives
+    the Delta planner no literal to compare against file statistics, so every
+    target file is scanned. Restating the source batch's distinct partition
+    values as literals lets the planner skip files in untouched partitions.
+
+    Parameters
+    ----------
+    table:
+        The deduplicated source batch about to be merged.
+    partition_by:
+        The target table's partition columns.
+    merge_on:
+        The identity columns joined by the merge predicate.
+
+    Returns
+    -------
+    str or None
+        An AND-joined conjunction of ``target.col IN (...)`` clauses, or
+        ``None`` when no column qualifies.
+
+    Notes
+    -----
+    Only columns that are both partition columns and merge keys are
+    constrained. A target row outside the source's value set for such a column
+    can never satisfy the equality predicate, so the constraint removes no
+    candidate match and leaves merge results unchanged.
+    """
+    clauses: list[str] = []
+    for column in partition_by:
+        if column not in merge_on or column not in table.column_names:
+            continue
+        values = table.column(column).unique().to_pylist()
+        if not values or len(values) > _MAX_PRUNE_LITERALS:
+            continue
+        if any(value is None for value in values):
+            continue
+        literals = ", ".join(_format_value(value) for value in sorted(values, key=str))
+        clauses.append(f"target.{column} IN ({literals})")
+    if not clauses:
+        return None
+    return " AND ".join(clauses)
+
+
+def _build_merge_update_predicate(
+    column_names: Sequence[str], merge_on: Sequence[str]
+) -> str | None:
+    """Build a null-safe predicate that excludes unchanged merge matches."""
+    value_columns = [column for column in column_names if column not in merge_on]
+    if not value_columns:
+        return None
+    return " OR ".join(
+        f"(source.{column} IS DISTINCT FROM target.{column})"
+        for column in value_columns
     )
 
 
@@ -340,7 +411,7 @@ def _dispatch_merge_scoped(
     -------
     WrittenResult
         The model class and Delta path, ``"merge_scoped"`` mode, its identity
-        predicate, and the number of deduplicated source rows submitted.
+        predicate, and the number of rows inserted or changed.
 
     Raises
     ------
@@ -352,10 +423,15 @@ def _dispatch_merge_scoped(
     -----
     The incoming batch is deduplicated before IO, with the final input row
     winning for each repeated key. Existing rows absent from the source are
-    never deleted.
+    never deleted. The identity predicate is narrowed with the batch's
+    distinct partition values so the planner can skip untouched partitions.
     """
     source = _deduplicate_on_keys(table, spec.merge_on)
     predicate = _build_merge_predicate(spec.merge_on)
+    prune = _build_partition_prune_predicate(source, spec.partition_by, spec.merge_on)
+    if prune is not None:
+        predicate = f"{predicate} AND {prune}"
+    rows_written = source.num_rows
     if not DeltaTable.is_deltatable(str(path)):
         write_deltalake(
             str(path),
@@ -364,7 +440,7 @@ def _dispatch_merge_scoped(
             partition_by=spec.partition_by or None,
         )
     else:
-        (
+        merger = (
             DeltaTable(str(path))
             .merge(
                 source=source,
@@ -372,16 +448,22 @@ def _dispatch_merge_scoped(
                 source_alias="source",
                 target_alias="target",
             )
-            .when_matched_update_all()
-            .when_not_matched_insert_all()
-            .execute()
+        )
+        update_predicate = _build_merge_update_predicate(
+            source.column_names, spec.merge_on
+        )
+        if update_predicate is not None:
+            merger = merger.when_matched_update_all(predicate=update_predicate)
+        metrics = merger.when_not_matched_insert_all().execute()
+        rows_written = int(metrics["num_target_rows_inserted"]) + int(
+            metrics["num_target_rows_updated"]
         )
     return WrittenResult(
         class_name=spec.model_cls.__name__,
         path=path,
         mode="merge_scoped",
         predicates=(predicate,),
-        rows_written=source.num_rows,
+        rows_written=rows_written,
     )
 
 

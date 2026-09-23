@@ -3,6 +3,7 @@
 - Added `merge_scoped` writes with registry-declared `merge_on` keys for the 15 currently writable identity-bearing metadata and association classes.
 - All 15 live registry entries now use `merge_scoped`; there are currently zero live `overwrite_scoped` entries. The overwrite dispatcher is intentionally retained for the deferred bulk `SynapseConnectivityLong` registration, where MERGE would be wasteful at 10^7 rows, and remains directly tested until that registration is enabled.
 - Implemented pure Delta MERGE upserts: matching rows are updated, new rows are inserted, and rows absent from the incoming batch are retained.
+- Narrowed each MERGE predicate with the batch's distinct partition values, so a merge reads only the partitions it touches instead of the whole target table.
 - Deduplicated incoming batches on their complete merge key with deterministic last-row-wins behavior.
 - Replaced `DataItem`'s append-only dispatch with merge-scoped upserts, so existing metadata can be updated instead of silently ignored.
 - Enforced nullable `ClusterMembership.item`, `.cluster`, and `.hierarchy_id` fields at the IO boundary through `required_for_write`; the LinkML schema remains optional.
@@ -19,6 +20,8 @@ This PR is based on `wp1-schema-scope` and should be reviewed against that branc
 
 Identity-bearing metadata also needed true update behavior: the previous `append_new_by_id` path skipped an existing `DataItem` instead of applying revised metadata. Delta MERGE makes these incremental workflows transactional at the table-operation level while leaving deletion explicit and separate.
 
+A MERGE predicate built only from `target.col = source.col` equalities gives the Delta planner no literal to compare against file statistics, so it scans every target file. Restating the batch's distinct partition values as literals restores file skipping. Measured on a ten-file table partitioned by `(project_id, hierarchy_id)`, a single-partition merge scanned all ten files with the equality-only predicate and one file with the added constraint. Only columns that are both partition columns and merge keys are constrained: a target row outside the batch's value set for such a column can never satisfy the equality join, so the narrowing removes no candidate match.
+
 Closes #13
 Closes #14
 Closes #15
@@ -30,7 +33,7 @@ Local automated validation:
 
 ```bash
 uv run pytest -q
-# 207 passed
+# 216 passed
 
 uv run ruff check \
   src/connects_common_connectivity/io/write_spec.py \
@@ -58,6 +61,7 @@ The refreshed notebook outputs capture this acceptance run. The capsule identifi
 
 - The per-class `merge_on` assignments in `io/write_spec.py`, especially composite identities for associations and memberships.
 - Pure-upsert semantics: MERGE intentionally does not delete target rows absent from an incoming batch; explicit removal remains separate work.
+- The partition-pruning constraint in `_build_partition_prune_predicate`: its restriction to `partition_by`-and-`merge_on` columns, and its skipping of null values and columns exceeding 100 distinct values.
 - Last-row-wins deduplication for duplicate merge keys within one incoming batch.
 - Keeping `ClusterMembership` fields optional in the shared schema while requiring merge keys only in this IO wrapper.
 - The changed configuration path (`scratch/wp2_acceptance_20260922/`) and committed notebook outputs from Code Ocean acceptance testing.

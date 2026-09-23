@@ -23,7 +23,9 @@ from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
+    _MAX_PRUNE_LITERALS,
     _build_merge_predicate,
+    _build_partition_prune_predicate,
     _build_predicate,
     _deduplicate_on_keys,
     _dispatch_overwrite_scoped,
@@ -89,6 +91,83 @@ def test_build_merge_predicate_uses_all_declared_keys():
     assert _build_merge_predicate(["project_id", "id"]) == (
         "target.project_id = source.project_id AND target.id = source.id"
     )
+
+
+def test_partition_prune_predicate_restates_batch_partition_values():
+    """Partitioned merge keys must be restated as literals for file skipping."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p"],
+            "hierarchy_id": ["h1", "h0"],
+            "item": ["a", "b"],
+        }
+    )
+
+    assert _build_partition_prune_predicate(
+        table, ["project_id", "hierarchy_id"], ["project_id", "hierarchy_id", "item"]
+    ) == (
+        "target.project_id IN ('p') AND target.hierarchy_id IN ('h0', 'h1')"
+    )
+
+
+def test_partition_prune_predicate_skips_columns_outside_merge_keys():
+    """Constraining a partition column that is not a merge key could drop matches."""
+    table = pa.table({"project_id": ["p"], "id": ["a"]})
+
+    assert (
+        _build_partition_prune_predicate(table, ["project_id"], ["id"]) is None
+    )
+
+
+def test_partition_prune_predicate_skips_high_cardinality_columns():
+    """Very wide literal lists cost more to plan than the skipping saves."""
+    values = [f"p{index}" for index in range(_MAX_PRUNE_LITERALS + 1)]
+    table = pa.table({"project_id": values})
+
+    assert (
+        _build_partition_prune_predicate(table, ["project_id"], ["project_id"]) is None
+    )
+
+
+def test_merge_scoped_predicate_prunes_untouched_partitions(settings, read_delta):
+    """A merge must scan only the partitions its source batch touches."""
+    write_models(
+        [
+            ClusterMembership(
+                project_id=project_id,
+                hierarchy_id=hierarchy_id,
+                item=f"cell_{index}",
+                cluster="c0",
+            )
+            for project_id in ("visp_patchseq", "minnie65")
+            for hierarchy_id in ("met_types", "tx_types")
+            for index in range(3)
+        ],
+        settings=settings,
+    )
+
+    result = write_models(
+        [
+            ClusterMembership(
+                project_id="visp_patchseq",
+                hierarchy_id="met_types",
+                item="cell_99",
+                cluster="c1",
+            )
+        ],
+        settings=settings,
+    )
+
+    assert result.predicates == (
+        "target.project_id = source.project_id "
+        "AND target.hierarchy_id = source.hierarchy_id "
+        "AND target.item = source.item "
+        "AND target.cluster = source.cluster "
+        "AND target.project_id IN ('visp_patchseq') "
+        "AND target.hierarchy_id IN ('met_types')",
+    )
+    rows = read_delta(settings.output_root / "clustermembership")
+    assert rows.height == 13, "pruned merge must not drop rows in other partitions"
 
 
 def test_deduplicate_on_keys_keeps_last_row_in_stable_order():
@@ -201,8 +280,11 @@ def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
 def test_merge_scoped_is_idempotent(settings, read_delta):
     """Repeated merges must preserve one unchanged row."""
     ds = DataSet(id="d1", name="example", project_id="p1")
-    write_models(ds, settings=settings)
-    write_models(ds, settings=settings)
+    first = write_models(ds, settings=settings)
+    second = write_models(ds, settings=settings)
+
+    assert first.rows_written == 1
+    assert second.rows_written == 0
     rows = read_delta(settings.output_root / "dataset")
     assert rows.shape[0] == 1, f"idempotent rewrite produced {rows.shape[0]} rows"
     assert rows["id"].to_list() == ["d1"], "row identity changed across rewrites"
@@ -266,7 +348,8 @@ def test_merge_batch_uses_one_identity_predicate(settings, read_delta):
     result = write_models(rows_in, settings=settings)
     assert isinstance(result, WrittenResult)
     assert result.predicates == (
-        "target.project_id = source.project_id AND target.id = source.id",
+        "target.project_id = source.project_id AND target.id = source.id "
+        "AND target.project_id IN ('p1')",
     )
     assert result.rows_written == 2
     # Both end up in the table.
@@ -299,6 +382,26 @@ def test_merge_scoped_inserts_and_updates_dataitems(settings, read_delta):
     rows = read_delta(settings.output_root / "dataitem").sort("id")
     assert sorted(rows["id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
     assert rows.filter(pl.col("id") == "cell_2")["name"].item() == "updated"
+
+
+def test_merge_scoped_counts_only_inserted_and_changed_rows(settings):
+    """Unchanged matches must not contribute to rows_written."""
+    initial = [
+        DataItem(id="cell_1", name="one", project_id="p1"),
+        DataItem(id="cell_2", name="two", project_id="p1"),
+    ]
+    write_models(initial, settings=settings)
+
+    result = write_models(
+        [
+            DataItem(id="cell_1", name="one", project_id="p1"),
+            DataItem(id="cell_2", name="updated", project_id="p1"),
+            DataItem(id="cell_3", name="three", project_id="p1"),
+        ],
+        settings=settings,
+    )
+
+    assert result.rows_written == 2
 
 
 def test_merge_scoped_preserves_shared_scope_contributions(settings, read_delta):

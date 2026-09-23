@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added merge-scoped upserts for identity-bearing metadata and association rows written through `write_models`.
+- Added merge-scoped upserts for identity-bearing metadata and association rows written through `write_models`, scanning only the partitions a batch touches.
 - Added project scoping to `ProjectionMeasurementMatrix`, `SingleCellReconstruction`, and `BrainRegionAssociation`.
 - Added taxonomy-local `hierarchy_id` values to `HierarchyCategory`.
 

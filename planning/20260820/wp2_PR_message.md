@@ -1,70 +1,112 @@
+Replaces scoped-overwrite writes with Delta MERGE upserts so ETL notebooks that
+contribute disjoint rows to a shared scope stop deleting each other's data. All
+15 live registry entries move to `merge_scoped`. Based on `wp1-schema-scope`;
+review against that branch.
+
 ## What changed
 
-- Added `merge_scoped` writes with registry-declared `merge_on` keys for the 15 currently writable identity-bearing metadata and association classes.
-- All 15 live registry entries now use `merge_scoped`; there are currently zero live `overwrite_scoped` entries. The overwrite dispatcher is intentionally retained for the deferred bulk `SynapseConnectivityLong` registration, where MERGE would be wasteful at 10^7 rows, and remains directly tested until that registration is enabled.
-- Implemented pure Delta MERGE upserts: matching rows are updated, new rows are inserted, and rows absent from the incoming batch are retained.
-- Narrowed each MERGE predicate with the batch's distinct partition values, so a merge reads only the partitions it touches instead of the whole target table.
-- Deduplicated incoming batches on their complete merge key with deterministic last-row-wins behavior.
-- Replaced `DataItem`'s append-only dispatch with merge-scoped upserts, so existing metadata can be updated instead of silently ignored.
-- Enforced nullable `ClusterMembership.item`, `.cluster`, and `.hierarchy_id` fields at the IO boundary through `required_for_write`; the LinkML schema remains optional.
-- Preserved discovered `dry_run` and other settings when `output_root` overrides only the write destination, including calls that omit an explicit `settings` argument.
-- Removed the VISp patch-seq notebooks' manual read-union-rewrite workarounds. The notebooks now submit only their own association and membership rows, verify persisted merge-key uniqueness, and assert that merge keys present before each write remain afterward.
-- Refreshed outputs for the Tasic, VISp MET-type, and six VISp patch-seq notebooks from the Code Ocean acceptance run.
-- Removed the unused standalone `append_new_dataitems` helper; `write_models(DataItem)` provides transactional merge-scoped upserts.
+1. **`merge_scoped` write mode**, with per-class identity keys declared in the
+   registry — `write_spec.py::REGISTRY`. `WriteSpec.validate_merge_on` refuses to
+   register a key that is neither schema-required-non-nullable nor listed in
+   `required_for_write`; the writer raises on a null key value. This is how
+   `ClusterMembership.item`, `.cluster`, and `.hierarchy_id` become mandatory at
+   the IO boundary while staying optional in the LinkML schema.
+2. **Pure MERGE upsert dispatch** — `writers.py::_dispatch_merge_scoped`. Matched
+   rows update, new rows insert, rows absent from the batch are retained.
+3. **Partition-pruned merge predicates** — `writers.py::_build_partition_prune_predicate`.
+4. **Last-row-wins batch deduplication** via Arrow group-by — `writers.py::_deduplicate_on_keys`.
+5. **`rows_written` counts inserted + changed rows only** — `writers.py::WrittenResult`,
+   `_build_merge_update_predicate`. An unchanged rerun now reports `0`.
+6. **Quoted column identifiers** in every generated predicate — `writers.py::_quote_identifier`.
+7. **Creation-race handling**: a writer that loses the initial-create race reopens
+   the table and merges — `writers.py::_dispatch_merge_scoped`.
+8. **`dry_run` honored when `output_root` overrides only the destination** —
+   `config.py`, `writers.py::_resolve_output_root`.
+9. **Notebook migration**: the VISp patch-seq notebooks drop their
+   read-union-rewrite workarounds and gain sibling-preservation guards;
+   `etl_wnm_exc_04` moves to `write_models`; the unused
+   `write_utils.append_new_dataitems` helper is deleted.
 
-This PR is based on `wp1-schema-scope` and should be reviewed against that branch.
+`_dispatch_overwrite_scoped` is retained with direct test coverage for the
+deferred bulk `SynapseConnectivityLong` registration, where MERGE would be
+wasteful at 10^7 rows. It has no live registry entry today.
+
+Also in the diff, unrelated to the milestone: two `.github/skills/` entries and a
+`.gitignore` line for `.vscode`.
+
+| Issue | Closed by |
+|---|---|
+| Closes #13 — merge_scoped mode with declared merge_on keys | 1, 2 |
+| Closes #14 — ClusterMembership merge keys in io, not schema | 1 |
+| Closes #15 — multi-writer data loss in shared scopes | 2, 9 |
+| Closes #16 — dry_run ignored when output_root is passed | 8 |
 
 ## Why
 
-`overwrite_scoped` replaced every row in a declared scope. Multiple patch-seq notebooks contribute disjoint rows to the same `(project_id, dataset_id)` association scope and `(project_id, hierarchy_id)` membership scope, so later notebooks silently deleted earlier contributions. The observed inhibitory association count shrank from 2,759 to 520 to 495, and excitatory/inhibitory MET memberships could overwrite one another.
+**Data loss (#15).** `overwrite_scoped` replaced every row in a declared scope.
+Several patch-seq notebooks write disjoint rows into the same
+`(project_id, dataset_id)` and `(project_id, hierarchy_id)` scopes, so later
+notebooks silently deleted earlier contributions — the inhibitory association
+count fell 2,759 → 520 → 495, and excitatory/inhibitory MET memberships could
+overwrite one another. Change 2 makes each contribution an atomic upsert; change
+9 removes the workarounds the notebooks had grown to compensate.
 
-Identity-bearing metadata also needed true update behavior: the previous `append_new_by_id` path skipped an existing `DataItem` instead of applying revised metadata. Delta MERGE makes these incremental workflows transactional at the table-operation level while leaving deletion explicit and separate.
+**Stale metadata.** The old `append_new_by_id` path *skipped* an existing
+`DataItem` rather than applying revised fields. Change 1 gives these classes real
+update semantics while leaving deletion explicit and separate (tracked in #21).
 
-The multi-writer guarantee in this milestone is limited to sequential notebook execution. Each MERGE commit is atomic and later sequential writes preserve earlier contributions, but two writers committing to the same Delta table concurrently can still encounter an optimistic-concurrency conflict. WP2 adds neither automatic retries nor distributed concurrency tests, so closing #15 does not claim that concurrent writes are guaranteed to succeed.
+**Merge cost (change 3).** A predicate built only from `target.c = source.c`
+equalities gives the Delta planner no literal to compare against file statistics,
+so it scans every target file. Restating the batch's distinct partition values as
+literals restores file skipping: `test_merge_scoped_predicate_prunes_untouched_partitions`
+asserts that a single-partition merge into a four-file table scans 1 file and
+skips 3. Only columns that are both partition columns *and* merge keys are
+constrained — a target row outside the batch's value set for such a column can
+never satisfy the equality join — so the narrowing removes no candidate match.
 
-A MERGE predicate built only from `target.col = source.col` equalities gives the Delta planner no literal to compare against file statistics, so it scans every target file. Restating the batch's distinct partition values as literals restores file skipping. Measured on a ten-file table partitioned by `(project_id, hierarchy_id)`, a single-partition merge scanned all ten files with the equality-only predicate and one file with the added constraint. Only columns that are both partition columns and merge keys are constrained: a target row outside the batch's value set for such a column can never satisfy the equality join, so the narrowing removes no candidate match.
-
-Closes #13
-Closes #14
-Closes #15
-Closes #16
+**Scope limit.** The guarantee here is sequential, not concurrent. Each MERGE
+commit is atomic and change 7 covers the initial-create race, but two writers
+committing to the same table simultaneously can still hit an
+optimistic-concurrency conflict. No retries or distributed concurrency tests are
+added, so closing #15 does not claim otherwise.
 
 ## How to test
 
-Local automated validation:
-
 ```bash
-uv run pytest -q
-# 216 passed
-
-uv run ruff check \
-  src/connects_common_connectivity/io/write_spec.py \
-  src/connects_common_connectivity/io/writers.py \
-  tests/test_write_spec.py \
-  tests/test_write_validation.py \
-  tests/test_writers.py
-# passed
+uv run pytest -q          # 215 passed
+uv run ruff check $(git diff --name-only origin/wp1-schema-scope...HEAD -- '*.py')
 ```
 
-The three modified patch-seq notebooks parse as valid JSON and every code cell compiles. `git diff --check` also passes.
+The change-3 file-skipping numbers are asserted from delta-rs merge metrics in
+`tests/test_writers.py`. The modified notebooks parse as valid JSON and every
+code cell compiles; `git diff --check` passes.
 
-The Code Ocean acceptance run used a fresh `scratch/wp2_acceptance_20260922/` output root and executed the Tasic taxonomy, VISp MET-type taxonomy, and six excitatory/inhibitory patch-seq notebooks. The incremental notebooks were rerun without clearing the output. Persisted results remained stable:
+A Code Ocean acceptance run (2026-09-22, fresh `scratch/wp2_acceptance_20260922/`
+output root) executed the Tasic and VISp MET-type taxonomies plus six patch-seq
+notebooks, then reran the incremental ones without clearing output: 2,879
+inhibitory associations, 2,637 MET memberships (1,152 exc + 1,485 inh) across 879
+distinct items, zero duplicate association or membership merge keys, all notebook
+assertions passing. The capsule id, tested SHA, and data-asset versions were not
+recorded in the handover report.
 
-- 2,879 inhibitory dataset associations;
-- 2,637 shared MET hierarchy memberships: 1,152 excitatory plus 1,485 inhibitory;
-- 879 distinct membership items: 384 excitatory plus 495 inhibitory;
-- zero duplicate `(project_id, dataset_id, dataitem_id)` association keys;
-- zero duplicate `(project_id, hierarchy_id, item, cluster)` membership keys;
-- all notebook assertions passed on the initial run and rerun.
+> **Caveat — the committed notebook outputs are older than the code.** The
+> sibling-preservation guards and the `etl_wnm_exc_04` migration (change 9) were
+> added after that run and have never been executed: those cells carry
+> `execution_count: null` beside outputs from the earlier run. Changes 3–7 are
+> covered by the test suite but are likewise absent from the committed outputs.
+> Read the numbers above as evidence for the first-pass implementation only; a
+> rerun is needed before merge.
 
-The refreshed notebook outputs capture this acceptance run. The capsule identifier, exact tested commit SHA, and attached data-asset versions were not recorded in the handover report.
+## Reviewer focus
 
-## Reviewer focus (optional)
-
-- The per-class `merge_on` assignments in `io/write_spec.py`, especially composite identities for associations and memberships.
-- Pure-upsert semantics: MERGE intentionally does not delete target rows absent from an incoming batch; explicit removal remains separate work.
-- The partition-pruning constraint in `_build_partition_prune_predicate`: its restriction to `partition_by`-and-`merge_on` columns, and its skipping of null values and columns exceeding 100 distinct values.
-- Last-row-wins deduplication for duplicate merge keys within one incoming batch.
-- Keeping `ClusterMembership` fields optional in the shared schema while requiring merge keys only in this IO wrapper.
-- The changed configuration path (`scratch/wp2_acceptance_20260922/`) and committed notebook outputs from Code Ocean acceptance testing.
-- Deferred decisions documented in `planning/20260820/wp2_out_of_scope_findings.md`: optimistic-concurrency retries and richer MERGE metrics in `WrittenResult`.
+- Composite `merge_on` choices for associations and memberships
+  (`write_spec.py::REGISTRY`) — a wrong key silently merges distinct rows.
+- `validate_merge_on` is the only barrier against adopting a nullable merge key.
+- `_build_partition_prune_predicate`: the 100-literal ceiling and the null skip.
+- Pure-upsert semantics: MERGE deliberately does not delete target rows missing
+  from a batch; explicit removal stays separate work.
+- Change 5 alters what an unchanged rerun reports — confirm no caller depends on
+  the old count.
+- Whether to rerun acceptance testing on the reviewed code before merge.
+- Deferred decisions in `planning/20260820/wp2_out_of_scope_findings.md`:
+  concurrency retries, richer MERGE metrics, repository-wide Ruff backlog.

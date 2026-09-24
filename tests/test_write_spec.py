@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
 
+
 def test_registry_contains_seed_entries():
     """The writer registry must contain its foundational model entries."""
     seed = {"DataSet", "DataItem", "DataItemDataSetAssociation"}

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed Delta writes for column names that overlap SQL keywords or contain special characters.
 - Fixed later writes deleting rows contributed by other ETL notebooks in shared dataset and hierarchy scopes.
+- Fixed mappings and feature-matrix pointers with the same local ID merging across different parent sets.
 - Fixed existing `DataItem` metadata updates being silently ignored.
 - Fixed `dry_run` being ignored when `output_root` overrides the configured destination.
 - Fixed generated `CellFeatureMeasurement` models to include `feature_set_id` and `unit`, and to accept valid NumPy dtype strings.

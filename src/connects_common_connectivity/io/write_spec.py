@@ -42,7 +42,32 @@ def _allows_none(annotation: Any) -> bool:
 
 
 class WriteSpec(BaseModel):
-    """Declarative description of how a model class is written to Delta."""
+    """Declarative policy for validating and writing one model class to Delta.
+
+    Attributes
+    ----------
+    model_cls:
+        Exact generated Pydantic model class accepted by this policy.
+    subdir:
+        Delta table directory relative to the configured output root.
+    partition_by:
+        Columns used to partition the Delta table. Merge writes may also use
+        qualifying partition columns to narrow the target scan.
+    scope_columns:
+        Columns defining replacement groups for ``overwrite_scoped`` writes.
+        They do not determine identity for ``merge_scoped`` writes.
+    write_mode:
+        Dispatch strategy used by :func:`~connects_common_connectivity.io.writers.write_models`.
+    merge_on:
+        Complete row identity for ``merge_scoped`` writes. It must be non-empty
+        only for that mode, and every key must be non-null at write time.
+    required_for_write:
+        Model fields made required and non-null by IO-layer validation without
+        changing the shared LinkML schema.
+    cross_field_rules:
+        Reserved names for cross-field validation rules. The current write path
+        does not consume them.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -159,11 +184,9 @@ REGISTRY: dict[str, WriteSpec] = {
         model_cls=CellToClusterMapping,
         subdir="celltoclustermapping",
         partition_by=["project_id"],
-        # Notebooks predicate on (project_id, mapping_set), which is the
-        # mapping-set foreign key on the row.
         scope_columns=["project_id", "mapping_set"],
         write_mode="merge_scoped",
-        merge_on=["project_id", "id"],
+        merge_on=["project_id", "mapping_set", "id"],
     ),
     "CellFeatureSet": WriteSpec(
         model_cls=CellFeatureSet,
@@ -193,7 +216,7 @@ REGISTRY: dict[str, WriteSpec] = {
         # instance, so it does not flow through ``write_models`` and stays
         # outside the registry.
         write_mode="merge_scoped",
-        merge_on=["project_id", "id"],
+        merge_on=["project_id", "feature_set_id", "id"],
     ),
     "ProjectionMeasurementMatrix": WriteSpec(
         model_cls=ProjectionMeasurementMatrix,

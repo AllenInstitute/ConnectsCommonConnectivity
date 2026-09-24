@@ -612,6 +612,79 @@ def test_merge_scoped_preserves_shared_hierarchy_memberships(settings, read_delt
     ]
 
 
+def test_mapping_ids_are_local_to_mapping_set(settings, read_delta):
+    """Independent mapping sets may reuse a deterministic child ID."""
+    first = CellToClusterMapping(
+        id="cell_1-c1",
+        project_id="p1",
+        mapping_set="ground_truth",
+        source_cell="cell_1",
+        target_cluster="c1",
+        probability=0.8,
+    )
+    second = first.model_copy(
+        update={"mapping_set": "curated", "probability": 0.9}
+    )
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+    updated = write_models(
+        second.model_copy(update={"probability": 0.95}), settings=settings
+    )
+
+    rows = read_delta(settings.output_root / "celltoclustermapping").sort(
+        "mapping_set"
+    )
+    assert updated.rows_written == 1
+    assert rows.select("mapping_set", "id", "probability").to_dicts() == [
+        {"mapping_set": "curated", "id": "cell_1-c1", "probability": 0.95},
+        {"mapping_set": "ground_truth", "id": "cell_1-c1", "probability": 0.8},
+    ]
+
+
+def test_matrix_ids_are_local_to_feature_set(settings, read_delta):
+    """Feature sets may publish matrices with the same local matrix ID."""
+    first = CellFeatureMatrix(
+        id="measurements",
+        project_id="p1",
+        feature_set_id="morphology",
+        parquet_path="file:///tmp/morphology.parquet",
+        cell_index_column="id",
+    )
+    second = first.model_copy(
+        update={
+            "feature_set_id": "electrophysiology",
+            "parquet_path": "file:///tmp/electrophysiology.parquet",
+        }
+    )
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+    updated = write_models(
+        second.model_copy(
+            update={"parquet_path": "file:///tmp/electrophysiology-v2.parquet"}
+        ),
+        settings=settings,
+    )
+
+    rows = read_delta(settings.output_root / "cellfeaturematrix").sort(
+        "feature_set_id"
+    )
+    assert updated.rows_written == 1
+    assert rows.select("feature_set_id", "id", "parquet_path").to_dicts() == [
+        {
+            "feature_set_id": "electrophysiology",
+            "id": "measurements",
+            "parquet_path": "file:///tmp/electrophysiology-v2.parquet",
+        },
+        {
+            "feature_set_id": "morphology",
+            "id": "measurements",
+            "parquet_path": "file:///tmp/morphology.parquet",
+        },
+    ]
+
+
 def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
     """Duplicate source identities must keep the final input row."""
     items = [

@@ -11,6 +11,10 @@ review against that branch.
    `required_for_write`; the writer raises on a null key value. This is how
    `ClusterMembership.item`, `.cluster`, and `.hierarchy_id` become mandatory at
    the IO boundary while staying optional in the LinkML schema.
+   `CellToClusterMapping` and `CellFeatureMatrix` include their parent
+   `mapping_set` and `feature_set_id` respectively, so identical local child IDs
+   can coexist across independent sets. Both foreign keys already exist and are
+   required in the schema; no LinkML or Delta table schema migration is needed.
 2. **Pure MERGE upsert dispatch** — `writers.py::_dispatch_merge_scoped`. Matched
    rows update, new rows insert, rows absent from the batch are retained.
 3. **Partition-pruned merge predicates** — `writers.py::_build_partition_prune_predicate`.
@@ -26,6 +30,13 @@ review against that branch.
    read-union-rewrite workarounds and gain sibling-preservation guards;
    `etl_wnm_exc_04` moves to `write_models`; the unused
    `write_utils.append_new_dataitems` helper is deleted.
+
+Existing ETLs already populate `mapping_set` and `feature_set_id`, so their model
+constructors do not change for the parent-set identity correction. The usage
+contract is now explicit: rerunning the same child ID in the same set updates it;
+an independent run, curation pass, or matrix publication uses a distinct parent
+set and creates a distinct row. Changing a row's parent set is not a move under
+pure-upsert semantics; removal of the old identity remains explicit work (#21).
 
 `_dispatch_overwrite_scoped` is retained with direct test coverage for the
 deferred bulk `SynapseConnectivityLong` registration, where MERGE would be
@@ -55,6 +66,14 @@ overwrite one another. Change 2 makes each contribution an atomic upsert; change
 `DataItem` rather than applying revised fields. Change 1 gives these classes real
 update semantics while leaving deletion explicit and separate (tracked in #21).
 
+**Parent-set identity.** `CellToClusterMapping` ETLs derive deterministic row IDs
+from the cell, cluster, project, and target hierarchy. Two mapping sets over the
+same hierarchy can therefore reuse an ID. Including `mapping_set` in the merge
+key preserves both results instead of rewriting the first row's parent set.
+`CellFeatureMatrix` follows the same rule with `feature_set_id`; current ETL IDs
+often encode that value, but correctness no longer depends on the naming
+convention.
+
 **Merge cost (change 3).** A predicate built only from `target.c = source.c`
 equalities gives the Delta planner no literal to compare against file statistics,
 so it scans every target file. Restating the batch's distinct partition values as
@@ -73,7 +92,7 @@ added, so closing #15 does not claim otherwise.
 ## How to test
 
 ```bash
-uv run pytest -q          # 215 passed
+uv run pytest -q          # 218 passed
 uv run ruff check $(git diff --name-only origin/wp1-schema-scope...HEAD -- '*.py')
 ```
 
@@ -101,6 +120,9 @@ recorded in the handover report.
 
 - Composite `merge_on` choices for associations and memberships
   (`write_spec.py::REGISTRY`) — a wrong key silently merges distinct rows.
+- Parent-set-local identity for `CellToClusterMapping` and `CellFeatureMatrix`:
+   the same child `id` may coexist across sets, while a rewrite within one set
+   remains an update.
 - `validate_merge_on` is the only barrier against adopting a nullable merge key.
 - `_build_partition_prune_predicate`: the 100-literal ceiling and the null skip.
 - Pure-upsert semantics: MERGE deliberately does not delete target rows missing

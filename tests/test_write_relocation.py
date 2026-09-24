@@ -24,7 +24,6 @@ from connects_common_connectivity.io.arrow_utils import (
     models_to_table,
 )
 from connects_common_connectivity.io.write_utils import (
-    append_new_dataitems,
     populate_region_coverage,
     walk_ancestors,
 )
@@ -111,7 +110,6 @@ def test_public_names_from_io_paths():
         build_arrow_schema,
         build_cell_feature_matrix_schema,
         models_to_table,
-        append_new_dataitems,
         populate_region_coverage,
         walk_ancestors,
     ):

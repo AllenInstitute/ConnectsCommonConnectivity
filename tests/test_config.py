@@ -8,14 +8,18 @@ from pathlib import Path
 import pytest
 import yaml
 from pydantic import ValidationError
+
 from connects_common_connectivity.config import (
     CONFIG_FILENAME,
+    ConfigNotFoundError,
     Settings,
     find_config_file,
     get_settings,
 )
 from connects_common_connectivity.io import (
     Settings as IOSettings,
+)
+from connects_common_connectivity.io import (
     get_settings as io_get_settings,
 )
 
@@ -29,8 +33,10 @@ def _write_config(dir_: Path, **values) -> Path:
 def test_get_settings_raises_actionable_error_when_missing(tmp_path):
     """Missing config must raise an error that names the expected file."""
     # tmp_path has no ccc_config.yaml anywhere up the tree (we chdir'd into it).
-    with pytest.raises(RuntimeError, match=CONFIG_FILENAME):
+    with pytest.raises(ConfigNotFoundError, match=CONFIG_FILENAME) as exc_info:
         get_settings()
+
+    assert isinstance(exc_info.value, RuntimeError)
 
 
 def test_find_and_load_from_nested_cwd(tmp_path, monkeypatch):

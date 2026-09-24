@@ -4,8 +4,7 @@ Covers:
 
 * The patchseq regression — overlapping ``project_id`` writes do not wipe
   each other (the original motivating bug).
-* Idempotency, multi-scope-group dispatch, predicate construction.
-* Append-new-by-id semantics.
+* Idempotency, merge dispatch, predicate construction, and batch deduplication.
 * A per-class round-trip smoke test for every entry in ``WRITABLE_CLASSES``.
 * ``write_projection_matrix`` enrichment + write.
 """
@@ -16,14 +15,24 @@ import numpy as np
 import polars as pl
 import pyarrow as pa
 import pytest
+import yaml
+from deltalake.exceptions import DeltaError
+from deltalake.table import TableMerger
 from pydantic import BaseModel
 
-from connects_common_connectivity.config import Settings
-from connects_common_connectivity.io.write_spec import REGISTRY
+from connects_common_connectivity.config import ConfigNotFoundError, Settings
+from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.writers import (
+    _MAX_PRUNE_LITERALS,
     WRITABLE_CLASSES,
     WrittenResult,
+    _build_merge_predicate,
+    _build_merge_update_predicate,
+    _build_partition_prune_predicate,
     _build_predicate,
+    _deduplicate_on_keys,
+    _dispatch_merge_scoped,
+    _dispatch_overwrite_scoped,
     _group_by_scope,
     write_models,
     write_projection_matrix,
@@ -59,11 +68,11 @@ def test_build_predicate_format():
     """Predicates must join scoped equality clauses with SQL conjunctions."""
     assert (
         _build_predicate(["project_id"], ["minnie65"])
-        == "project_id = 'minnie65'"
+        == '"project_id" = \'minnie65\''
     )
     assert (
         _build_predicate(["project_id", "id"], ["minnie65", "ds_a"])
-        == "project_id = 'minnie65' AND id = 'ds_a'"
+        == '"project_id" = \'minnie65\' AND "id" = \'ds_a\''
     )
 
 
@@ -78,7 +87,193 @@ def test_build_predicate_format():
 )
 def test_build_predicate_escapes(value, expected_literal):
     """Predicate values must be escaped as valid SQL string literals."""
-    assert _build_predicate(["name"], [value]) == f"name = {expected_literal}"
+    assert _build_predicate(["name"], [value]) == f'"name" = {expected_literal}'
+
+
+def test_build_merge_predicate_uses_all_declared_keys():
+    """Merge predicates must compare every identity column through aliases."""
+    assert _build_merge_predicate(["project_id", "id"]) == (
+        'target."project_id" = source."project_id" '
+        'AND target."id" = source."id"'
+    )
+
+
+def test_merge_predicates_quote_keyword_like_and_escaped_identifiers():
+    """Merge expressions must quote identifiers and escape embedded quotes."""
+    assert _build_merge_predicate(["item", 'cluster"name']) == (
+        'target."item" = source."item" '
+        'AND target."cluster""name" = source."cluster""name"'
+    )
+    assert _build_merge_update_predicate(["item", "order"], ["item"]) == (
+        '(source."order" IS DISTINCT FROM target."order")'
+    )
+
+
+def test_partition_prune_predicate_restates_batch_partition_values():
+    """Partitioned merge keys must be restated as literals for file skipping."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p"],
+            "hierarchy_id": ["h1", "h0"],
+            "item": ["a", "b"],
+        }
+    )
+
+    assert _build_partition_prune_predicate(
+        table, ["project_id", "hierarchy_id"], ["project_id", "hierarchy_id", "item"]
+    ) == (
+        'target."project_id" IN (\'p\') '
+        'AND target."hierarchy_id" IN (\'h0\', \'h1\')'
+    )
+
+
+def test_partition_prune_predicate_skips_columns_outside_merge_keys():
+    """Constraining a partition column that is not a merge key could drop matches."""
+    table = pa.table({"project_id": ["p"], "id": ["a"]})
+
+    assert (
+        _build_partition_prune_predicate(table, ["project_id"], ["id"]) is None
+    )
+
+
+def test_partition_prune_predicate_skips_high_cardinality_columns():
+    """Very wide literal lists cost more to plan than the skipping saves."""
+    values = [f"p{index}" for index in range(_MAX_PRUNE_LITERALS + 1)]
+    table = pa.table({"project_id": values})
+
+    assert (
+        _build_partition_prune_predicate(table, ["project_id"], ["project_id"]) is None
+    )
+
+
+def test_merge_scoped_predicate_prunes_untouched_partitions(
+    settings, read_delta, monkeypatch
+):
+    """A merge must scan only the partitions its source batch touches."""
+    merge_metrics = {}
+    original_execute = TableMerger.execute
+
+    def capture_metrics(merger):
+        metrics = original_execute(merger)
+        merge_metrics.update(metrics)
+        return metrics
+
+    monkeypatch.setattr(TableMerger, "execute", capture_metrics)
+
+    write_models(
+        [
+            ClusterMembership(
+                project_id=project_id,
+                hierarchy_id=hierarchy_id,
+                item=f"cell_{index}",
+                cluster="c0",
+            )
+            for project_id in ("visp_patchseq", "minnie65")
+            for hierarchy_id in ("met_types", "tx_types")
+            for index in range(3)
+        ],
+        settings=settings,
+    )
+
+    result = write_models(
+        [
+            ClusterMembership(
+                project_id="visp_patchseq",
+                hierarchy_id="met_types",
+                item="cell_99",
+                cluster="c1",
+            )
+        ],
+        settings=settings,
+    )
+
+    assert result.predicates == (
+        'target."project_id" = source."project_id" '
+        'AND target."hierarchy_id" = source."hierarchy_id" '
+        'AND target."item" = source."item" '
+        'AND target."cluster" = source."cluster" '
+        'AND target."project_id" IN (\'visp_patchseq\') '
+        'AND target."hierarchy_id" IN (\'met_types\')',
+    )
+    assert merge_metrics["num_target_files_scanned"] == 1
+    assert merge_metrics["num_target_files_skipped_during_scan"] == 3
+    rows = read_delta(settings.output_root / "clustermembership")
+    assert rows.height == 13, "pruned merge must not drop rows in other partitions"
+
+
+def test_deduplicate_on_keys_keeps_last_row_in_stable_order():
+    """Later source rows must deterministically replace earlier duplicate keys."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p", "p"],
+            "id": ["a", "b", "a"],
+            "value": [1, 2, 3],
+        }
+    )
+
+    deduplicated = _deduplicate_on_keys(table, ["project_id", "id"])
+
+    assert deduplicated.to_pylist() == [
+        {"project_id": "p", "id": "b", "value": 2},
+        {"project_id": "p", "id": "a", "value": 3},
+    ]
+
+
+def test_deduplicate_on_keys_supports_chunked_keys_and_empty_tables():
+    """Arrow-native deduplication must handle chunk boundaries and no rows."""
+    chunked = pa.table(
+        {
+            "id": pa.chunked_array([["a", "b"], ["a"]]),
+            "value": [1, 2, 3],
+        }
+    )
+    empty = pa.table(
+        {
+            "id": pa.array([], type=pa.string()),
+            "value": pa.array([], type=pa.int64()),
+        }
+    )
+
+    assert _deduplicate_on_keys(chunked, ["id"]).to_pylist() == [
+        {"id": "b", "value": 2},
+        {"id": "a", "value": 3},
+    ]
+    assert _deduplicate_on_keys(empty, ["id"]).equals(empty)
+
+
+def test_deduplicate_on_keys_rejects_earliest_null_key():
+    """Null validation must report the first invalid row across all key columns."""
+    table = pa.table(
+        {
+            "project_id": ["p", None, "p"],
+            "id": [None, "a", "b"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"row 0 has key \('p', None\)",
+    ):
+        _deduplicate_on_keys(table, ["project_id", "id"])
+
+
+def test_deduplicate_on_keys_avoids_temporary_column_collisions():
+    """A source column resembling the internal row index must be preserved."""
+    table = pa.table(
+        {
+            "id": ["a", "a"],
+            "__ccc_row_index": [10, 20],
+            "__ccc_row_index__max": [30, 40],
+        }
+    )
+
+    assert _deduplicate_on_keys(table, ["id"]).to_pylist() == [
+        {
+            "id": "a",
+            "__ccc_row_index": 20,
+            "__ccc_row_index__max": 40,
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +298,139 @@ def test_group_by_scope_preserves_first_appearance_order():
     assert first_sub.column("value").to_pylist() == [1, 3]
 
 
+def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
+    tmp_path, monkeypatch
+):
+    """The retained bulk-table dispatcher must issue one overwrite per scope."""
+    table = pa.table(
+        {
+            "project_id": ["p", "p", "p"],
+            "dataset_id": ["a", "b", "a"],
+            "value": [1, 2, 3],
+        }
+    )
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="synapse",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "dataset_id"],
+        write_mode="overwrite_scoped",
+    )
+    calls = []
+
+    def record_write(path, batch, **kwargs):
+        calls.append((path, batch.to_pylist(), kwargs))
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake", record_write
+    )
+
+    path = tmp_path / "synapse"
+    result = _dispatch_overwrite_scoped(table, spec, path)
+
+    assert result.mode == "overwrite_scoped"
+    assert result.predicates == (
+        '"project_id" = \'p\' AND "dataset_id" = \'a\'',
+        '"project_id" = \'p\' AND "dataset_id" = \'b\'',
+    )
+    assert result.rows_written == 3
+    assert [call[1] for call in calls] == [
+        [
+            {"project_id": "p", "dataset_id": "a", "value": 1},
+            {"project_id": "p", "dataset_id": "a", "value": 3},
+        ],
+        [{"project_id": "p", "dataset_id": "b", "value": 2}],
+    ]
+    assert all(call[2]["mode"] == "overwrite" for call in calls)
+    assert all(call[2]["partition_by"] == ["project_id"] for call in calls)
+
+
+def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypatch):
+    """A writer losing table creation must reopen and merge its batch."""
+    table = pa.table({"project_id": ["p1"], "id": ["d1"], "name": ["one"]})
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="dataset",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
+    )
+    events = []
+    table_checks = iter([False, True])
+
+    class FakeMerger:
+        def when_matched_update_all(self, **kwargs):
+            return self
+
+        def when_not_matched_insert_all(self):
+            return self
+
+        def execute(self):
+            events.append("merge")
+            return {"num_target_rows_inserted": 1, "num_target_rows_updated": 0}
+
+    class FakeDeltaTable:
+        @staticmethod
+        def is_deltatable(path):
+            return next(table_checks)
+
+        def __init__(self, path):
+            events.append("reopen")
+
+        def merge(self, **kwargs):
+            return FakeMerger()
+
+    def lose_creation_race(*args, **kwargs):
+        events.append("create")
+        raise DeltaError("table already exists")
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.DeltaTable", FakeDeltaTable
+    )
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake",
+        lose_creation_race,
+    )
+
+    result = _dispatch_merge_scoped(table, spec, tmp_path / "dataset")
+
+    assert events == ["create", "reopen", "merge"]
+    assert result.rows_written == 1
+
+
+def test_merge_scoped_reraises_unrelated_creation_error(tmp_path, monkeypatch):
+    """A creation failure must be preserved when no competing table appeared."""
+    table = pa.table({"project_id": ["p1"], "id": ["d1"], "name": ["one"]})
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="dataset",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
+    )
+    creation_error = DeltaError("permission denied")
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.DeltaTable.is_deltatable",
+        lambda path: False,
+    )
+
+    def fail_creation(*args, **kwargs):
+        raise creation_error
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake",
+        fail_creation,
+    )
+
+    with pytest.raises(DeltaError) as raised:
+        _dispatch_merge_scoped(table, spec, tmp_path / "dataset")
+
+    assert raised.value is creation_error
+
+
 # ---------------------------------------------------------------------------
 # Patchseq regression: the headline test
 # ---------------------------------------------------------------------------
@@ -123,11 +451,14 @@ def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
     )
 
 
-def test_overwrite_scoped_is_idempotent(settings, read_delta):
-    """Repeated scoped overwrites must preserve one unchanged row."""
+def test_merge_scoped_is_idempotent(settings, read_delta):
+    """Repeated merges must preserve one unchanged row."""
     ds = DataSet(id="d1", name="example", project_id="p1")
-    write_models(ds, settings=settings)
-    write_models(ds, settings=settings)
+    first = write_models(ds, settings=settings)
+    second = write_models(ds, settings=settings)
+
+    assert first.rows_written == 1
+    assert second.rows_written == 0
     rows = read_delta(settings.output_root / "dataset")
     assert rows.shape[0] == 1, f"idempotent rewrite produced {rows.shape[0]} rows"
     assert rows["id"].to_list() == ["d1"], "row identity changed across rewrites"
@@ -182,15 +513,19 @@ def test_dry_run_does_not_write(tmp_path):
     assert not (tmp_path / "dataset").exists(), "dry_run must not create tables"
 
 
-def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, read_delta):
-    """Multi-scope writes must emit one predicate per persisted group."""
+def test_merge_batch_uses_one_identity_predicate(settings, read_delta):
+    """One merge transaction must handle all identities in a batch."""
     rows_in = [
         DataSet(id="a", name="A", project_id="p1"),
         DataSet(id="b", name="B", project_id="p1"),
     ]
     result = write_models(rows_in, settings=settings)
     assert isinstance(result, WrittenResult)
-    assert len(result.predicates) == 2
+    assert result.predicates == (
+        'target."project_id" = source."project_id" '
+        'AND target."id" = source."id" '
+        'AND target."project_id" IN (\'p1\')',
+    )
     assert result.rows_written == 2
     # Both end up in the table.
     rows = read_delta(settings.output_root / "dataset")
@@ -198,40 +533,207 @@ def test_multi_scope_group_dispatch_yields_one_predicate_per_group(settings, rea
 
 
 # ---------------------------------------------------------------------------
-# append_new_by_id semantics (DataItem)
+# merge_scoped semantics
 # ---------------------------------------------------------------------------
 
 
-def test_append_new_by_id_only_appends_unseen(settings, read_delta):
-    """Append-by-ID writes must persist only previously unseen identifiers."""
+def test_merge_scoped_inserts_and_updates_dataitems(settings, read_delta):
+    """DataItem writes must insert unseen IDs and update existing metadata."""
     items_first = [
         DataItem(id="cell_1", name="cell_1", project_id="p1"),
         DataItem(id="cell_2", name="cell_2", project_id="p1"),
     ]
     r1 = write_models(items_first, settings=settings)
-    assert r1.mode == "append_new_by_id"
-    assert r1.predicates == ()
+    assert r1.mode == "merge_scoped"
     assert r1.rows_written == 2
 
     items_second = [
-        DataItem(id="cell_2", name="cell_2", project_id="p1"),  # already there
+        DataItem(id="cell_2", name="updated", project_id="p1"),
         DataItem(id="cell_3", name="cell_3", project_id="p1"),  # new
     ]
     r2 = write_models(items_second, settings=settings)
-    assert r2.rows_written == 1
+    assert r2.rows_written == 2
 
-    rows = read_delta(settings.output_root / "dataitem")
+    rows = read_delta(settings.output_root / "dataitem").sort("id")
     assert sorted(rows["id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
+    assert rows.filter(pl.col("id") == "cell_2")["name"].item() == "updated"
 
 
-def test_append_new_by_id_rejects_mixed_project_ids(settings):
-    """Append-by-ID batches must reject mixed project identifiers."""
-    bad = [
-        DataItem(id="x", name="x", project_id="p1"),
-        DataItem(id="y", name="y", project_id="p2"),
+def test_merge_scoped_counts_only_inserted_and_changed_rows(settings):
+    """Unchanged matches must not contribute to rows_written."""
+    initial = [
+        DataItem(id="cell_1", name="one", project_id="p1"),
+        DataItem(id="cell_2", name="two", project_id="p1"),
     ]
-    with pytest.raises(ValueError, match="single project_id"):
-        write_models(bad, settings=settings)
+    write_models(initial, settings=settings)
+
+    result = write_models(
+        [
+            DataItem(id="cell_1", name="one", project_id="p1"),
+            DataItem(id="cell_2", name="updated", project_id="p1"),
+            DataItem(id="cell_3", name="three", project_id="p1"),
+        ],
+        settings=settings,
+    )
+
+    assert result.rows_written == 2
+
+
+def test_merge_scoped_preserves_shared_scope_contributions(settings, read_delta):
+    """A later writer must not delete associations from an earlier writer."""
+    first = [
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_1"
+        ),
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_2"
+        ),
+    ]
+    second = [
+        DataItemDataSetAssociation(
+            project_id="p1", dataset_id="d1", dataitem_id="cell_3"
+        )
+    ]
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+
+    rows = read_delta(settings.output_root / "dataitem_dataset_association")
+    assert sorted(rows["dataitem_id"].to_list()) == ["cell_1", "cell_2", "cell_3"]
+
+
+def test_merge_scoped_preserves_shared_hierarchy_memberships(settings, read_delta):
+    """Excitatory and inhibitory writers must coexist in one hierarchy scope."""
+    excitatory = [
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="exc_1",
+            cluster="met_a",
+        ),
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="exc_1",
+            cluster="root",
+        ),
+    ]
+    inhibitory = [
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="inh_1",
+            cluster="met_b",
+        ),
+        ClusterMembership(
+            project_id="visp_patchseq",
+            hierarchy_id="visp_met_types_taxonomy",
+            item="inh_1",
+            cluster="root",
+        ),
+    ]
+
+    write_models(excitatory, settings=settings)
+    write_models(inhibitory, settings=settings)
+
+    rows = read_delta(settings.output_root / "clustermembership")
+    assert sorted(rows.select("item", "cluster").rows()) == [
+        ("exc_1", "met_a"),
+        ("exc_1", "root"),
+        ("inh_1", "met_b"),
+        ("inh_1", "root"),
+    ]
+
+
+def test_mapping_ids_are_local_to_mapping_set(settings, read_delta):
+    """Independent mapping sets may reuse a deterministic child ID."""
+    first = CellToClusterMapping(
+        id="cell_1-c1",
+        project_id="p1",
+        mapping_set="ground_truth",
+        source_cell="cell_1",
+        target_cluster="c1",
+        probability=0.8,
+    )
+    second = first.model_copy(
+        update={"mapping_set": "curated", "probability": 0.9}
+    )
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+    updated = write_models(
+        second.model_copy(update={"probability": 0.95}), settings=settings
+    )
+
+    rows = read_delta(settings.output_root / "celltoclustermapping").sort(
+        "mapping_set"
+    )
+    assert updated.rows_written == 1
+    assert rows.select("mapping_set", "id", "probability").to_dicts() == [
+        {"mapping_set": "curated", "id": "cell_1-c1", "probability": 0.95},
+        {"mapping_set": "ground_truth", "id": "cell_1-c1", "probability": 0.8},
+    ]
+
+
+def test_matrix_ids_are_local_to_feature_set(settings, read_delta):
+    """Feature sets may publish matrices with the same local matrix ID."""
+    first = CellFeatureMatrix(
+        id="measurements",
+        project_id="p1",
+        feature_set_id="morphology",
+        parquet_path="file:///tmp/morphology.parquet",
+        cell_index_column="id",
+    )
+    second = first.model_copy(
+        update={
+            "feature_set_id": "electrophysiology",
+            "parquet_path": "file:///tmp/electrophysiology.parquet",
+        }
+    )
+
+    write_models(first, settings=settings)
+    write_models(second, settings=settings)
+    updated = write_models(
+        second.model_copy(
+            update={"parquet_path": "file:///tmp/electrophysiology-v2.parquet"}
+        ),
+        settings=settings,
+    )
+
+    rows = read_delta(settings.output_root / "cellfeaturematrix").sort(
+        "feature_set_id"
+    )
+    assert updated.rows_written == 1
+    assert rows.select("feature_set_id", "id", "parquet_path").to_dicts() == [
+        {
+            "feature_set_id": "electrophysiology",
+            "id": "measurements",
+            "parquet_path": "file:///tmp/electrophysiology-v2.parquet",
+        },
+        {
+            "feature_set_id": "morphology",
+            "id": "measurements",
+            "parquet_path": "file:///tmp/morphology.parquet",
+        },
+    ]
+
+
+def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
+    """Duplicate source identities must keep the final input row."""
+    items = [
+        DataItem(id="cell_1", name="first", project_id="p1"),
+        DataItem(id="cell_2", name="other", project_id="p1"),
+        DataItem(id="cell_1", name="last", project_id="p1"),
+    ]
+
+    result = write_models(items, settings=settings)
+
+    assert result.rows_written == 2
+    rows = read_delta(settings.output_root / "dataitem").sort("id")
+    assert rows.select("id", "name").to_dicts() == [
+        {"id": "cell_1", "name": "last"},
+        {"id": "cell_2", "name": "other"},
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -473,8 +975,44 @@ def test_write_models_rejects_unregistered_pydantic_model(settings):
 # ---------------------------------------------------------------------------
 
 
+def test_write_models_output_root_works_without_discoverable_config(tmp_path):
+    """An explicit root uses default controls when no config is discoverable."""
+    output_root = tmp_path / "isolated_dataset"
+    ds = DataSet(id="d_isolated", name="isolated", project_id="p_isolated")
+
+    result = write_models(ds, output_root=output_root)
+
+    assert result.path == output_root / "dataset"
+    rows = pl.read_delta(str(output_root / "dataset")).filter(
+        pl.col("id") == "d_isolated"
+    )
+    assert rows.shape[0] == 1
+
+
+def test_write_models_without_settings_or_output_root_requires_config():
+    """A write with no configuration source must retain the discovery error."""
+    ds = DataSet(id="d_missing", name="missing", project_id="p_missing")
+
+    with pytest.raises(ConfigNotFoundError, match="ccc_config.yaml"):
+        write_models(ds)
+
+
+def test_write_models_output_root_does_not_hide_malformed_config(tmp_path):
+    """An explicit root must not suppress errors from a discovered config."""
+    (tmp_path / "ccc_config.yaml").write_text("- invalid\n")
+    ds = DataSet(id="d_invalid", name="invalid", project_id="p_invalid")
+
+    with pytest.raises(RuntimeError, match="expected a YAML mapping"):
+        write_models(ds, output_root=tmp_path / "isolated_dataset")
+
+
 def test_write_models_output_root_override_writes_to_given_path(tmp_path):
-    """Passing output_root= writes under that root, bypassing get_settings()."""
+    """Passing output_root= overrides the root from discovered settings."""
+    config = {
+        "output_root": str(tmp_path / "configured"),
+        "dry_run": False,
+    }
+    (tmp_path / "ccc_config.yaml").write_text(yaml.safe_dump(config))
     alt_root = tmp_path / "alt_dataset"
     ds = DataSet(id="d_alt", name="alt", project_id="p_alt")
 
@@ -489,23 +1027,48 @@ def test_write_models_output_root_override_writes_to_given_path(tmp_path):
 
 def test_write_models_output_root_accepts_string(tmp_path):
     """str and Path are both accepted for output_root."""
+    settings = Settings(output_root=tmp_path / "configured")
     alt_root = tmp_path / "string_root"
     ds = DataSet(id="d_str", name="s", project_id="p_str")
 
-    result = write_models(ds, output_root=str(alt_root))
+    result = write_models(ds, settings=settings, output_root=str(alt_root))
 
     assert result.path == alt_root / "dataset"
 
 
-def test_write_models_rejects_both_settings_and_output_root(settings, tmp_path):
-    """Passing both settings= and output_root= raises (no precedence to memorize)."""
+def test_write_models_output_root_preserves_settings_dry_run(tmp_path):
+    """A root override must not discard dry-run controls from settings."""
+    settings = Settings(output_root=tmp_path / "configured", dry_run=True)
+    alt_root = tmp_path / "other"
     ds = DataSet(id="d_x", name="x", project_id="p_x")
-    with pytest.raises(TypeError, match="either settings= or output_root="):
-        write_models(ds, settings=settings, output_root=tmp_path / "other")
+
+    result = write_models(ds, settings=settings, output_root=alt_root)
+
+    assert result.path == alt_root / "dataset"
+    assert result.rows_written == 0
+    assert not (alt_root / "dataset").exists()
+
+
+def test_write_models_output_root_preserves_discovered_dry_run(tmp_path):
+    """A root override must retain dry-run controls from discovered settings."""
+    config = {
+        "output_root": str(tmp_path / "configured"),
+        "dry_run": True,
+    }
+    (tmp_path / "ccc_config.yaml").write_text(yaml.safe_dump(config))
+    alt_root = tmp_path / "other"
+    ds = DataSet(id="d_discovered", name="x", project_id="p_x")
+
+    result = write_models(ds, output_root=alt_root)
+
+    assert result.path == alt_root / "dataset"
+    assert result.rows_written == 0
+    assert not (alt_root / "dataset").exists()
 
 
 def test_write_projection_matrix_output_root_override(tmp_path):
     """write_projection_matrix forwards output_root through write_models."""
+    settings = Settings(output_root=tmp_path / "configured")
     alt_root = tmp_path / "pmm_alt"
     pmm = ProjectionMeasurementMatrix(
         id="pmm_alt",
@@ -520,15 +1083,17 @@ def test_write_projection_matrix_output_root_override(tmp_path):
     )
     matrix = np.array([[1.0, 0.0], [0.0, 2.0]])
 
-    result = write_projection_matrix(pmm, matrix, output_root=alt_root)
+    result = write_projection_matrix(
+        pmm, matrix, settings=settings, output_root=alt_root
+    )
 
     assert result.path == alt_root / "projectionmeasurementmatrix"
 
 
-def test_write_projection_matrix_rejects_both_settings_and_output_root(
-    settings, tmp_path
-):
-    """Projection writes must reject competing output configuration sources."""
+def test_write_projection_matrix_output_root_preserves_dry_run(tmp_path):
+    """Projection root overrides must retain settings-based dry-run controls."""
+    settings = Settings(output_root=tmp_path / "configured", dry_run=True)
+    alt_root = tmp_path / "other"
     pmm = ProjectionMeasurementMatrix(
         id="pmm_x",
         project_id="p1",
@@ -541,7 +1106,11 @@ def test_write_projection_matrix_rejects_both_settings_and_output_root(
         values="file:///tmp/pmm_x.delta",
     )
     matrix = np.array([[1.0]])
-    with pytest.raises(TypeError, match="either settings= or output_root="):
-        write_projection_matrix(
-            pmm, matrix, settings=settings, output_root=tmp_path / "other"
-        )
+
+    result = write_projection_matrix(
+        pmm, matrix, settings=settings, output_root=alt_root
+    )
+
+    assert result.path == alt_root / "projectionmeasurementmatrix"
+    assert result.rows_written == 0
+    assert not (alt_root / "projectionmeasurementmatrix").exists()

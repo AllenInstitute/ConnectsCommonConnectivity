@@ -28,6 +28,10 @@ from pydantic import BaseModel, Field
 CONFIG_FILENAME = "ccc_config.yaml"
 
 
+class ConfigNotFoundError(RuntimeError):
+    """Raised when no package configuration file can be discovered."""
+
+
 class Settings(BaseModel):
     """Validated, package-wide settings loaded from ``ccc_config.yaml``."""
 
@@ -74,7 +78,7 @@ def get_settings() -> Settings:
     """
     path = find_config_file()
     if path is None:
-        raise RuntimeError(
+        raise ConfigNotFoundError(
             f"No {CONFIG_FILENAME} found — create one at the repo root with "
             "output_root: <path>. Discovery walks up from the current working "
             "directory, like pyproject.toml/ruff/pytest."
@@ -116,6 +120,7 @@ def _anchor_path(value, base: Path) -> Path:
 
 __all__ = [
     "CONFIG_FILENAME",
+    "ConfigNotFoundError",
     "Settings",
     "find_config_file",
     "get_settings",

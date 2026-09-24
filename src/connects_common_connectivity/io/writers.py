@@ -45,8 +45,10 @@ from connects_common_connectivity.models import ProjectionMeasurementMatrix
 class WrittenResult:
     """Return value of a single :func:`write_models` invocation.
 
-    ``predicates`` is one entry per scope group for ``overwrite_scoped``
-    writes and the identity predicate for a ``merge_scoped`` write.
+    ``predicates`` records the Delta conditions used by the write. For
+    ``overwrite_scoped``, each entry selects one group of rows to replace.
+    For ``merge_scoped``, the single entry matches source and target rows and
+    may also limit the partitions scanned. It is empty for a dry run.
     ``rows_written`` is the number of rows written to storage. For
     ``merge_scoped``, this is the sum of inserted and changed rows; matched
     rows whose values are unchanged are excluded.
@@ -615,9 +617,8 @@ def write_models(
     Returns
     -------
     WrittenResult
-        Class name, on-disk path, dispatch mode, the predicates issued (one
-        per scope group for ``overwrite_scoped`` or the identity predicate for
-        ``merge_scoped``), and the number of source rows written.
+        Class name, on-disk path, dispatch mode, the Delta conditions used,
+        and the number of source rows written.
 
     Raises
     ------

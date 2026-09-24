@@ -10,7 +10,7 @@
 - Preserved discovered `dry_run` and other settings when `output_root` overrides only the write destination, including calls that omit an explicit `settings` argument.
 - Removed the VISp patch-seq notebooks' manual read-union-rewrite workarounds. The notebooks now submit only their own association and membership rows, verify persisted merge-key uniqueness, and assert that merge keys present before each write remain afterward.
 - Refreshed outputs for the Tasic, VISp MET-type, and six VISp patch-seq notebooks from the Code Ocean acceptance run.
-- Kept the standalone `append_new_dataitems` helper for compatibility; `write_models(DataItem)` no longer uses it.
+- Removed the unused standalone `append_new_dataitems` helper; `write_models(DataItem)` provides transactional merge-scoped upserts.
 
 This PR is based on `wp1-schema-scope` and should be reviewed against that branch.
 
@@ -67,4 +67,4 @@ The refreshed notebook outputs capture this acceptance run. The capsule identifi
 - Last-row-wins deduplication for duplicate merge keys within one incoming batch.
 - Keeping `ClusterMembership` fields optional in the shared schema while requiring merge keys only in this IO wrapper.
 - The changed configuration path (`scratch/wp2_acceptance_20260922/`) and committed notebook outputs from Code Ocean acceptance testing.
-- Deferred decisions documented in `planning/20260820/wp2_out_of_scope_findings.md`: optimistic-concurrency retries, the lifecycle of `append_new_dataitems`, and richer MERGE metrics in `WrittenResult`.
+- Deferred decisions documented in `planning/20260820/wp2_out_of_scope_findings.md`: optimistic-concurrency retries and richer MERGE metrics in `WrittenResult`.

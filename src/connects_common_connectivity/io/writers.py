@@ -21,6 +21,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import DeltaTable, write_deltalake
+from deltalake.exceptions import DeltaError
 from numpy.typing import ArrayLike
 from pydantic import BaseModel
 
@@ -462,6 +463,8 @@ def _dispatch_merge_scoped(
     winning for each repeated key. Existing rows absent from the source are
     never deleted. The identity predicate is narrowed with the batch's
     distinct partition values so the planner can skip untouched partitions.
+    If another writer creates the table during initial creation, this writer
+    reopens the table and merges its batch instead.
     """
     source = _deduplicate_on_keys(table, spec.merge_on)
     predicate = _build_merge_predicate(spec.merge_on)
@@ -469,17 +472,22 @@ def _dispatch_merge_scoped(
     if prune is not None:
         predicate = f"{predicate} AND {prune}"
     rows_written = source.num_rows
+    delta_table: DeltaTable | None = None
     if not DeltaTable.is_deltatable(str(path)):
-        write_deltalake(
-            str(path),
-            source,
-            mode="error",
-            partition_by=spec.partition_by or None,
-        )
+        try:
+            write_deltalake(
+                str(path),
+                source,
+                mode="error",
+                partition_by=spec.partition_by or None,
+            )
+        except DeltaError:
+            delta_table = DeltaTable(str(path))
     else:
+        delta_table = DeltaTable(str(path))
+    if delta_table is not None:
         merger = (
-            DeltaTable(str(path))
-            .merge(
+            delta_table.merge(
                 source=source,
                 predicate=predicate,
                 source_alias="source",

@@ -16,6 +16,7 @@ import polars as pl
 import pyarrow as pa
 import pytest
 import yaml
+from deltalake.exceptions import DeltaError
 from deltalake.table import TableMerger
 from pydantic import BaseModel
 
@@ -29,6 +30,7 @@ from connects_common_connectivity.io.writers import (
     _build_partition_prune_predicate,
     _build_predicate,
     _deduplicate_on_keys,
+    _dispatch_merge_scoped,
     _dispatch_overwrite_scoped,
     _group_by_scope,
     write_models,
@@ -327,6 +329,59 @@ def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
     ]
     assert all(call[2]["mode"] == "overwrite" for call in calls)
     assert all(call[2]["partition_by"] == ["project_id"] for call in calls)
+
+
+def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypatch):
+    """A writer losing table creation must reopen and merge its batch."""
+    table = pa.table({"project_id": ["p1"], "id": ["d1"], "name": ["one"]})
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="dataset",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
+    )
+    events = []
+
+    class FakeMerger:
+        def when_matched_update_all(self, **kwargs):
+            return self
+
+        def when_not_matched_insert_all(self):
+            return self
+
+        def execute(self):
+            events.append("merge")
+            return {"num_target_rows_inserted": 1, "num_target_rows_updated": 0}
+
+    class FakeDeltaTable:
+        @staticmethod
+        def is_deltatable(path):
+            return False
+
+        def __init__(self, path):
+            events.append("reopen")
+
+        def merge(self, **kwargs):
+            return FakeMerger()
+
+    def lose_creation_race(*args, **kwargs):
+        events.append("create")
+        raise DeltaError("table already exists")
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.DeltaTable", FakeDeltaTable
+    )
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake",
+        lose_creation_race,
+    )
+
+    result = _dispatch_merge_scoped(table, spec, tmp_path / "dataset")
+
+    assert events == ["create", "reopen", "merge"]
+    assert result.rows_written == 1
 
 
 # ---------------------------------------------------------------------------

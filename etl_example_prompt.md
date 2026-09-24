@@ -188,14 +188,20 @@ When two notebooks merge into the same scoped slice (for example, both patch-seq
 
 ### 5g. Cell-cell connectivity (`cellcellconnectivitylong/`)
 
-`CellCellConnectivityLong` rows have no per-example discriminator yet (no `connectome_id` slot). Two examples for the same project would overwrite each other if written into the same folder. **Workaround until the schema adds a discriminator:** write each example to its own subdirectory, e.g.
+Every `CellCellConnectivityLong` row requires `connectome_id`. It identifies the measurement context — segmentation version, proofreading state, and measurement semantics — not a cohort or replacement for `dataset_id`.
+
+Use `derive_cell_cell_connectivity(...)` to aggregate a Polars synapse frame by project and pre/post endpoints. It always emits `SYNAPSE_COUNT` with unit `COUNT`. Supplying both `size_column` and `size_unit` additionally emits `SUM_ANATOMICAL_SIZE`; the size column must be numeric and contain no null values.
+
+Use `read_cell_cell_connectivity(project_id, connectome_id, ...)` to read canonical `cellcellconnectivitylong/` storage. It can filter explicit presynaptic IDs, postsynaptic IDs, and measurement types. Dataset and cluster cohort resolution is not implemented here and remains issue #23.
+
+Current ETLs retain their temporary subdirectories and raw Delta writes until issue #19 adds canonical registration and migrates persistence:
 
 ```
 cellcellconnectivitylong_proofread_pre_to_csm_post/
 cellcellconnectivitylong_proofread_to_proofread/
 ```
 
-Predicate `project_id` only; the folder scopes the example. See `etl_minnie_04_cell_cell.ipynb`.
+Populate a stable `connectome_id` even while writing these temporary paths. See `etl_minnie_04_cell_cell.ipynb` and `etl_v1dd_03_synapses.ipynb`.
 
 ### 5h. Projection matrix (`projectionmeasurementmatrix/` + wide-form parquet)
 
@@ -318,4 +324,4 @@ When two projects (different `project_id`) share a feature set (same `feature_se
 ## 11. Known limitations
 
 - **`HierarchyCategory` rows are id-scoped global vocabulary rows.** Because ids like `class`, `subclass`, and `cluster` are shared across taxonomies, only write canonical shared definitions (same ids/meaning) via `write_models`. Do not invent taxonomy-specific category ids without a schema-level discriminator.
-- **`CellCellConnectivityLong` has no `connectome_id` discriminator.** Two example connectomes for the same project must live in separate folders (see §5g). Schema addition would let them share a folder.
+- **Canonical cell-cell persistence is not registered yet.** `CellCellConnectivityLong` requires `connectome_id`, but ETLs continue writing temporary folders directly until issue #19 adds the canonical writer and migration. The scoped reader expects future canonical `cellcellconnectivitylong/` storage (see §5g).

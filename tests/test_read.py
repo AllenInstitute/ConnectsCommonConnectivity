@@ -7,7 +7,11 @@ import pyarrow as pa
 import pytest
 from deltalake import write_deltalake
 
-from connects_common_connectivity.io import DatasetReader
+from connects_common_connectivity.config import Settings
+from connects_common_connectivity.io import (
+    DatasetReader,
+    read_cell_cell_connectivity,
+)
 
 
 def _write_table(root: Path, subdir: str, data: dict) -> None:
@@ -155,6 +159,144 @@ def _build_reader_root(tmp_path: Path) -> Path:
 @pytest.fixture
 def reader_root(tmp_path: Path) -> Path:
     return _build_reader_root(tmp_path)
+
+
+@pytest.fixture
+def cell_cell_root(tmp_path: Path) -> Path:
+    root = tmp_path / "cell-cell-root"
+    _write_table(
+        root,
+        "cellcellconnectivitylong",
+        {
+            "id": ["c1-count", "c1-size", "c1-other-pre", "c2-count", "p2-count"],
+            "connectome_id": [
+                "connectome-1",
+                "connectome-1",
+                "connectome-1",
+                "connectome-2",
+                "connectome-1",
+            ],
+            "presynaptic_cell": ["pre-1", "pre-1", "pre-2", "pre-1", "pre-1"],
+            "postsynaptic_cell": ["post-1", "post-1", "post-1", "post-1", "post-1"],
+            "measurement_type": [
+                "SYNAPSE_COUNT",
+                "SUM_ANATOMICAL_SIZE",
+                "SYNAPSE_COUNT",
+                "SYNAPSE_COUNT",
+                "SYNAPSE_COUNT",
+            ],
+            "modality": ["ELECTRON_MICROSCOPY"] * 5,
+            "value": [2.0, 5.0, 1.0, 4.0, 8.0],
+            "unit": ["COUNT", "MICRONS_SQUARE", "COUNT", "COUNT", "COUNT"],
+            "project_id": ["project-1", "project-1", "project-1", "project-1", "project-2"],
+        },
+    )
+    return root
+
+
+def test_read_cell_cell_connectivity_requires_both_scopes(cell_cell_root: Path):
+    with pytest.raises(TypeError):
+        read_cell_cell_connectivity(output_root=cell_cell_root)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        read_cell_cell_connectivity(  # type: ignore[call-arg]
+            "project-1",
+            output_root=cell_cell_root,
+        )
+
+
+def test_read_cell_cell_connectivity_selects_project_and_connectome(
+    cell_cell_root: Path,
+):
+    first = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-1",
+        output_root=cell_cell_root,
+    )
+    second = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-2",
+        output_root=cell_cell_root,
+    )
+
+    assert first["id"].to_list() == ["c1-count", "c1-size", "c1-other-pre"]
+    assert second["id"].to_list() == ["c2-count"]
+
+
+@pytest.mark.parametrize(
+    ("filters", "expected_ids"),
+    [
+        ({"presynaptic_cells": "pre-1"}, ["c1-count", "c1-size"]),
+        ({"presynaptic_cells": ["pre-2"]}, ["c1-other-pre"]),
+        ({"postsynaptic_cells": ["post-1"]}, ["c1-count", "c1-size", "c1-other-pre"]),
+        ({"measurement_types": ["SUM_ANATOMICAL_SIZE"]}, ["c1-size"]),
+        (
+            {
+                "presynaptic_cells": ["pre-1"],
+                "postsynaptic_cells": ["post-1"],
+                "measurement_types": ["SYNAPSE_COUNT"],
+            },
+            ["c1-count"],
+        ),
+    ],
+)
+def test_read_cell_cell_connectivity_applies_explicit_filters(
+    cell_cell_root: Path,
+    filters: dict,
+    expected_ids: list[str],
+):
+    result = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-1",
+        output_root=cell_cell_root,
+        **filters,
+    )
+
+    assert result["id"].to_list() == expected_ids
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"presynaptic_cells": []},
+        {"postsynaptic_cells": ["missing"]},
+        {"measurement_types": ["EXISTENCE"]},
+    ],
+)
+def test_read_cell_cell_connectivity_returns_typed_empty_results(
+    cell_cell_root: Path,
+    filters: dict,
+):
+    result = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-1",
+        output_root=cell_cell_root,
+        **filters,
+    )
+
+    assert result.is_empty()
+    assert result.schema["id"] == pl.String
+
+
+def test_read_cell_cell_connectivity_resolves_settings(cell_cell_root: Path):
+    result = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-2",
+        settings=Settings(output_root=cell_cell_root),
+    )
+
+    assert result["id"].to_list() == ["c2-count"]
+
+
+def test_read_cell_cell_connectivity_requires_canonical_table(tmp_path: Path):
+    root = tmp_path / "missing-cell-cell"
+    root.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="cellcellconnectivitylong"):
+        read_cell_cell_connectivity(
+            "project-1",
+            "connectome-1",
+            output_root=root,
+        )
 
 
 def test_displays_datasets_and_discovers_related_sets(reader_root: Path):

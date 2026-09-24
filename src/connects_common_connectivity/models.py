@@ -2096,7 +2096,8 @@ class CellCellConnectivityLong(ProjectScoped):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-cell-cell-schema',
          'mixins': ['ProjectScoped'],
-         'slot_usage': {'measurement_type': {'name': 'measurement_type',
+         'slot_usage': {'connectome_id': {'name': 'connectome_id', 'required': True},
+                        'measurement_type': {'name': 'measurement_type',
                                              'range': 'SynapticMeasurementType'},
                         'modality': {'name': 'modality', 'range': 'Modality'},
                         'postsynaptic_cell': {'description': 'The postsynaptic cell '
@@ -2153,6 +2154,7 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
+    connectome_id: str = Field(default=..., description="""Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'connectome_id', 'domain_of': ['CellCellConnectivityLong']} })
     presynaptic_cell: Optional[str] = Field(default=None, description="""The presynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'presynaptic_cell',
          'domain_of': ['CellCellConnectivityLong', 'SynapseConnectivityLong']} })
     postsynaptic_cell: Optional[str] = Field(default=None, description="""The postsynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'postsynaptic_cell',

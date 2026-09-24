@@ -1,18 +1,184 @@
 """Write helpers for Delta Lake tables shared across ETL notebooks."""
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
+import polars as pl
 from numpy.typing import ArrayLike
 
-from connects_common_connectivity.models import ProjectionMeasurementMatrix
+from connects_common_connectivity.models import (
+    Modality,
+    ProjectionMeasurementMatrix,
+    SynapticMeasurementType,
+    Unit,
+)
 
 __all__ = [
+    "derive_cell_cell_connectivity",
     "populate_region_coverage",
     "walk_ancestors",
 ]
 
+#---------------
+# derive_cell_cell_connectivity
+#---------------
+
+_CELL_CELL_IDENTITY_COLUMNS = [
+    "project_id",
+    "presynaptic_cell",
+    "postsynaptic_cell",
+]
+_CELL_CELL_OUTPUT_SCHEMA = {
+    "id": pl.String,
+    "description": pl.String,
+    "connectome_id": pl.String,
+    "presynaptic_cell": pl.String,
+    "postsynaptic_cell": pl.String,
+    "measurement_type": pl.String,
+    "modality": pl.String,
+    "value": pl.Float64,
+    "unit": pl.String,
+    "project_id": pl.String,
+}
+
+
+def derive_cell_cell_connectivity(
+    synapses: pl.DataFrame,
+    *,
+    connectome_id: str,
+    modality: Modality | str,
+    size_column: str | None = None,
+    size_unit: Unit | str | None = None,
+) -> pl.DataFrame:
+    """Aggregate single-synapse rows into cell-cell connectivity measurements.
+
+    One ``SYNAPSE_COUNT`` row is emitted for every project and endpoint pair.
+    Supplying both ``size_column`` and ``size_unit`` additionally emits a
+    ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
+    would report a partial sum as a total anatomical size.
+
+    Output IDs are full SHA-256 hashes of canonical JSON arrays containing the
+    project, connectome, endpoints, and measurement type.
+    """
+    missing = [
+        column for column in _CELL_CELL_IDENTITY_COLUMNS if column not in synapses
+    ]
+    if missing:
+        raise ValueError(f"Missing required synapse columns: {missing}")
+    if not isinstance(connectome_id, str) or not connectome_id.strip():
+        raise ValueError("connectome_id must be a non-empty string")
+    if (size_column is None) != (size_unit is None):
+        raise ValueError("size_column and size_unit must be supplied together")
+
+    try:
+        modality_value = Modality(modality).value
+    except ValueError as error:
+        raise ValueError(f"Unsupported modality: {modality!r}") from error
+
+    size_unit_value: str | None = None
+    if size_column is not None:
+        if size_column not in synapses:
+            raise ValueError(f"Size column not found: {size_column!r}")
+        if not synapses.schema[size_column].is_numeric():
+            raise TypeError(f"Size column {size_column!r} must be numeric")
+        if synapses[size_column].null_count():
+            raise ValueError(f"Size column {size_column!r} contains null values")
+        try:
+            size_unit_value = Unit(size_unit).value
+        except ValueError as error:
+            raise ValueError(f"Unsupported size unit: {size_unit!r}") from error
+
+    null_columns = [
+        column
+        for column in _CELL_CELL_IDENTITY_COLUMNS
+        if synapses[column].null_count()
+    ]
+    if null_columns:
+        raise ValueError(f"Identity columns contain null values: {null_columns}")
+    if synapses.is_empty():
+        return pl.DataFrame(schema=_CELL_CELL_OUTPUT_SCHEMA)
+
+    normalized = synapses.with_columns(
+        pl.col(_CELL_CELL_IDENTITY_COLUMNS).cast(pl.String)
+    )
+    count_rows = normalized.group_by(
+        _CELL_CELL_IDENTITY_COLUMNS,
+        maintain_order=True,
+    ).len(name="value")
+    count_rows = _shape_cell_cell_measurements(
+        count_rows,
+        connectome_id=connectome_id,
+        modality=modality_value,
+        measurement_type=SynapticMeasurementType.SYNAPSE_COUNT.value,
+        unit=Unit.COUNT.value,
+    )
+
+    measurements = [count_rows]
+    if size_column is not None and size_unit_value is not None:
+        size_rows = normalized.group_by(
+            _CELL_CELL_IDENTITY_COLUMNS,
+            maintain_order=True,
+        ).agg(pl.col(size_column).sum().cast(pl.Float64).alias("value"))
+        measurements.append(
+            _shape_cell_cell_measurements(
+                size_rows,
+                connectome_id=connectome_id,
+                modality=modality_value,
+                measurement_type=SynapticMeasurementType.SUM_ANATOMICAL_SIZE.value,
+                unit=size_unit_value,
+            )
+        )
+
+    return pl.concat(measurements)
+
+
+def _shape_cell_cell_measurements(
+    measurements: pl.DataFrame,
+    *,
+    connectome_id: str,
+    modality: str,
+    measurement_type: str,
+    unit: str,
+) -> pl.DataFrame:
+    measurements = measurements.with_columns(
+        pl.lit(None, dtype=pl.String).alias("description"),
+        pl.lit(connectome_id).alias("connectome_id"),
+        pl.lit(measurement_type).alias("measurement_type"),
+        pl.lit(modality).alias("modality"),
+        pl.col("value").cast(pl.Float64),
+        pl.lit(unit).alias("unit"),
+    )
+    return measurements.with_columns(
+        pl.struct(
+            [
+                "project_id",
+                "connectome_id",
+                "presynaptic_cell",
+                "postsynaptic_cell",
+                "measurement_type",
+            ]
+        )
+        .map_elements(_cell_cell_measurement_id, return_dtype=pl.String)
+        .alias("id")
+    ).select(_CELL_CELL_OUTPUT_SCHEMA.keys())
+
+
+def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
+    values = [
+        identity["project_id"],
+        identity["connectome_id"],
+        identity["presynaptic_cell"],
+        identity["postsynaptic_cell"],
+        identity["measurement_type"],
+    ]
+    encoded = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(encoded.encode()).hexdigest()}"
+
+
+#---------------
 
 def walk_ancestors(
     leaf_id: str,

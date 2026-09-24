@@ -17,7 +17,12 @@ Example::
 from __future__ import annotations
 
 from connects_common_connectivity.config import Settings, get_settings
-from connects_common_connectivity.io.read import DatasetReader, read_synapse_table
+from connects_common_connectivity.io.read import (
+    DatasetReader,
+    read_cell_cell_connectivity,
+    read_synapse_table,
+)
+from connects_common_connectivity.io.write_utils import derive_cell_cell_connectivity
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
     WrittenResult,
@@ -33,5 +38,7 @@ __all__ = [
     "WrittenResult",
     "WRITABLE_CLASSES",
     "DatasetReader",
+    "derive_cell_cell_connectivity",
+    "read_cell_cell_connectivity",
     "read_synapse_table",
 ]

@@ -23,9 +23,9 @@ from pydantic import BaseModel
 from connects_common_connectivity.config import ConfigNotFoundError, Settings
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.writers import (
+    _MAX_PRUNE_LITERALS,
     WRITABLE_CLASSES,
     WrittenResult,
-    _MAX_PRUNE_LITERALS,
     _build_merge_predicate,
     _build_merge_update_predicate,
     _build_partition_prune_predicate,

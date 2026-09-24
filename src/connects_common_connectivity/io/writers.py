@@ -504,6 +504,8 @@ def _dispatch_merge_scoped(
                 partition_by=spec.partition_by or None,
             )
         except DeltaError:
+            if not DeltaTable.is_deltatable(str(path)):
+                raise
             delta_table = DeltaTable(str(path))
     else:
         delta_table = DeltaTable(str(path))

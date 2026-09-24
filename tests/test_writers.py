@@ -357,6 +357,7 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
         merge_on=["project_id", "id"],
     )
     events = []
+    table_checks = iter([False, True])
 
     class FakeMerger:
         def when_matched_update_all(self, **kwargs):
@@ -372,7 +373,7 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
     class FakeDeltaTable:
         @staticmethod
         def is_deltatable(path):
-            return False
+            return next(table_checks)
 
         def __init__(self, path):
             events.append("reopen")
@@ -396,6 +397,38 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
 
     assert events == ["create", "reopen", "merge"]
     assert result.rows_written == 1
+
+
+def test_merge_scoped_reraises_unrelated_creation_error(tmp_path, monkeypatch):
+    """A creation failure must be preserved when no competing table appeared."""
+    table = pa.table({"project_id": ["p1"], "id": ["d1"], "name": ["one"]})
+    spec = WriteSpec(
+        model_cls=DataSet,
+        subdir="dataset",
+        partition_by=["project_id"],
+        scope_columns=["project_id", "id"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "id"],
+    )
+    creation_error = DeltaError("permission denied")
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.DeltaTable.is_deltatable",
+        lambda path: False,
+    )
+
+    def fail_creation(*args, **kwargs):
+        raise creation_error
+
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.writers.write_deltalake",
+        fail_creation,
+    )
+
+    with pytest.raises(DeltaError) as raised:
+        _dispatch_merge_scoped(table, spec, tmp_path / "dataset")
+
+    assert raised.value is creation_error
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added required measurement-context `connectome_id` values to `CellCellConnectivityLong`.
+- Added `derive_cell_cell_connectivity` for deriving count and optional anatomical-size measurements from Polars synapse tables.
+- Added `read_cell_cell_connectivity` for project- and connectome-scoped reads from canonical cell-cell Delta storage, with explicit endpoint and measurement-type filters.
 - Added merge-scoped upserts for identity-bearing metadata and association rows written through `write_models`, scanning only the partitions a batch touches.
 - Added project scoping to `ProjectionMeasurementMatrix`, `SingleCellReconstruction`, and `BrainRegionAssociation`.
 - Added taxonomy-local `hierarchy_id` values to `HierarchyCategory`.

@@ -4,7 +4,8 @@ Where :mod:`connects_common_connectivity.io.writers` owns the write path, this
 module owns the read path. It exposes :class:`DatasetReader` for assembling
 wide, dataset-centric tables from the Delta tables under a Common Connectivity
 root, and :func:`read_synapse_table` for reading the long single-synapse table
-with optional feature columns.
+with optional feature columns. :func:`read_cell_cell_connectivity` reads a
+single project and connectome scope from the canonical cell-cell table.
 """
 
 from __future__ import annotations
@@ -24,11 +25,14 @@ CELL_FEATURES_SUBDIR = "cellfeatures"
 CLUSTER_HIERARCHY_SUBDIR = "clusterhierarchy"
 CLUSTER_SUBDIR = "cluster"
 CLUSTER_MEMBERSHIP_SUBDIR = "clustermembership"
+CELL_CELL_CONNECTIVITY_SUBDIR = "cellcellconnectivitylong"
 SYNAPSE_SUBDIR = "synapse"
 SYNAPSE_FEATURES_SUBDIR = "synapsefeatures"
 
 __all__ = [
+    "CELL_CELL_CONNECTIVITY_SUBDIR",
     "DatasetReader",
+    "read_cell_cell_connectivity",
     "read_synapse_table",
     "SYNAPSE_SUBDIR",
     "SYNAPSE_FEATURES_SUBDIR",
@@ -752,6 +756,72 @@ def _resolve_output_root(
     if output_root is not None:
         return Path(output_root)
     return Path((settings or get_settings()).output_root)
+
+
+def read_cell_cell_connectivity(
+    project_id: str,
+    connectome_id: str,
+    *,
+    presynaptic_cells: str | Iterable[str] | None = None,
+    postsynaptic_cells: str | Iterable[str] | None = None,
+    measurement_types: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read one cell-cell measurement context from the canonical Delta table.
+
+    The required project and connectome scopes identify the stored measurement
+    context. Optional filters select explicit endpoint IDs or measurement
+    types; dataset and cluster cohort resolution is intentionally outside this
+    helper's contract.
+
+    Parameters
+    ----------
+    project_id:
+        Project scope to read.
+    connectome_id:
+        Measurement context to read within the project.
+    presynaptic_cells, postsynaptic_cells:
+        Optional explicit cell ID or iterable of cell IDs to retain.
+    measurement_types:
+        Optional measurement type or iterable of measurement types to retain.
+    output_root, settings:
+        On-disk root resolution with the same precedence and mutual exclusion
+        as :func:`connects_common_connectivity.io.write_models`.
+
+    Returns
+    -------
+    polars.DataFrame
+        Matching long-form connectivity rows. Valid filters with no matches
+        return an empty frame retaining the stored table schema.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical ``cellcellconnectivitylong/`` table is absent.
+    """
+    root = _resolve_output_root(settings, output_root)
+    table_path = root / CELL_CELL_CONNECTIVITY_SUBDIR
+    if not table_path.exists():
+        raise FileNotFoundError(
+            f"No cell-cell connectivity table at {table_path}. Canonical "
+            "persistence is provided by issue #19."
+        )
+
+    connectivity = pl.read_delta(str(table_path)).filter(
+        (pl.col("project_id") == project_id)
+        & (pl.col("connectome_id") == connectome_id)
+    )
+    filters = (
+        ("presynaptic_cell", presynaptic_cells),
+        ("postsynaptic_cell", postsynaptic_cells),
+        ("measurement_type", measurement_types),
+    )
+    for column, requested in filters:
+        if requested is not None:
+            values = [requested] if isinstance(requested, str) else list(requested)
+            connectivity = connectivity.filter(pl.col(column).is_in(values))
+    return connectivity
 
 
 def read_synapse_table(

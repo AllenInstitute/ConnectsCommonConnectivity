@@ -27,6 +27,7 @@ from connects_common_connectivity.io.writers import (
     WrittenResult,
     _MAX_PRUNE_LITERALS,
     _build_merge_predicate,
+    _build_merge_update_predicate,
     _build_partition_prune_predicate,
     _build_predicate,
     _deduplicate_on_keys,
@@ -67,11 +68,11 @@ def test_build_predicate_format():
     """Predicates must join scoped equality clauses with SQL conjunctions."""
     assert (
         _build_predicate(["project_id"], ["minnie65"])
-        == "project_id = 'minnie65'"
+        == '"project_id" = \'minnie65\''
     )
     assert (
         _build_predicate(["project_id", "id"], ["minnie65", "ds_a"])
-        == "project_id = 'minnie65' AND id = 'ds_a'"
+        == '"project_id" = \'minnie65\' AND "id" = \'ds_a\''
     )
 
 
@@ -86,13 +87,25 @@ def test_build_predicate_format():
 )
 def test_build_predicate_escapes(value, expected_literal):
     """Predicate values must be escaped as valid SQL string literals."""
-    assert _build_predicate(["name"], [value]) == f"name = {expected_literal}"
+    assert _build_predicate(["name"], [value]) == f'"name" = {expected_literal}'
 
 
 def test_build_merge_predicate_uses_all_declared_keys():
     """Merge predicates must compare every identity column through aliases."""
     assert _build_merge_predicate(["project_id", "id"]) == (
-        "target.project_id = source.project_id AND target.id = source.id"
+        'target."project_id" = source."project_id" '
+        'AND target."id" = source."id"'
+    )
+
+
+def test_merge_predicates_quote_keyword_like_and_escaped_identifiers():
+    """Merge expressions must quote identifiers and escape embedded quotes."""
+    assert _build_merge_predicate(["item", 'cluster"name']) == (
+        'target."item" = source."item" '
+        'AND target."cluster""name" = source."cluster""name"'
+    )
+    assert _build_merge_update_predicate(["item", "order"], ["item"]) == (
+        '(source."order" IS DISTINCT FROM target."order")'
     )
 
 
@@ -109,7 +122,8 @@ def test_partition_prune_predicate_restates_batch_partition_values():
     assert _build_partition_prune_predicate(
         table, ["project_id", "hierarchy_id"], ["project_id", "hierarchy_id", "item"]
     ) == (
-        "target.project_id IN ('p') AND target.hierarchy_id IN ('h0', 'h1')"
+        'target."project_id" IN (\'p\') '
+        'AND target."hierarchy_id" IN (\'h0\', \'h1\')'
     )
 
 
@@ -174,12 +188,12 @@ def test_merge_scoped_predicate_prunes_untouched_partitions(
     )
 
     assert result.predicates == (
-        "target.project_id = source.project_id "
-        "AND target.hierarchy_id = source.hierarchy_id "
-        "AND target.item = source.item "
-        "AND target.cluster = source.cluster "
-        "AND target.project_id IN ('visp_patchseq') "
-        "AND target.hierarchy_id IN ('met_types')",
+        'target."project_id" = source."project_id" '
+        'AND target."hierarchy_id" = source."hierarchy_id" '
+        'AND target."item" = source."item" '
+        'AND target."cluster" = source."cluster" '
+        'AND target."project_id" IN (\'visp_patchseq\') '
+        'AND target."hierarchy_id" IN (\'met_types\')',
     )
     assert merge_metrics["num_target_files_scanned"] == 1
     assert merge_metrics["num_target_files_skipped_during_scan"] == 3
@@ -316,8 +330,8 @@ def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
 
     assert result.mode == "overwrite_scoped"
     assert result.predicates == (
-        "project_id = 'p' AND dataset_id = 'a'",
-        "project_id = 'p' AND dataset_id = 'b'",
+        '"project_id" = \'p\' AND "dataset_id" = \'a\'',
+        '"project_id" = \'p\' AND "dataset_id" = \'b\'',
     )
     assert result.rows_written == 3
     assert [call[1] for call in calls] == [
@@ -475,8 +489,9 @@ def test_merge_batch_uses_one_identity_predicate(settings, read_delta):
     result = write_models(rows_in, settings=settings)
     assert isinstance(result, WrittenResult)
     assert result.predicates == (
-        "target.project_id = source.project_id AND target.id = source.id "
-        "AND target.project_id IN ('p1')",
+        'target."project_id" = source."project_id" '
+        'AND target."id" = source."id" '
+        'AND target."project_id" IN (\'p1\')',
     )
     assert result.rows_written == 2
     # Both end up in the table.

@@ -151,13 +151,28 @@ def _format_value(v: Any) -> str:
     return "'" + str(v).replace("'", "''") + "'"
 
 
-def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) -> str:
-    """Build an AND-joined ``col = 'val'`` predicate for ``write_deltalake``.
+def _quote_identifier(identifier: str) -> str:
+    """Render one column name as a quoted Delta SQL identifier.
 
-    The format is exactly ``col1 = 'val1' AND col2 = 'val2'`` — single
-    quotes, AND-joined, no extra whitespace beyond the single space around
-    each operator. Notebooks that compose predicates by hand use the same
-    format; this helper is the canonical implementation.
+    Parameters
+    ----------
+    identifier:
+        Column name to quote. Embedded double quotes are escaped by doubling
+        them according to SQL identifier rules.
+
+    Returns
+    -------
+    str
+        The identifier surrounded by double quotes.
+    """
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) -> str:
+    """Build an AND-joined ``"col" = 'val'`` predicate for ``write_deltalake``.
+
+    Column identifiers are double-quoted and values are single-quoted. This
+    keeps keyword-like or punctuation-bearing schema names valid in Delta SQL.
 
     Parameters
     ----------
@@ -182,16 +197,20 @@ def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) ->
             f"scope_columns ({len(scope_columns)}) and row_values "
             f"({len(row_values)}) length mismatch"
         )
-    parts = [f"{c} = {_format_value(v)}" for c, v in zip(scope_columns, row_values)]
+    parts = [
+        f"{_quote_identifier(column)} = {_format_value(value)}"
+        for column, value in zip(scope_columns, row_values)
+    ]
     return " AND ".join(parts)
 
 
 def _build_merge_predicate(merge_on: Sequence[str]) -> str:
-    """Build the source-to-target equality predicate for a Delta merge."""
+    """Build a Delta merge equality predicate with quoted column names."""
     if not merge_on:
         raise ValueError("merge_on must be non-empty for merge_scoped writes")
     return " AND ".join(
-        f"target.{column} = source.{column}" for column in merge_on
+        f"target.{_quote_identifier(column)} = source.{_quote_identifier(column)}"
+        for column in merge_on
     )
 
 
@@ -224,7 +243,7 @@ def _build_partition_prune_predicate(
     Returns
     -------
     str or None
-        An AND-joined conjunction of ``target.col IN (...)`` clauses, or
+        An AND-joined conjunction of ``target."col" IN (...)`` clauses, or
         ``None`` when no column qualifies.
 
     Notes
@@ -244,7 +263,7 @@ def _build_partition_prune_predicate(
         if any(value is None for value in values):
             continue
         literals = ", ".join(_format_value(value) for value in sorted(values, key=str))
-        clauses.append(f"target.{column} IN ({literals})")
+        clauses.append(f"target.{_quote_identifier(column)} IN ({literals})")
     if not clauses:
         return None
     return " AND ".join(clauses)
@@ -253,12 +272,13 @@ def _build_partition_prune_predicate(
 def _build_merge_update_predicate(
     column_names: Sequence[str], merge_on: Sequence[str]
 ) -> str | None:
-    """Build a null-safe predicate that excludes unchanged merge matches."""
+    """Build a null-safe update predicate with quoted column names."""
     value_columns = [column for column in column_names if column not in merge_on]
     if not value_columns:
         return None
     return " OR ".join(
-        f"(source.{column} IS DISTINCT FROM target.{column})"
+        f"(source.{_quote_identifier(column)} IS DISTINCT FROM "
+        f"target.{_quote_identifier(column)})"
         for column in value_columns
     )
 

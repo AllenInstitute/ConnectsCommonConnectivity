@@ -41,6 +41,20 @@ def test_cluster_membership_merge_keys_are_required_only_for_write():
     assert spec.required_for_write == ["hierarchy_id", "item", "cluster"]
 
 
+def test_set_scoped_rows_include_parent_set_in_merge_identity():
+    """Local child IDs must not collide across their parent sets."""
+    assert REGISTRY["CellToClusterMapping"].merge_on == [
+        "project_id",
+        "mapping_set",
+        "id",
+    ]
+    assert REGISTRY["CellFeatureMatrix"].merge_on == [
+        "project_id",
+        "feature_set_id",
+        "id",
+    ]
+
+
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_registry_key_matches_model_cls(key):
     """Each registry key must match its generated model class."""

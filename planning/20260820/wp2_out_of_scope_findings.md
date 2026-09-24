@@ -14,16 +14,6 @@ Future decision: define whether the IO layer should expose conflicts directly or
 retry selected conflict types with bounded backoff. Cover the policy against the
 object-store backend used in deployment, not only a local filesystem.
 
-## Legacy `append_new_dataitems` lifecycle
-
-`write_models(DataItem)` now uses transactional merge-scoped upserts, but the
-public `append_new_dataitems` helper remains available for compatibility. That
-helper uses a non-transactional read-then-append sequence and can admit duplicate
-IDs under concurrent use.
-
-Future decision: deprecate and remove the helper, make it delegate to the registry
-writer, or explicitly document it as a low-level sequential-only API.
-
 ## Repository-wide Ruff backlog
 
 The WP2-touched Python files pass targeted Ruff checks. A repository-wide

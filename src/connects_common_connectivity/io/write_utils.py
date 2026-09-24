@@ -4,16 +4,11 @@ from __future__ import annotations
 from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
-import polars as pl
-import pyarrow as pa
-import pyarrow.compute as pc
-from deltalake import write_deltalake
 from numpy.typing import ArrayLike
 
 from connects_common_connectivity.models import ProjectionMeasurementMatrix
 
 __all__ = [
-    "append_new_dataitems",
     "populate_region_coverage",
     "walk_ancestors",
 ]
@@ -69,74 +64,6 @@ def walk_ancestors(
         yield cur, is_leaf
         is_leaf = False
         cur = parent_of.get(cur)
-
-
-def append_new_dataitems(
-    output_path: str,
-    table: pa.Table,
-    *,
-    project_id: str,
-    id_column: str = "id",
-) -> int:
-    """Append candidate rows whose ids are not stored for one project.
-
-    On a sequential call where the existing Delta table can be read, rows
-    whose ``id_column`` value already occurs in the selected ``project_id``
-    partition are omitted. The append does not remove existing rows. If the
-    table does not exist or the read fails for any reason, every candidate row
-    is treated as new.
-
-    Parameters
-    ----------
-    output_path:
-        Complete path to the Delta table directory.
-    table:
-        Arrow table of candidate rows. It must contain ``id_column`` and a
-        ``project_id`` column whose values match the ``project_id`` argument;
-        duplicate ids within this batch are not removed.
-    project_id:
-        Existing-table partition to inspect before checking candidate ids.
-    id_column:
-        Candidate and existing-table column used for the id comparison.
-
-    Returns
-    -------
-    int
-        Number of candidate rows submitted to the Delta append, or zero when
-        none remain after the existing-id check.
-
-    Notes
-    -----
-    Repeating a batch is idempotent only for sequential calls where the
-    existing Delta table can be read. This helper provides no transaction
-    spanning the read and append, so concurrent writers can append the same
-    id. A read failure is treated like a missing table and disables duplicate
-    detection for that call.
-    """
-    existing_ids: set[str] = set()
-    try:
-        existing_ids = set(
-            pl.read_delta(output_path)
-            .filter(pl.col("project_id") == project_id)[id_column]
-            .to_list()
-        )
-    except Exception:
-        # Table doesn't exist yet, or read failed — treat all rows as new.
-        pass
-
-    if existing_ids:
-        id_array = table.column(id_column)
-        existing_array = pa.array(list(existing_ids), type=id_array.type)
-        in_existing = pc.is_in(id_array, value_set=existing_array)
-        new_rows = table.filter(pc.invert(in_existing))
-    else:
-        new_rows = table
-
-    if new_rows.num_rows == 0:
-        return 0
-
-    write_deltalake(output_path, new_rows, mode="append", partition_by=["project_id"])
-    return new_rows.num_rows
 
 
 def populate_region_coverage(

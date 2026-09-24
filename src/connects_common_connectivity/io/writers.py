@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
+import pyarrow.compute as pc
 from deltalake import DeltaTable, write_deltalake
 from numpy.typing import ArrayLike
 from pydantic import BaseModel
@@ -262,7 +263,28 @@ def _build_merge_update_predicate(
 
 
 def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
-    """Keep the final input row for each merge key in stable survivor order."""
+    """Keep the final input row for each merge key in stable survivor order.
+
+    Parameters
+    ----------
+    table:
+        Arrow table containing every merge key column.
+    merge_on:
+        Non-empty ordered column names whose combined values identify a row.
+
+    Returns
+    -------
+    pyarrow.Table
+        Rows selected from ``table`` so each merge key occurs once. For a
+        repeated key, its final input row survives; surviving rows are ordered
+        by the positions of their final occurrences.
+
+    Raises
+    ------
+    ValueError
+        If no merge keys are provided, a key column is absent, or any key
+        value is null.
+    """
     if not merge_on:
         raise ValueError("merge_on must be non-empty for merge_scoped writes")
 
@@ -270,17 +292,32 @@ def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
     if missing:
         raise ValueError(f"merge_on columns missing from table: {missing!r}")
 
-    key_columns = [table.column(column).to_pylist() for column in merge_on]
-    keys = list(zip(*key_columns))
-    for row_index, key in enumerate(keys):
-        if any(value is None for value in key):
-            raise ValueError(
-                f"merge_on columns must be non-null; row {row_index} has key {key!r}"
-            )
+    if table.num_rows == 0:
+        return table
 
-    last_index_by_key = {key: index for index, key in enumerate(keys)}
-    survivor_indices = sorted(last_index_by_key.values())
-    return table.take(pa.array(survivor_indices, type=pa.int64()))
+    if any(table.column(column).null_count for column in merge_on):
+        null_mask = pc.is_null(table.column(merge_on[0]))
+        for column in merge_on[1:]:
+            null_mask = pc.or_(null_mask, pc.is_null(table.column(column)))
+        null_indices = pc.indices_nonzero(null_mask)
+        row_index = null_indices[0].as_py()
+        key = tuple(table.column(column)[row_index].as_py() for column in merge_on)
+        raise ValueError(
+            f"merge_on columns must be non-null; row {row_index} has key {key!r}"
+        )
+
+    index_name = "__ccc_row_index"
+    while index_name in table.column_names or f"{index_name}_max" in table.column_names:
+        index_name += "_"
+    indexed_keys = table.select(merge_on).append_column(
+        index_name, pa.array(range(table.num_rows), type=pa.int64())
+    )
+    grouped = indexed_keys.group_by(list(merge_on)).aggregate([(index_name, "max")])
+    survivor_column = f"{index_name}_max"
+    survivor_indices = grouped.sort_by([(survivor_column, "ascending")]).column(
+        survivor_column
+    )
+    return table.take(survivor_indices)
 
 
 def _group_by_scope(

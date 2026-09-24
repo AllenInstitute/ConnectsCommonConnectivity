@@ -203,6 +203,63 @@ def test_deduplicate_on_keys_keeps_last_row_in_stable_order():
     ]
 
 
+def test_deduplicate_on_keys_supports_chunked_keys_and_empty_tables():
+    """Arrow-native deduplication must handle chunk boundaries and no rows."""
+    chunked = pa.table(
+        {
+            "id": pa.chunked_array([["a", "b"], ["a"]]),
+            "value": [1, 2, 3],
+        }
+    )
+    empty = pa.table(
+        {
+            "id": pa.array([], type=pa.string()),
+            "value": pa.array([], type=pa.int64()),
+        }
+    )
+
+    assert _deduplicate_on_keys(chunked, ["id"]).to_pylist() == [
+        {"id": "b", "value": 2},
+        {"id": "a", "value": 3},
+    ]
+    assert _deduplicate_on_keys(empty, ["id"]).equals(empty)
+
+
+def test_deduplicate_on_keys_rejects_earliest_null_key():
+    """Null validation must report the first invalid row across all key columns."""
+    table = pa.table(
+        {
+            "project_id": ["p", None, "p"],
+            "id": [None, "a", "b"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"row 0 has key \('p', None\)",
+    ):
+        _deduplicate_on_keys(table, ["project_id", "id"])
+
+
+def test_deduplicate_on_keys_avoids_temporary_column_collisions():
+    """A source column resembling the internal row index must be preserved."""
+    table = pa.table(
+        {
+            "id": ["a", "a"],
+            "__ccc_row_index": [10, 20],
+            "__ccc_row_index__max": [30, 40],
+        }
+    )
+
+    assert _deduplicate_on_keys(table, ["id"]).to_pylist() == [
+        {
+            "id": "a",
+            "__ccc_row_index": 20,
+            "__ccc_row_index__max": 40,
+        }
+    ]
+
+
 # ---------------------------------------------------------------------------
 # _group_by_scope
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ classes:
     slots:
       - id
       - description
+      - connectome_id
       - presynaptic_cell
       - postsynaptic_cell
       - measurement_type
@@ -21,6 +22,8 @@ classes:
     mixins:
       - ProjectScoped
     slot_usage:
+      connectome_id:
+        required: true
       measurement_type:
         range: SynapticMeasurementType
       modality:
@@ -82,6 +85,8 @@ classes:
         range: Unit
 
 slots:
+  connectome_id:
+    description: Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.
   dataitem_id:
     description: The DataItem for which projection measurements are reported.
   measurement_type:

@@ -5,7 +5,7 @@ module owns the read path. It exposes :class:`DatasetReader` for assembling
 wide, dataset-centric tables from the Delta tables under a Common Connectivity
 root, and :func:`read_synapse_table` for reading the long single-synapse table
 with optional feature columns. :func:`read_cell_cell_connectivity` reads a
-single project and source synapse-table scope from the canonical cell-cell table.
+single project and connectome scope from the canonical cell-cell table.
 """
 
 from __future__ import annotations
@@ -773,9 +773,9 @@ def _filter_explicit_values(
 
 def read_cell_cell_connectivity(
     project_id: str,
+    connectome_id: str,
     *,
-    synapse_table_id: str,
-    connectome_id: str | None = None,
+    synapse_table_id: str | None = None,
     presynaptic_cells: str | Iterable[str] | None = None,
     postsynaptic_cells: str | Iterable[str] | None = None,
     measurement_types: str | Iterable[str] | None = None,
@@ -784,20 +784,19 @@ def read_cell_cell_connectivity(
 ) -> pl.DataFrame:
     """Read one cell-cell measurement context from the canonical Delta table.
 
-    The required project and synapse-table scopes identify the source rows.
-    An optional connectome filter narrows those rows to one derived measurement
-    context. Additional filters select explicit endpoint IDs or measurement
-    types; DataSet and cluster cohort resolution is intentionally outside this
-    helper's contract.
+    The required project and connectome scopes identify one measurement
+    context. Optional filters select source-table provenance, explicit endpoint
+    IDs, or measurement types; DataSet and cluster cohort resolution is
+    intentionally outside this helper's contract.
 
     Parameters
     ----------
     project_id:
         Project scope to read.
-    synapse_table_id:
-        Logical single-synapse table from which the measurements were derived.
     connectome_id:
-        Optional measurement context within the source synapse table.
+        Measurement context to read within the project.
+    synapse_table_id:
+        Optional logical single-synapse table provenance to retain.
     presynaptic_cells, postsynaptic_cells:
         Optional explicit cell ID or iterable of cell IDs to retain.
     measurement_types:
@@ -827,10 +826,12 @@ def read_cell_cell_connectivity(
 
     connectivity = pl.read_delta(str(table_path)).filter(
         (pl.col("project_id") == project_id)
-        & (pl.col("synapse_table_id") == synapse_table_id)
+        & (pl.col("connectome_id") == connectome_id)
     )
-    if connectome_id is not None:
-        connectivity = connectivity.filter(pl.col("connectome_id") == connectome_id)
+    if synapse_table_id is not None:
+        connectivity = connectivity.filter(
+            pl.col("synapse_table_id") == synapse_table_id
+        )
     return _filter_explicit_values(
         connectivity,
         (
@@ -945,7 +946,7 @@ def _select_feature_columns(
     """Return the feature frame reduced to the id key plus requested columns.
 
     ``features is True`` keeps every column except scope columns that already
-    live on the long table (``project_id``/``dataset_id``), which would
+    live on the long table (``project_id``/``synapse_table_id``), which would
     otherwise collide on the join. An explicit iterable keeps only the named
     columns (plus the ``id`` key).
     """

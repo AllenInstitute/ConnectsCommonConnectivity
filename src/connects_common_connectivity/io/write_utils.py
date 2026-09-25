@@ -27,7 +27,6 @@ __all__ = [
 
 _CELL_CELL_IDENTITY_COLUMNS = [
     "project_id",
-    "synapse_table_id",
     "presynaptic_cell",
     "postsynaptic_cell",
 ]
@@ -47,13 +46,15 @@ def derive_cell_cell_connectivity(
 ) -> pl.DataFrame:
     """Aggregate single-synapse rows into cell-cell connectivity measurements.
 
-    One ``SYNAPSE_COUNT`` row is emitted for every project, synapse table, and
-    endpoint pair. Supplying both ``size_column`` and ``size_unit`` additionally
-    emits a ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because
-    ignoring them would report a partial sum as a total anatomical size.
+    One ``SYNAPSE_COUNT`` row is emitted for every project and endpoint pair.
+    Supplying both ``size_column`` and ``size_unit`` additionally emits a
+    ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
+    would report a partial sum as a total anatomical size.
 
     Output IDs are full SHA-256 hashes of canonical JSON arrays containing the
-    project, source synapse table, connectome, endpoints, and measurement type.
+    project, connectome, endpoints, and measurement type. If every input row
+    has the same non-null ``synapse_table_id``, that value is preserved as
+    optional provenance; it does not affect grouping or output identity.
     """
     missing = [
         column for column in _CELL_CELL_IDENTITY_COLUMNS if column not in synapses
@@ -93,6 +94,7 @@ def derive_cell_cell_connectivity(
     if synapses.is_empty():
         return pl.DataFrame(schema=_CELL_CELL_OUTPUT_SCHEMA)
 
+    synapse_table_id = _single_synapse_table_id(synapses)
     normalized = synapses.with_columns(
         pl.col(_CELL_CELL_IDENTITY_COLUMNS).cast(pl.String)
     )
@@ -103,6 +105,7 @@ def derive_cell_cell_connectivity(
     count_rows = _shape_cell_cell_measurements(
         count_rows,
         connectome_id=connectome_id,
+        synapse_table_id=synapse_table_id,
         modality=modality_value,
         measurement_type=SynapticMeasurementType.SYNAPSE_COUNT.value,
         unit=Unit.COUNT.value,
@@ -118,6 +121,7 @@ def derive_cell_cell_connectivity(
             _shape_cell_cell_measurements(
                 size_rows,
                 connectome_id=connectome_id,
+                synapse_table_id=synapse_table_id,
                 modality=modality_value,
                 measurement_type=SynapticMeasurementType.SUM_ANATOMICAL_SIZE.value,
                 unit=size_unit_value,
@@ -131,6 +135,7 @@ def _shape_cell_cell_measurements(
     measurements: pl.DataFrame,
     *,
     connectome_id: str,
+    synapse_table_id: str | None,
     modality: str,
     measurement_type: str,
     unit: str,
@@ -138,6 +143,7 @@ def _shape_cell_cell_measurements(
     measurements = measurements.with_columns(
         pl.lit(None, dtype=pl.String).alias("description"),
         pl.lit(connectome_id).alias("connectome_id"),
+        pl.lit(synapse_table_id, dtype=pl.String).alias("synapse_table_id"),
         pl.lit(measurement_type).alias("measurement_type"),
         pl.lit(modality).alias("modality"),
         pl.col("value").cast(pl.Float64),
@@ -147,7 +153,6 @@ def _shape_cell_cell_measurements(
         pl.struct(
             [
                 "project_id",
-                "synapse_table_id",
                 "connectome_id",
                 "presynaptic_cell",
                 "postsynaptic_cell",
@@ -162,7 +167,6 @@ def _shape_cell_cell_measurements(
 def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
     values = [
         identity["project_id"],
-        identity["synapse_table_id"],
         identity["connectome_id"],
         identity["presynaptic_cell"],
         identity["postsynaptic_cell"],
@@ -170,6 +174,17 @@ def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
     ]
     encoded = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(encoded.encode()).hexdigest()}"
+
+
+def _single_synapse_table_id(synapses: pl.DataFrame) -> str | None:
+    """Return one complete source-table value, otherwise no provenance."""
+    if "synapse_table_id" not in synapses.columns:
+        return None
+    values = synapses["synapse_table_id"]
+    if values.null_count():
+        return None
+    unique = values.unique().to_list()
+    return str(unique[0]) if len(unique) == 1 else None
 
 
 def walk_ancestors(

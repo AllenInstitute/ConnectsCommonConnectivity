@@ -188,11 +188,11 @@ When two notebooks merge into the same scoped slice (for example, both patch-seq
 
 ### 5g. Cell-cell connectivity (`cellcellconnectivitylong/`)
 
-Every `CellCellConnectivityLong` row requires both `synapse_table_id` and `connectome_id`. The former identifies the source connectivity table; the latter identifies the derived measurement context (segmentation version, proofreading state, and measurement semantics). DataSet IDs remain reserved for collections of DataItems.
+Every `CellCellConnectivityLong` row requires `connectome_id`, which independently identifies the measurement context (segmentation version, proofreading state, and measurement semantics). `synapse_table_id` is optional provenance for connectivity derived from a single-synapse table; cell-cell connectivity produced by other methods can omit it. DataSet IDs remain reserved for collections of DataItems.
 
-Use `derive_cell_cell_connectivity(...)` to aggregate a Polars synapse frame by project, synapse table, and pre/post endpoints. It always emits `SYNAPSE_COUNT` with unit `COUNT`. Supplying both `size_column` and `size_unit` additionally emits `SUM_ANATOMICAL_SIZE`; the size column must be numeric and contain no null values.
+Use `derive_cell_cell_connectivity(...)` to aggregate a Polars synapse frame by project and pre/post endpoints. It always emits `SYNAPSE_COUNT` with unit `COUNT`. Supplying both `size_column` and `size_unit` additionally emits `SUM_ANATOMICAL_SIZE`; the size column must be numeric and contain no null values. When all input rows share one non-null `synapse_table_id`, the transform preserves it as optional provenance without using it for grouping or row IDs.
 
-Use `read_cell_cell_connectivity(project_id, synapse_table_id=..., ...)` to read canonical `cellcellconnectivitylong/` storage. It can optionally select one `connectome_id` and filter explicit presynaptic IDs, postsynaptic IDs, and measurement types. `read_synapse_table` uses the same project, synapse-table, and endpoint selectors, with additional feature-join controls. DataSet and cluster cohort resolution is not implemented here and remains issue #23.
+Use `read_cell_cell_connectivity(project_id, connectome_id, ...)` to read canonical `cellcellconnectivitylong/` storage. It can optionally filter `synapse_table_id` provenance, explicit presynaptic IDs, postsynaptic IDs, and measurement types. `read_synapse_table` instead requires its logical `synapse_table_id` and adds feature-join controls. DataSet and cluster cohort resolution is not implemented here and remains issue #23.
 
 All cell-cell ETLs write to the same canonical directory:
 

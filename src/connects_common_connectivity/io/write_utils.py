@@ -7,9 +7,12 @@ from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
 import polars as pl
+import pyarrow as pa
 from numpy.typing import ArrayLike
 
+from connects_common_connectivity.io.arrow_utils import build_arrow_schema
 from connects_common_connectivity.models import (
+    CellCellConnectivityLong,
     Modality,
     ProjectionMeasurementMatrix,
     SynapticMeasurementType,
@@ -22,27 +25,16 @@ __all__ = [
     "walk_ancestors",
 ]
 
-#---------------
-# derive_cell_cell_connectivity
-#---------------
-
 _CELL_CELL_IDENTITY_COLUMNS = [
     "project_id",
+    "synapse_table_id",
     "presynaptic_cell",
     "postsynaptic_cell",
 ]
-_CELL_CELL_OUTPUT_SCHEMA = {
-    "id": pl.String,
-    "description": pl.String,
-    "connectome_id": pl.String,
-    "presynaptic_cell": pl.String,
-    "postsynaptic_cell": pl.String,
-    "measurement_type": pl.String,
-    "modality": pl.String,
-    "value": pl.Float64,
-    "unit": pl.String,
-    "project_id": pl.String,
-}
+_CELL_CELL_ARROW_SCHEMA = build_arrow_schema(CellCellConnectivityLong)
+_CELL_CELL_OUTPUT_SCHEMA = pl.from_arrow(
+    pa.Table.from_batches([], schema=_CELL_CELL_ARROW_SCHEMA)
+).schema
 
 
 def derive_cell_cell_connectivity(
@@ -55,13 +47,13 @@ def derive_cell_cell_connectivity(
 ) -> pl.DataFrame:
     """Aggregate single-synapse rows into cell-cell connectivity measurements.
 
-    One ``SYNAPSE_COUNT`` row is emitted for every project and endpoint pair.
-    Supplying both ``size_column`` and ``size_unit`` additionally emits a
-    ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
-    would report a partial sum as a total anatomical size.
+    One ``SYNAPSE_COUNT`` row is emitted for every project, synapse table, and
+    endpoint pair. Supplying both ``size_column`` and ``size_unit`` additionally
+    emits a ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because
+    ignoring them would report a partial sum as a total anatomical size.
 
     Output IDs are full SHA-256 hashes of canonical JSON arrays containing the
-    project, connectome, endpoints, and measurement type.
+    project, source synapse table, connectome, endpoints, and measurement type.
     """
     missing = [
         column for column in _CELL_CELL_IDENTITY_COLUMNS if column not in synapses
@@ -155,6 +147,7 @@ def _shape_cell_cell_measurements(
         pl.struct(
             [
                 "project_id",
+                "synapse_table_id",
                 "connectome_id",
                 "presynaptic_cell",
                 "postsynaptic_cell",
@@ -169,6 +162,7 @@ def _shape_cell_cell_measurements(
 def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
     values = [
         identity["project_id"],
+        identity["synapse_table_id"],
         identity["connectome_id"],
         identity["presynaptic_cell"],
         identity["postsynaptic_cell"],
@@ -177,8 +171,6 @@ def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
     encoded = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(encoded.encode()).hexdigest()}"
 
-
-#---------------
 
 def walk_ancestors(
     leaf_id: str,

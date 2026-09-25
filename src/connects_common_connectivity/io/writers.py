@@ -722,15 +722,11 @@ def write_cellcellconnectivitylong(
     """Placeholder writer for ``CellCellConnectivityLong`` rows.
 
     Not implemented. ``CellCellConnectivityLong`` has no ``WriteSpec`` entry
-    yet, and the existing ETL notebooks (``etl_minnie_04_cell_cell.ipynb``,
-    ``parse_minnie_clustering.ipynb``) write to non-canonical, run-specific
-    subdirs (e.g. ``cellcellconnectivitylong_proofread_pre_to_csm_post/``)
-    rather than the canonical ``cellcellconnectivitylong/`` subdir that
-    ``write_models`` would resolve. Until either (a) those callers
-    consolidate onto the canonical subdir and a ``WriteSpec`` is added, or
-    (b) dispatch is extended to accept a per-call subdir override, those
-    notebooks keep using ``write_deltalake`` directly. This stub exists as
-    a reminder of that open work.
+    yet. Current ETL notebooks write directly to canonical
+    ``cellcellconnectivitylong/`` storage with project/connectome-scoped
+    overwrite predicates. They continue using ``write_deltalake`` until a
+    ``WriteSpec`` adds the equivalent validated generic write path. This stub
+    exists as a reminder of that remaining registration work.
 
     Parameters
     ----------

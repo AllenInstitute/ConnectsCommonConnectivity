@@ -825,10 +825,7 @@ class DataItemDataSetAssociation(ProjectScoped):
                        'BrainRegionAssociation',
                        'CellFeatureMeasurement',
                        'CellGeneData']} })
-    dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id',
-         'domain_of': ['DataItemDataSetAssociation',
-                       'SynapseConnectivityLong',
-                       'SynapseFeatureMatrix']} })
+    dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
@@ -2098,18 +2095,25 @@ class CellCellConnectivityLong(ProjectScoped):
          'mixins': ['ProjectScoped'],
          'slot_usage': {'connectome_id': {'name': 'connectome_id', 'required': True},
                         'measurement_type': {'name': 'measurement_type',
-                                             'range': 'SynapticMeasurementType'},
-                        'modality': {'name': 'modality', 'range': 'Modality'},
+                                             'range': 'SynapticMeasurementType',
+                                             'required': True},
+                        'modality': {'name': 'modality',
+                                     'range': 'Modality',
+                                     'required': True},
                         'postsynaptic_cell': {'description': 'The postsynaptic cell '
                                                              'for this measurement.',
                                               'inlined': False,
                                               'name': 'postsynaptic_cell',
-                                              'range': 'DataItem'},
+                                              'range': 'DataItem',
+                                              'required': True},
                         'presynaptic_cell': {'description': 'The presynaptic cell for '
                                                             'this measurement.',
                                              'inlined': False,
                                              'name': 'presynaptic_cell',
-                                             'range': 'DataItem'},
+                                             'range': 'DataItem',
+                                             'required': True},
+                        'synapse_table_id': {'name': 'synapse_table_id',
+                                             'required': True},
                         'unit': {'name': 'unit', 'range': 'Unit', 'required': True},
                         'value': {'description': 'Numeric value quantifying '
                                                  'connectivity between the presynaptic '
@@ -2155,15 +2159,19 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
     connectome_id: str = Field(default=..., description="""Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'connectome_id', 'domain_of': ['CellCellConnectivityLong']} })
-    presynaptic_cell: Optional[str] = Field(default=None, description="""The presynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'presynaptic_cell',
+    synapse_table_id: str = Field(default=..., description="""Identifier for a logical table of single-synapse connectivity rows within a project.""", json_schema_extra = { "linkml_meta": {'alias': 'synapse_table_id',
+         'domain_of': ['CellCellConnectivityLong',
+                       'SynapseConnectivityLong',
+                       'SynapseFeatureMatrix']} })
+    presynaptic_cell: str = Field(default=..., description="""The presynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'presynaptic_cell',
          'domain_of': ['CellCellConnectivityLong', 'SynapseConnectivityLong']} })
-    postsynaptic_cell: Optional[str] = Field(default=None, description="""The postsynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'postsynaptic_cell',
+    postsynaptic_cell: str = Field(default=..., description="""The postsynaptic cell for this measurement.""", json_schema_extra = { "linkml_meta": {'alias': 'postsynaptic_cell',
          'domain_of': ['CellCellConnectivityLong', 'SynapseConnectivityLong']} })
-    measurement_type: Optional[SynapticMeasurementType] = Field(default=None, description="""The specific projection measurement type (enum) for this set.""", json_schema_extra = { "linkml_meta": {'alias': 'measurement_type',
+    measurement_type: SynapticMeasurementType = Field(default=..., description="""The specific projection measurement type (enum) for this set.""", json_schema_extra = { "linkml_meta": {'alias': 'measurement_type',
          'domain_of': ['ProjectionMeasurementMatrix',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
-    modality: Optional[Modality] = Field(default=None, description="""Source modality for the data item (if relevant).""", json_schema_extra = { "linkml_meta": {'alias': 'modality',
+    modality: Modality = Field(default=..., description="""Source modality for the data item (if relevant).""", json_schema_extra = { "linkml_meta": {'alias': 'modality',
          'domain_of': ['DataSet',
                        'ProjectionMeasurementMatrix',
                        'CellCellConnectivityLong',
@@ -2296,14 +2304,7 @@ class SynapseConnectivityLong(ProjectScoped):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-synapse-schema',
          'mixins': ['ProjectScoped'],
-         'slot_usage': {'dataset_id': {'description': 'DataSet the '
-                                                      'presynaptic/postsynaptic '
-                                                      'DataItem ids belong to.',
-                                       'inlined': False,
-                                       'name': 'dataset_id',
-                                       'range': 'DataSet',
-                                       'required': True},
-                        'id': {'description': 'Unique synapse identifier from the '
+         'slot_usage': {'id': {'description': 'Unique synapse identifier from the '
                                               'source segmentation (stored as-is, '
                                               'never cast).',
                                'identifier': True,
@@ -2323,6 +2324,10 @@ class SynapseConnectivityLong(ProjectScoped):
                                              'inlined': False,
                                              'name': 'presynaptic_cell',
                                              'range': 'DataItem',
+                                             'required': True},
+                        'synapse_table_id': {'description': 'Logical synapse table '
+                                                            'containing this row.',
+                                             'name': 'synapse_table_id',
                                              'required': True}}})
 
     id: str = Field(default=..., description="""Unique synapse identifier from the source segmentation (stored as-is, never cast).""", json_schema_extra = { "linkml_meta": {'alias': 'id',
@@ -2356,8 +2361,8 @@ class SynapseConnectivityLong(ProjectScoped):
          'domain_of': ['CellCellConnectivityLong', 'SynapseConnectivityLong']} })
     postsynaptic_cell: str = Field(default=..., description="""Postsynaptic DataItem (root id) of this synapse.""", json_schema_extra = { "linkml_meta": {'alias': 'postsynaptic_cell',
          'domain_of': ['CellCellConnectivityLong', 'SynapseConnectivityLong']} })
-    dataset_id: str = Field(default=..., description="""DataSet the presynaptic/postsynaptic DataItem ids belong to.""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id',
-         'domain_of': ['DataItemDataSetAssociation',
+    synapse_table_id: str = Field(default=..., description="""Logical synapse table containing this row.""", json_schema_extra = { "linkml_meta": {'alias': 'synapse_table_id',
+         'domain_of': ['CellCellConnectivityLong',
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
@@ -2376,12 +2381,7 @@ class SynapseFeatureMatrix(ProjectScoped):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-synapse-schema',
          'mixins': ['ProjectScoped'],
-         'slot_usage': {'dataset_id': {'description': 'DataSet the synapses in this '
-                                                      'matrix belong to.',
-                                       'inlined': False,
-                                       'name': 'dataset_id',
-                                       'range': 'DataSet'},
-                        'id': {'description': 'Identifier for this per-synapse feature '
+         'slot_usage': {'id': {'description': 'Identifier for this per-synapse feature '
                                               'matrix.',
                                'name': 'id',
                                'range': 'string',
@@ -2397,7 +2397,12 @@ class SynapseFeatureMatrix(ProjectScoped):
                                                                 'SynapseConnectivityLong '
                                                                 'id.',
                                                  'name': 'synapse_index_column',
-                                                 'range': 'string'}}})
+                                                 'range': 'string'},
+                        'synapse_table_id': {'description': 'Logical synapse table '
+                                                            'whose rows this feature '
+                                                            'matrix describes.',
+                                             'name': 'synapse_table_id',
+                                             'required': True}}})
 
     id: str = Field(default=..., description="""Identifier for this per-synapse feature matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
@@ -2435,8 +2440,8 @@ class SynapseFeatureMatrix(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
-    dataset_id: str = Field(default=..., description="""DataSet the synapses in this matrix belong to.""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id',
-         'domain_of': ['DataItemDataSetAssociation',
+    synapse_table_id: str = Field(default=..., description="""Logical synapse table whose rows this feature matrix describes.""", json_schema_extra = { "linkml_meta": {'alias': 'synapse_table_id',
+         'domain_of': ['CellCellConnectivityLong',
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     parquet_path: str = Field(default=..., description="""Path to the wide-form per-synapse feature Parquet dataset.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path',

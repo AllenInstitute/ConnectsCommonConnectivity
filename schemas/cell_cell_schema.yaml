@@ -13,6 +13,7 @@ classes:
       - id
       - description
       - connectome_id
+      - synapse_table_id
       - presynaptic_cell
       - postsynaptic_cell
       - measurement_type
@@ -24,17 +25,23 @@ classes:
     slot_usage:
       connectome_id:
         required: true
+      synapse_table_id:
+        required: true
       measurement_type:
         range: SynapticMeasurementType
+        required: true
       modality:
         range: Modality
+        required: true
       presynaptic_cell:
         range: DataItem
         inlined: false
+        required: true
         description: The presynaptic cell for this measurement.
       postsynaptic_cell:
         range: DataItem
         inlined: false
+        required: true
         description: The postsynaptic cell for this measurement.
       value:
         required: true

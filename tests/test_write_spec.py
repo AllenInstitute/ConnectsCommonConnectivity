@@ -11,6 +11,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from connects_common_connectivity import models as models_module
+from connects_common_connectivity.io.path_spec import MODEL_TABLE_PATHS
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
 
 
@@ -18,6 +19,20 @@ def test_registry_contains_seed_entries():
     """The writer registry must contain its foundational model entries."""
     seed = {"DataSet", "DataItem", "DataItemDataSetAssociation"}
     assert seed.issubset(set(REGISTRY))
+
+
+def test_registry_uses_canonical_model_table_paths():
+    """Every writer must use the neutral IO path specification."""
+    for model_name, spec in REGISTRY.items():
+        assert spec.subdir == MODEL_TABLE_PATHS[model_name]
+
+
+def test_path_spec_includes_unregistered_connectivity_tables():
+    """Readers and raw ETLs need canonical paths before writer registration."""
+    assert MODEL_TABLE_PATHS["SynapseConnectivityLong"] == "synapse"
+    assert MODEL_TABLE_PATHS["CellCellConnectivityLong"] == (
+        "cellcellconnectivitylong"
+    )
 
 
 def test_milestone_scopes_use_taxonomy_and_project_identity():

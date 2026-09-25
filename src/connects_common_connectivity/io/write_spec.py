@@ -14,6 +14,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from connects_common_connectivity.io.path_spec import MODEL_TABLE_PATHS
 from connects_common_connectivity.models import (
     AlgorithmRun,
     CellFeatureDefinition,
@@ -117,7 +118,7 @@ class WriteSpec(BaseModel):
 REGISTRY: dict[str, WriteSpec] = {
     "DataSet": WriteSpec(
         model_cls=DataSet,
-        subdir="dataset",
+        subdir=MODEL_TABLE_PATHS["DataSet"],
         partition_by=["project_id"],
         # Scoped on (project_id, id) so DataSet rows from sibling notebooks
         # sharing a project_id (e.g. patchseq exc/inh) do not overwrite each
@@ -128,7 +129,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "DataItem": WriteSpec(
         model_cls=DataItem,
-        subdir="dataitem",
+        subdir=MODEL_TABLE_PATHS["DataItem"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
         write_mode="merge_scoped",
@@ -136,7 +137,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "DataItemDataSetAssociation": WriteSpec(
         model_cls=DataItemDataSetAssociation,
-        subdir="dataitem_dataset_association",
+        subdir=MODEL_TABLE_PATHS["DataItemDataSetAssociation"],
         partition_by=["project_id"],
         scope_columns=["project_id", "dataset_id"],
         write_mode="merge_scoped",
@@ -148,7 +149,7 @@ REGISTRY: dict[str, WriteSpec] = {
     # cluster ETL notebooks.
     "Cluster": WriteSpec(
         model_cls=Cluster,
-        subdir="cluster",
+        subdir=MODEL_TABLE_PATHS["Cluster"],
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id"],
         write_mode="merge_scoped",
@@ -157,7 +158,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "ClusterHierarchy": WriteSpec(
         model_cls=ClusterHierarchy,
-        subdir="clusterhierarchy",
+        subdir=MODEL_TABLE_PATHS["ClusterHierarchy"],
         partition_by=[],
         scope_columns=["id"],
         write_mode="merge_scoped",
@@ -165,7 +166,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "ClusterMembership": WriteSpec(
         model_cls=ClusterMembership,
-        subdir="clustermembership",
+        subdir=MODEL_TABLE_PATHS["ClusterMembership"],
         partition_by=["project_id", "hierarchy_id"],
         scope_columns=["project_id", "hierarchy_id"],
         write_mode="merge_scoped",
@@ -174,7 +175,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "MappingSet": WriteSpec(
         model_cls=MappingSet,
-        subdir="mappingset",
+        subdir=MODEL_TABLE_PATHS["MappingSet"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
         write_mode="merge_scoped",
@@ -182,7 +183,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "CellToClusterMapping": WriteSpec(
         model_cls=CellToClusterMapping,
-        subdir="celltoclustermapping",
+        subdir=MODEL_TABLE_PATHS["CellToClusterMapping"],
         partition_by=["project_id"],
         scope_columns=["project_id", "mapping_set"],
         write_mode="merge_scoped",
@@ -190,7 +191,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "CellFeatureSet": WriteSpec(
         model_cls=CellFeatureSet,
-        subdir="cellfeatureset",
+        subdir=MODEL_TABLE_PATHS["CellFeatureSet"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
         write_mode="merge_scoped",
@@ -198,7 +199,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "CellFeatureDefinition": WriteSpec(
         model_cls=CellFeatureDefinition,
-        subdir="cellfeaturedefinition",
+        subdir=MODEL_TABLE_PATHS["CellFeatureDefinition"],
         partition_by=["project_id", "feature_set_id"],
         scope_columns=["project_id", "feature_set_id"],
         write_mode="merge_scoped",
@@ -207,7 +208,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "CellFeatureMatrix": WriteSpec(
         model_cls=CellFeatureMatrix,
-        subdir="cellfeaturematrix",
+        subdir=MODEL_TABLE_PATHS["CellFeatureMatrix"],
         partition_by=["project_id"],
         scope_columns=["project_id", "feature_set_id"],
         # CellFeatureMatrix rows are metadata pointers (one row per matrix);
@@ -220,7 +221,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "ProjectionMeasurementMatrix": WriteSpec(
         model_cls=ProjectionMeasurementMatrix,
-        subdir="projectionmeasurementmatrix",
+        subdir=MODEL_TABLE_PATHS["ProjectionMeasurementMatrix"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
         write_mode="merge_scoped",
@@ -230,7 +231,7 @@ REGISTRY: dict[str, WriteSpec] = {
     # (no project_id slot). Notebook predicates are id-only, matching scope=["id"].
     "AlgorithmRun": WriteSpec(
         model_cls=AlgorithmRun,
-        subdir="algorithmrun",
+        subdir=MODEL_TABLE_PATHS["AlgorithmRun"],
         partition_by=[],
         scope_columns=["id"],
         write_mode="merge_scoped",
@@ -238,7 +239,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "HierarchyCategory": WriteSpec(
         model_cls=HierarchyCategory,
-        subdir="hierarchycategory",
+        subdir=MODEL_TABLE_PATHS["HierarchyCategory"],
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id", "id"],
         write_mode="merge_scoped",
@@ -247,14 +248,14 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
 #    "SynapseConnectivityLong": WriteSpec(
 #        model_cls=SynapseConnectivityLong,
-#        subdir="synapse",
+#        subdir=MODEL_TABLE_PATHS["SynapseConnectivityLong"],
 #        partition_by=["project_id"],
-#        scope_columns=["project_id", "dataset_id"],
+#        scope_columns=["project_id", "synapse_table_id"],
 #        write_mode="overwrite_scoped",
 #    ),
     "SynapseFeatureMatrix": WriteSpec(
         model_cls=SynapseFeatureMatrix,
-        subdir="synapsefeaturematrix",
+        subdir=MODEL_TABLE_PATHS["SynapseFeatureMatrix"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
         write_mode="merge_scoped",

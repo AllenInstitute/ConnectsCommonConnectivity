@@ -165,6 +165,9 @@ slots:
       - project
       - program_id
     required: true
+  synapse_table_id:
+    description: Identifier for a logical table of single-synapse connectivity rows within a project.
+    range: string
 
 classes:
   ProjectScoped:

@@ -5,7 +5,7 @@ module owns the read path. It exposes :class:`DatasetReader` for assembling
 wide, dataset-centric tables from the Delta tables under a Common Connectivity
 root, and :func:`read_synapse_table` for reading the long single-synapse table
 with optional feature columns. :func:`read_cell_cell_connectivity` reads a
-single project and connectome scope from the canonical cell-cell table.
+single project and source synapse-table scope from the canonical cell-cell table.
 """
 
 from __future__ import annotations
@@ -16,18 +16,19 @@ from typing import Any, Iterable, Sequence
 import polars as pl
 
 from connects_common_connectivity.config import Settings, get_settings
-
-DATASET_SUBDIR = "dataset"
-DATAITEM_DATASET_ASSOCIATION_SUBDIR = "dataitem_dataset_association"
-CELL_FEATURE_SET_SUBDIR = "cellfeatureset"
-CELL_FEATURE_MATRIX_SUBDIR = "cellfeaturematrix"
-CELL_FEATURES_SUBDIR = "cellfeatures"
-CLUSTER_HIERARCHY_SUBDIR = "clusterhierarchy"
-CLUSTER_SUBDIR = "cluster"
-CLUSTER_MEMBERSHIP_SUBDIR = "clustermembership"
-CELL_CELL_CONNECTIVITY_SUBDIR = "cellcellconnectivitylong"
-SYNAPSE_SUBDIR = "synapse"
-SYNAPSE_FEATURES_SUBDIR = "synapsefeatures"
+from connects_common_connectivity.io.path_spec import (
+    CELL_CELL_CONNECTIVITY_SUBDIR,
+    CELL_FEATURE_MATRIX_SUBDIR,
+    CELL_FEATURE_SET_SUBDIR,
+    CELL_FEATURES_SUBDIR,
+    CLUSTER_HIERARCHY_SUBDIR,
+    CLUSTER_MEMBERSHIP_SUBDIR,
+    CLUSTER_SUBDIR,
+    DATAITEM_DATASET_ASSOCIATION_SUBDIR,
+    DATASET_SUBDIR,
+    SYNAPSE_FEATURES_SUBDIR,
+    SYNAPSE_SUBDIR,
+)
 
 __all__ = [
     "CELL_CELL_CONNECTIVITY_SUBDIR",
@@ -758,10 +759,23 @@ def _resolve_output_root(
     return Path((settings or get_settings()).output_root)
 
 
+def _filter_explicit_values(
+    frame: pl.DataFrame,
+    filters: Iterable[tuple[str, str | Iterable[str] | None]],
+) -> pl.DataFrame:
+    """Apply optional string-or-iterable filters with shared semantics."""
+    for column, requested in filters:
+        if requested is not None:
+            values = [requested] if isinstance(requested, str) else list(requested)
+            frame = frame.filter(pl.col(column).is_in(values))
+    return frame
+
+
 def read_cell_cell_connectivity(
     project_id: str,
-    connectome_id: str,
     *,
+    synapse_table_id: str,
+    connectome_id: str | None = None,
     presynaptic_cells: str | Iterable[str] | None = None,
     postsynaptic_cells: str | Iterable[str] | None = None,
     measurement_types: str | Iterable[str] | None = None,
@@ -770,17 +784,20 @@ def read_cell_cell_connectivity(
 ) -> pl.DataFrame:
     """Read one cell-cell measurement context from the canonical Delta table.
 
-    The required project and connectome scopes identify the stored measurement
-    context. Optional filters select explicit endpoint IDs or measurement
-    types; dataset and cluster cohort resolution is intentionally outside this
+    The required project and synapse-table scopes identify the source rows.
+    An optional connectome filter narrows those rows to one derived measurement
+    context. Additional filters select explicit endpoint IDs or measurement
+    types; DataSet and cluster cohort resolution is intentionally outside this
     helper's contract.
 
     Parameters
     ----------
     project_id:
         Project scope to read.
+    synapse_table_id:
+        Logical single-synapse table from which the measurements were derived.
     connectome_id:
-        Measurement context to read within the project.
+        Optional measurement context within the source synapse table.
     presynaptic_cells, postsynaptic_cells:
         Optional explicit cell ID or iterable of cell IDs to retain.
     measurement_types:
@@ -804,30 +821,32 @@ def read_cell_cell_connectivity(
     table_path = root / CELL_CELL_CONNECTIVITY_SUBDIR
     if not table_path.exists():
         raise FileNotFoundError(
-            f"No cell-cell connectivity table at {table_path}. Canonical "
-            "persistence is provided by issue #19."
+            f"No cell-cell connectivity table at {table_path}. Run a cell-cell "
+            "ETL that writes the canonical table first."
         )
 
     connectivity = pl.read_delta(str(table_path)).filter(
         (pl.col("project_id") == project_id)
-        & (pl.col("connectome_id") == connectome_id)
+        & (pl.col("synapse_table_id") == synapse_table_id)
     )
-    filters = (
-        ("presynaptic_cell", presynaptic_cells),
-        ("postsynaptic_cell", postsynaptic_cells),
-        ("measurement_type", measurement_types),
+    if connectome_id is not None:
+        connectivity = connectivity.filter(pl.col("connectome_id") == connectome_id)
+    return _filter_explicit_values(
+        connectivity,
+        (
+            ("presynaptic_cell", presynaptic_cells),
+            ("postsynaptic_cell", postsynaptic_cells),
+            ("measurement_type", measurement_types),
+        ),
     )
-    for column, requested in filters:
-        if requested is not None:
-            values = [requested] if isinstance(requested, str) else list(requested)
-            connectivity = connectivity.filter(pl.col(column).is_in(values))
-    return connectivity
 
 
 def read_synapse_table(
     project_id: str,
     *,
-    dataset_id: str | None = None,
+    synapse_table_id: str,
+    presynaptic_cells: str | Iterable[str] | None = None,
+    postsynaptic_cells: str | Iterable[str] | None = None,
     features: bool | Iterable[str] = False,
     feature_matrix_id: str | None = None,
     synapse_index_column: str = "id",
@@ -841,10 +860,10 @@ def read_synapse_table(
     project_id:
         Project scope to read. Always required — the long table is
         ``ProjectScoped``.
-    dataset_id:
-        Optional additional filter. When given, only synapses whose
-        ``dataset_id`` matches are returned. Pass it whenever a project owns
-        more than one dataset of synapses.
+    synapse_table_id:
+        Logical single-synapse table to read within the project.
+    presynaptic_cells, postsynaptic_cells:
+        Optional explicit cell ID or iterable of cell IDs to retain.
     features:
         Controls the feature LEFT-join.
 
@@ -877,9 +896,17 @@ def read_synapse_table(
             f"rows first (see code/etl_v1dd_03_synapses.ipynb)."
         )
 
-    synapses = pl.read_delta(str(long_path)).filter(pl.col("project_id") == project_id)
-    if dataset_id is not None:
-        synapses = synapses.filter(pl.col("dataset_id") == dataset_id)
+    synapses = pl.read_delta(str(long_path)).filter(
+        (pl.col("project_id") == project_id)
+        & (pl.col("synapse_table_id") == synapse_table_id)
+    )
+    synapses = _filter_explicit_values(
+        synapses,
+        (
+            ("presynaptic_cell", presynaptic_cells),
+            ("postsynaptic_cell", postsynaptic_cells),
+        ),
+    )
 
     if not features:
         return synapses
@@ -897,8 +924,10 @@ def read_synapse_table(
     feature_df = pl.read_delta(str(feature_path)).filter(
         pl.col("project_id") == project_id
     )
-    if dataset_id is not None and "dataset_id" in feature_df.columns:
-        feature_df = feature_df.filter(pl.col("dataset_id") == dataset_id)
+    if "synapse_table_id" in feature_df.columns:
+        feature_df = feature_df.filter(
+            pl.col("synapse_table_id") == synapse_table_id
+        )
 
     # Normalize the feature join key to the long table's synapse id column.
     if synapse_index_column != "id":
@@ -920,7 +949,7 @@ def _select_feature_columns(
     otherwise collide on the join. An explicit iterable keeps only the named
     columns (plus the ``id`` key).
     """
-    drop_on_join = {"project_id", "dataset_id"}
+    drop_on_join = {"project_id", "synapse_table_id"}
     if features is True:
         keep = [c for c in feature_df.columns if c == "id" or c not in drop_on_join]
         return feature_df.select(keep)

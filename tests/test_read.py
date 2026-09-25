@@ -273,8 +273,8 @@ def synapse_root(tmp_path: Path) -> Path:
     return root
 
 
-def test_read_cell_cell_connectivity_requires_source_scope(cell_cell_root: Path):
-    """Cell-cell reads must identify both project and source synapse table."""
+def test_read_cell_cell_connectivity_requires_connectome_scope(cell_cell_root: Path):
+    """Cell-cell reads must identify both project and connectome context."""
     with pytest.raises(TypeError):
         read_cell_cell_connectivity(output_root=cell_cell_root)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
@@ -290,27 +290,31 @@ def test_read_cell_cell_connectivity_selects_project_and_connectome(
     """An optional connectome filter must isolate derived contexts."""
     first = read_cell_cell_connectivity(
         "project-1",
-        synapse_table_id="synapses-1",
-        connectome_id="connectome-1",
+        "connectome-1",
         output_root=cell_cell_root,
     )
     second = read_cell_cell_connectivity(
         "project-1",
-        synapse_table_id="synapses-1",
-        connectome_id="connectome-2",
+        "connectome-2",
         output_root=cell_cell_root,
     )
 
-    assert first["id"].to_list() == ["c1-count", "c1-size", "c1-other-pre"]
+    assert first["id"].to_list() == [
+        "c1-count",
+        "c1-size",
+        "c1-other-pre",
+        "other-source",
+    ]
     assert second["id"].to_list() == ["c2-count"]
 
 
-def test_read_cell_cell_connectivity_can_return_all_source_contexts(
+def test_read_cell_cell_connectivity_can_filter_optional_source_provenance(
     cell_cell_root: Path,
 ):
-    """A source-table read may return every connectome derived from it."""
+    """Source-table provenance may narrow an already selected connectome."""
     result = read_cell_cell_connectivity(
         "project-1",
+        "connectome-1",
         synapse_table_id="synapses-1",
         output_root=cell_cell_root,
     )
@@ -319,7 +323,6 @@ def test_read_cell_cell_connectivity_can_return_all_source_contexts(
         "c1-count",
         "c1-size",
         "c1-other-pre",
-        "c2-count",
     ]
 
 
@@ -348,8 +351,8 @@ def test_read_cell_cell_connectivity_applies_explicit_filters(
     """Cell-cell reads must compose explicit endpoint and measurement filters."""
     result = read_cell_cell_connectivity(
         "project-1",
+        "connectome-1",
         synapse_table_id="synapses-1",
-        connectome_id="connectome-1",
         output_root=cell_cell_root,
         **filters,
     )
@@ -372,8 +375,8 @@ def test_read_cell_cell_connectivity_returns_typed_empty_results(
     """Valid filters with no matches must retain the stored table schema."""
     result = read_cell_cell_connectivity(
         "project-1",
+        "connectome-1",
         synapse_table_id="synapses-1",
-        connectome_id="connectome-1",
         output_root=cell_cell_root,
         **filters,
     )
@@ -386,8 +389,8 @@ def test_read_cell_cell_connectivity_resolves_settings(cell_cell_root: Path):
     """Cell-cell reads must resolve storage from explicit settings."""
     result = read_cell_cell_connectivity(
         "project-1",
+        "connectome-2",
         synapse_table_id="synapses-1",
-        connectome_id="connectome-2",
         settings=Settings(output_root=cell_cell_root),
     )
 
@@ -402,7 +405,7 @@ def test_read_cell_cell_connectivity_requires_canonical_table(tmp_path: Path):
     with pytest.raises(FileNotFoundError, match="cellcellconnectivitylong"):
         read_cell_cell_connectivity(
             "project-1",
-            synapse_table_id="synapses-1",
+            "connectome-1",
             output_root=root,
         )
 

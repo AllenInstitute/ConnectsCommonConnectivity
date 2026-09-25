@@ -35,11 +35,10 @@ def test_cell_cell_connectivity_requires_connectome_id():
 
 
 def test_cell_cell_connectivity_accepts_connectome_id():
-    """A complete cell-cell row must preserve its connectome context."""
+    """A complete cell-cell row need not have synapse-table provenance."""
     measurement = CellCellConnectivityLong(
         id="measurement-1",
         connectome_id="connectome-1",
-        synapse_table_id="synapses-1",
         presynaptic_cell="pre-1",
         postsynaptic_cell="post-1",
         measurement_type=SynapticMeasurementType.SYNAPSE_COUNT,
@@ -50,6 +49,7 @@ def test_cell_cell_connectivity_accepts_connectome_id():
     )
 
     assert measurement.connectome_id == "connectome-1"
+    assert measurement.synapse_table_id is None
 
 
 @pytest.mark.parametrize(
@@ -83,10 +83,9 @@ def test_synapse_contracts_require_synapse_table_id(model_cls, kwargs):
         model_cls(**kwargs)
 
 
-def test_cell_cell_contract_requires_source_and_measurement_fields():
-    """Derived rows must carry provenance, endpoints, type, and modality."""
+def test_cell_cell_contract_requires_measurement_fields_not_provenance():
+    """Derived rows require measurement identity but not source provenance."""
     required = {
-        "synapse_table_id",
         "presynaptic_cell",
         "postsynaptic_cell",
         "measurement_type",
@@ -98,6 +97,9 @@ def test_cell_cell_contract_requires_source_and_measurement_fields():
         for name, field in CellCellConnectivityLong.model_fields.items()
         if field.is_required()
     }
+    assert not CellCellConnectivityLong.model_fields[
+        "synapse_table_id"
+    ].is_required()
 
 
 def test_derives_counts_for_pairs_and_projects():
@@ -201,7 +203,7 @@ def test_size_column_must_exist_and_be_numeric_and_non_null():
 
 @pytest.mark.parametrize(
     "missing_column",
-    ["project_id", "synapse_table_id", "presynaptic_cell", "postsynaptic_cell"],
+    ["project_id", "presynaptic_cell", "postsynaptic_cell"],
 )
 def test_identity_columns_must_exist(missing_column):
     """Every aggregation identity column must be present in the source."""
@@ -217,7 +219,7 @@ def test_identity_columns_must_exist(missing_column):
 
 @pytest.mark.parametrize(
     "null_column",
-    ["project_id", "synapse_table_id", "presynaptic_cell", "postsynaptic_cell"],
+    ["project_id", "presynaptic_cell", "postsynaptic_cell"],
 )
 def test_identity_columns_must_not_contain_nulls(null_column):
     """Aggregation identity columns must never contain null values."""
@@ -283,8 +285,8 @@ def test_ids_are_deterministic_and_separate_connectome_contexts():
     assert first["id"].str.contains(r"^sha256:[0-9a-f]{64}$").all()
 
 
-def test_ids_separate_source_synapse_tables():
-    """Stable IDs must preserve source synapse-table provenance."""
+def test_source_synapse_table_does_not_change_identity():
+    """Optional source provenance must not change connectome row identity."""
     first = derive_cell_cell_connectivity(
         _synapse_frame(),
         connectome_id="connectome-1",
@@ -298,7 +300,20 @@ def test_ids_separate_source_synapse_tables():
         modality=Modality.ELECTRON_MICROSCOPY,
     )
 
-    assert first["id"].to_list() != second["id"].to_list()
+    assert first["id"].to_list() == second["id"].to_list()
+    assert first["synapse_table_id"].to_list() == ["synapses-1"]
+    assert second["synapse_table_id"].to_list() == ["synapses-2"]
+
+
+def test_transform_allows_rows_without_synapse_table_provenance():
+    """Derivation must work when connectivity did not come from a table."""
+    result = derive_cell_cell_connectivity(
+        _synapse_frame().drop("synapse_table_id"),
+        connectome_id="connectome-1",
+        modality=Modality.ELECTRON_MICROSCOPY,
+    )
+
+    assert result["synapse_table_id"].to_list() == [None]
 
 
 def _synapse_frame() -> pl.DataFrame:

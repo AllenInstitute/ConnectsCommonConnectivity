@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added required measurement-context `connectome_id` values to `CellCellConnectivityLong`.
-- Added `synapse_table_id` provenance to single-synapse rows, synapse feature pointers, and derived cell-cell measurements; DataSet IDs remain reserved for DataItem collections.
+- Added required `synapse_table_id` identity to single-synapse rows and feature pointers, plus optional source provenance on derived cell-cell measurements; DataSet IDs remain reserved for DataItem collections.
 - Added `derive_cell_cell_connectivity` for deriving count and optional anatomical-size measurements from Polars synapse tables.
-- Added aligned `read_synapse_table` and `read_cell_cell_connectivity` selectors for project, synapse table, and explicit endpoints; cell-cell reads can additionally select a connectome and measurement types.
+- Added aligned endpoint filters to `read_synapse_table` and `read_cell_cell_connectivity`; synapse reads require table identity, while cell-cell reads require connectome identity and can optionally filter source provenance.
 - Added `io.path_spec` as the shared source of canonical model-table and wide-payload paths for readers, writers, and ETLs.
 - Added merge-scoped upserts for identity-bearing metadata and association rows written through `write_models`, scanning only the partitions a batch touches.
 - Added project scoping to `ProjectionMeasurementMatrix`, `SingleCellReconstruction`, and `BrainRegionAssociation`.

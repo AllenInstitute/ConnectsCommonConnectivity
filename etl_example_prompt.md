@@ -188,20 +188,19 @@ When two notebooks merge into the same scoped slice (for example, both patch-seq
 
 ### 5g. Cell-cell connectivity (`cellcellconnectivitylong/`)
 
-Every `CellCellConnectivityLong` row requires `connectome_id`. It identifies the measurement context — segmentation version, proofreading state, and measurement semantics — not a cohort or replacement for `dataset_id`.
+Every `CellCellConnectivityLong` row requires both `synapse_table_id` and `connectome_id`. The former identifies the source connectivity table; the latter identifies the derived measurement context (segmentation version, proofreading state, and measurement semantics). DataSet IDs remain reserved for collections of DataItems.
 
-Use `derive_cell_cell_connectivity(...)` to aggregate a Polars synapse frame by project and pre/post endpoints. It always emits `SYNAPSE_COUNT` with unit `COUNT`. Supplying both `size_column` and `size_unit` additionally emits `SUM_ANATOMICAL_SIZE`; the size column must be numeric and contain no null values.
+Use `derive_cell_cell_connectivity(...)` to aggregate a Polars synapse frame by project, synapse table, and pre/post endpoints. It always emits `SYNAPSE_COUNT` with unit `COUNT`. Supplying both `size_column` and `size_unit` additionally emits `SUM_ANATOMICAL_SIZE`; the size column must be numeric and contain no null values.
 
-Use `read_cell_cell_connectivity(project_id, connectome_id, ...)` to read canonical `cellcellconnectivitylong/` storage. It can filter explicit presynaptic IDs, postsynaptic IDs, and measurement types. Dataset and cluster cohort resolution is not implemented here and remains issue #23.
+Use `read_cell_cell_connectivity(project_id, synapse_table_id=..., ...)` to read canonical `cellcellconnectivitylong/` storage. It can optionally select one `connectome_id` and filter explicit presynaptic IDs, postsynaptic IDs, and measurement types. `read_synapse_table` uses the same project, synapse-table, and endpoint selectors, with additional feature-join controls. DataSet and cluster cohort resolution is not implemented here and remains issue #23.
 
-Current ETLs retain their temporary subdirectories and raw Delta writes until issue #19 adds canonical registration and migrates persistence:
+All cell-cell ETLs write to the same canonical directory:
 
 ```
-cellcellconnectivitylong_proofread_pre_to_csm_post/
-cellcellconnectivitylong_proofread_to_proofread/
+cellcellconnectivitylong/
 ```
 
-Populate a stable `connectome_id` even while writing these temporary paths. See `etl_minnie_04_cell_cell.ipynb` and `etl_v1dd_03_synapses.ipynb`.
+Direct Delta writes must overwrite only `(project_id, connectome_id)` and use consistent partitions. Issue #19 still owns `write_models` registration; folder consolidation does not depend on it. Canonical model-table paths and dataframe-backed payload roots come from `connects_common_connectivity.io.path_spec`. See `etl_minnie_04_cell_cell.ipynb` and `etl_v1dd_03_synapses.ipynb`.
 
 ### 5h. Projection matrix (`projectionmeasurementmatrix/` + wide-form parquet)
 
@@ -324,4 +323,4 @@ When two projects (different `project_id`) share a feature set (same `feature_se
 ## 11. Known limitations
 
 - **`HierarchyCategory` rows are id-scoped global vocabulary rows.** Because ids like `class`, `subclass`, and `cluster` are shared across taxonomies, only write canonical shared definitions (same ids/meaning) via `write_models`. Do not invent taxonomy-specific category ids without a schema-level discriminator.
-- **Canonical cell-cell persistence is not registered yet.** `CellCellConnectivityLong` requires `connectome_id`, but ETLs continue writing temporary folders directly until issue #19 adds the canonical writer and migration. The scoped reader expects future canonical `cellcellconnectivitylong/` storage (see §5g).
+- **Canonical cell-cell persistence is not registered yet.** ETLs write directly to canonical `cellcellconnectivitylong/`, scoped by `(project_id, connectome_id)`. Issue #19 still owns registration with the generic model writer (see §5g).

@@ -31,7 +31,7 @@ classes:
       - id
       - presynaptic_cell
       - postsynaptic_cell
-      - dataset_id
+      - synapse_table_id
     slot_usage:
       id:
         range: string
@@ -48,11 +48,9 @@ classes:
         inlined: false
         required: true
         description: Postsynaptic DataItem (root id) of this synapse.
-      dataset_id:
-        range: DataSet
-        inlined: false
+      synapse_table_id:
         required: true
-        description: DataSet the presynaptic/postsynaptic DataItem ids belong to.
+        description: Logical synapse table containing this row.
 
   SynapseFeatureMatrix:
     description: |-
@@ -67,7 +65,7 @@ classes:
     slots:
       - id
       - description
-      - dataset_id
+      - synapse_table_id
       - parquet_path
       - synapse_index_column
     slot_usage:
@@ -75,10 +73,9 @@ classes:
         range: string
         required: true
         description: Identifier for this per-synapse feature matrix.
-      dataset_id:
-        range: DataSet
-        inlined: false
-        description: DataSet the synapses in this matrix belong to.
+      synapse_table_id:
+        required: true
+        description: Logical synapse table whose rows this feature matrix describes.
       parquet_path:
         range: ParquetDataset
         required: true

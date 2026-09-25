@@ -11,6 +11,7 @@ from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io import (
     DatasetReader,
     read_cell_cell_connectivity,
+    read_synapse_table,
 )
 
 
@@ -158,43 +159,122 @@ def _build_reader_root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def reader_root(tmp_path: Path) -> Path:
+    """Provide dataset-centric tables for DatasetReader tests."""
     return _build_reader_root(tmp_path)
 
 
 @pytest.fixture
 def cell_cell_root(tmp_path: Path) -> Path:
+    """Provide canonical cell-cell rows spanning source and connectome scopes."""
     root = tmp_path / "cell-cell-root"
     _write_table(
         root,
         "cellcellconnectivitylong",
         {
-            "id": ["c1-count", "c1-size", "c1-other-pre", "c2-count", "p2-count"],
+            "id": [
+                "c1-count",
+                "c1-size",
+                "c1-other-pre",
+                "c2-count",
+                "other-source",
+                "p2-count",
+            ],
             "connectome_id": [
                 "connectome-1",
                 "connectome-1",
                 "connectome-1",
                 "connectome-2",
                 "connectome-1",
+                "connectome-1",
             ],
-            "presynaptic_cell": ["pre-1", "pre-1", "pre-2", "pre-1", "pre-1"],
-            "postsynaptic_cell": ["post-1", "post-1", "post-1", "post-1", "post-1"],
+            "synapse_table_id": [
+                "synapses-1",
+                "synapses-1",
+                "synapses-1",
+                "synapses-1",
+                "synapses-2",
+                "synapses-1",
+            ],
+            "presynaptic_cell": [
+                "pre-1",
+                "pre-1",
+                "pre-2",
+                "pre-1",
+                "pre-1",
+                "pre-1",
+            ],
+            "postsynaptic_cell": ["post-1"] * 6,
             "measurement_type": [
                 "SYNAPSE_COUNT",
                 "SUM_ANATOMICAL_SIZE",
                 "SYNAPSE_COUNT",
                 "SYNAPSE_COUNT",
                 "SYNAPSE_COUNT",
+                "SYNAPSE_COUNT",
             ],
-            "modality": ["ELECTRON_MICROSCOPY"] * 5,
-            "value": [2.0, 5.0, 1.0, 4.0, 8.0],
-            "unit": ["COUNT", "MICRONS_SQUARE", "COUNT", "COUNT", "COUNT"],
-            "project_id": ["project-1", "project-1", "project-1", "project-1", "project-2"],
+            "modality": ["ELECTRON_MICROSCOPY"] * 6,
+            "value": [2.0, 5.0, 1.0, 4.0, 9.0, 8.0],
+            "unit": [
+                "COUNT",
+                "MICRONS_SQUARE",
+                "COUNT",
+                "COUNT",
+                "COUNT",
+                "COUNT",
+            ],
+            "project_id": [
+                "project-1",
+                "project-1",
+                "project-1",
+                "project-1",
+                "project-1",
+                "project-2",
+            ],
         },
     )
     return root
 
 
-def test_read_cell_cell_connectivity_requires_both_scopes(cell_cell_root: Path):
+@pytest.fixture
+def synapse_root(tmp_path: Path) -> Path:
+    """Provide long synapses and one matching wide feature table."""
+    root = tmp_path / "synapse-root"
+    _write_table(
+        root,
+        "synapse",
+        {
+            "id": ["s1", "s2", "s3", "s4"],
+            "presynaptic_cell": ["pre-1", "pre-1", "pre-2", "pre-1"],
+            "postsynaptic_cell": ["post-1", "post-2", "post-1", "post-1"],
+            "synapse_table_id": [
+                "synapses-1",
+                "synapses-1",
+                "synapses-2",
+                "synapses-1",
+            ],
+            "project_id": ["project-1", "project-1", "project-1", "project-2"],
+        },
+    )
+    _write_table(
+        root,
+        "synapsefeatures/features-1",
+        {
+            "id": ["s1", "s2", "s3", "s4"],
+            "size": [1.0, 2.0, 3.0, 4.0],
+            "synapse_table_id": [
+                "synapses-1",
+                "synapses-1",
+                "synapses-2",
+                "synapses-1",
+            ],
+            "project_id": ["project-1", "project-1", "project-1", "project-2"],
+        },
+    )
+    return root
+
+
+def test_read_cell_cell_connectivity_requires_source_scope(cell_cell_root: Path):
+    """Cell-cell reads must identify both project and source synapse table."""
     with pytest.raises(TypeError):
         read_cell_cell_connectivity(output_root=cell_cell_root)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
@@ -207,19 +287,40 @@ def test_read_cell_cell_connectivity_requires_both_scopes(cell_cell_root: Path):
 def test_read_cell_cell_connectivity_selects_project_and_connectome(
     cell_cell_root: Path,
 ):
+    """An optional connectome filter must isolate derived contexts."""
     first = read_cell_cell_connectivity(
         "project-1",
-        "connectome-1",
+        synapse_table_id="synapses-1",
+        connectome_id="connectome-1",
         output_root=cell_cell_root,
     )
     second = read_cell_cell_connectivity(
         "project-1",
-        "connectome-2",
+        synapse_table_id="synapses-1",
+        connectome_id="connectome-2",
         output_root=cell_cell_root,
     )
 
     assert first["id"].to_list() == ["c1-count", "c1-size", "c1-other-pre"]
     assert second["id"].to_list() == ["c2-count"]
+
+
+def test_read_cell_cell_connectivity_can_return_all_source_contexts(
+    cell_cell_root: Path,
+):
+    """A source-table read may return every connectome derived from it."""
+    result = read_cell_cell_connectivity(
+        "project-1",
+        synapse_table_id="synapses-1",
+        output_root=cell_cell_root,
+    )
+
+    assert result["id"].to_list() == [
+        "c1-count",
+        "c1-size",
+        "c1-other-pre",
+        "c2-count",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -244,9 +345,11 @@ def test_read_cell_cell_connectivity_applies_explicit_filters(
     filters: dict,
     expected_ids: list[str],
 ):
+    """Cell-cell reads must compose explicit endpoint and measurement filters."""
     result = read_cell_cell_connectivity(
         "project-1",
-        "connectome-1",
+        synapse_table_id="synapses-1",
+        connectome_id="connectome-1",
         output_root=cell_cell_root,
         **filters,
     )
@@ -266,9 +369,11 @@ def test_read_cell_cell_connectivity_returns_typed_empty_results(
     cell_cell_root: Path,
     filters: dict,
 ):
+    """Valid filters with no matches must retain the stored table schema."""
     result = read_cell_cell_connectivity(
         "project-1",
-        "connectome-1",
+        synapse_table_id="synapses-1",
+        connectome_id="connectome-1",
         output_root=cell_cell_root,
         **filters,
     )
@@ -278,9 +383,11 @@ def test_read_cell_cell_connectivity_returns_typed_empty_results(
 
 
 def test_read_cell_cell_connectivity_resolves_settings(cell_cell_root: Path):
+    """Cell-cell reads must resolve storage from explicit settings."""
     result = read_cell_cell_connectivity(
         "project-1",
-        "connectome-2",
+        synapse_table_id="synapses-1",
+        connectome_id="connectome-2",
         settings=Settings(output_root=cell_cell_root),
     )
 
@@ -288,18 +395,55 @@ def test_read_cell_cell_connectivity_resolves_settings(cell_cell_root: Path):
 
 
 def test_read_cell_cell_connectivity_requires_canonical_table(tmp_path: Path):
+    """Missing canonical cell-cell storage must fail with its expected path."""
     root = tmp_path / "missing-cell-cell"
     root.mkdir()
 
     with pytest.raises(FileNotFoundError, match="cellcellconnectivitylong"):
         read_cell_cell_connectivity(
             "project-1",
-            "connectome-1",
+            synapse_table_id="synapses-1",
             output_root=root,
         )
 
 
+def test_read_synapse_table_scopes_and_filters_endpoints(synapse_root: Path):
+    """Synapse reads must share project, table, and endpoint selectors."""
+    result = read_synapse_table(
+        "project-1",
+        synapse_table_id="synapses-1",
+        presynaptic_cells="pre-1",
+        postsynaptic_cells=["post-2"],
+        output_root=synapse_root,
+    )
+
+    assert result["id"].to_list() == ["s2"]
+
+
+def test_read_synapse_table_requires_source_scope(synapse_root: Path):
+    """Synapse reads must identify the logical table within a project."""
+    with pytest.raises(TypeError):
+        read_synapse_table(  # type: ignore[call-arg]
+            "project-1",
+            output_root=synapse_root,
+        )
+
+
+def test_read_synapse_table_joins_requested_features(synapse_root: Path):
+    """Synapse reads must add requested features after applying source scope."""
+    result = read_synapse_table(
+        "project-1",
+        synapse_table_id="synapses-1",
+        features=["size"],
+        feature_matrix_id="features-1",
+        output_root=synapse_root,
+    )
+
+    assert result.select("id", "size").rows() == [("s1", 1.0), ("s2", 2.0)]
+
+
 def test_displays_datasets_and_discovers_related_sets(reader_root: Path):
+    """Dataset displays must expose only sets related to each dataset."""
     reader = DatasetReader(reader_root)
 
     datasets = reader.display_dataset_names()
@@ -313,6 +457,7 @@ def test_displays_datasets_and_discovers_related_sets(reader_root: Path):
 
 
 def test_read_dataset_joins_features_and_cluster_levels(reader_root: Path):
+    """Dataset reads must left-join selected features and cluster levels."""
     table = DatasetReader(reader_root).read_dataset("dataset_a")
 
     assert table["dataitem_id"].to_list() == ["a", "b", "c"]
@@ -340,6 +485,7 @@ def test_read_dataset_joins_features_and_cluster_levels(reader_root: Path):
 
 
 def test_read_dataset_accepts_subset_and_empty_selections(reader_root: Path):
+    """Dataset reads must honor explicit and empty related-set selections."""
     reader = DatasetReader(reader_root)
 
     subset = reader.read_dataset(
@@ -359,6 +505,7 @@ def test_read_dataset_accepts_subset_and_empty_selections(reader_root: Path):
 
 
 def test_project_scoping_excludes_other_project_memberships(reader_root: Path):
+    """Cluster discovery must not leak memberships across projects."""
     table = DatasetReader(reader_root).read_dataset(
         "dataset_b",
         featuresets=[],
@@ -377,6 +524,7 @@ def test_project_scoping_excludes_other_project_memberships(reader_root: Path):
 
 
 def test_unknown_dataset_and_selectors_raise_clear_errors(reader_root: Path):
+    """Unknown dataset and related-set names must fail clearly."""
     reader = DatasetReader(reader_root)
 
     with pytest.raises(KeyError, match="Unknown dataset"):
@@ -388,6 +536,7 @@ def test_unknown_dataset_and_selectors_raise_clear_errors(reader_root: Path):
 
 
 def test_duplicate_feature_names_raise(reader_root: Path):
+    """Feature sets with colliding output columns must be rejected."""
     _write_table(
         reader_root,
         "cellfeatureset",
@@ -460,6 +609,7 @@ def test_duplicate_feature_names_raise(reader_root: Path):
 
 
 def test_duplicate_same_level_cluster_assignments_raise(reader_root: Path):
+    """Multiple cluster assignments at one hierarchy level must fail."""
     _write_table(
         reader_root,
         "clustermembership",
@@ -479,6 +629,7 @@ def test_duplicate_same_level_cluster_assignments_raise(reader_root: Path):
 
 
 def test_missing_required_tables_raise(tmp_path: Path):
+    """DatasetReader must reject roots missing its required model tables."""
     root = tmp_path / "empty-root"
     root.mkdir()
 

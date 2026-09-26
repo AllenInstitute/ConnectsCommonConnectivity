@@ -17,14 +17,14 @@ raw Delta write paths.
 ## Relationship to WP4
 
 WP3 is independently deliverable. It defines the schema and transformations
-that WP4 later persists. WP4 issue #19 owns generic `write_table`, registration
-of both `SynapseConnectivityLong` and `CellCellConnectivityLong`, canonical
-overwrite policies, and migration from the temporary raw Delta writes to the
-canonical table.
+that WP4 later persists through the generic writer. WP4 issue #19 owns generic
+`write_table`, registration of both `SynapseConnectivityLong` and
+`CellCellConnectivityLong`, and replacement of direct canonical Delta writes
+with validated registry-backed writes.
 
-The reader in WP3 targets the future canonical `cellcellconnectivitylong/`
-layout and is tested against synthetic Delta data. WP3 does not make the model
-appear in `WRITABLE_CLASSES` or `REGISTRY`.
+The reader and ETLs in WP3 use canonical `cellcellconnectivitylong/` layout and
+are tested against synthetic Delta data. WP3 does not make the model appear in
+`WRITABLE_CLASSES` or `REGISTRY`.
 
 ## Starting and repository constraints
 
@@ -34,7 +34,7 @@ appear in `WRITABLE_CLASSES` or `REGISTRY`.
 - Make model changes under `schemas/`, then run
   `bash scripts/generate_models.sh`.
 - Edit only the minimal cells described under "ETL compatibility updates";
-  preserve valid notebook JSON and leave persistence migration to WP4.
+  preserve valid notebook JSON and leave generic writer adoption to WP4.
 - Follow `.github/instructions/changelog.instructions.md` for `CHANGELOG.md`.
 - Use the repository `commit-and-push` and `write-pr-message` skills.
 - Do not revert or commit unrelated user changes.
@@ -49,9 +49,9 @@ Cohorts are read-side filters. A connectome should be written once as the
 appropriate superset; subsets are selected by endpoint IDs now and may later be
 resolved from dataset associations or cluster membership by issue #23.
 
-WP4 will persist `CellCellConnectivityLong` in canonical subdirectory
+WP3 writes `CellCellConnectivityLong` directly to canonical subdirectory
 `cellcellconnectivitylong` with overwrite scope `(project_id, connectome_id)`.
-WP3 defines and reads that layout but does not register its write policy.
+WP4 registers and validates the equivalent generic write policy.
 
 ## Work package 1: schema, reader, and derivation
 
@@ -148,7 +148,8 @@ Document:
 - the reader's expected canonical storage layout;
 - the reader's explicit-ID filtering boundary;
 - transform count and optional size behavior;
-- that persistence and ETL adoption are deferred to WP4 #19.
+- that generic writer registration and raw-write replacement are deferred to
+  WP4 #19.
 
 Do not document dataset/cluster cohort resolution as implemented; that remains
 #23.
@@ -156,8 +157,8 @@ Do not document dataset/cluster cohort resolution as implemented; that remains
 ## ETL compatibility updates
 
 Edit only active notebooks whose filenames begin with `etl`. WP3 notebook
-changes keep the existing direct Delta writes and temporary output directories;
-they do not call `write_table` or depend on registry support.
+changes keep direct Delta writes but consolidate cell-cell rows into canonical
+storage; they do not call `write_table` or depend on registry support.
 
 ### `code/etl_minnie_04_cell_cell.ipynb`
 
@@ -165,14 +166,11 @@ they do not call `write_table` or depend on registry support.
   contexts;
 - add the appropriate required `connectome_id` to every
   `CellCellConnectivityLong` row;
-- retain the existing `cellcellconnectivitylong_proofread_pre_to_csm_post/` and
-  `cellcellconnectivitylong_proofread_to_proofread/` destinations;
+- write both contexts to canonical `cellcellconnectivitylong/` storage;
 - retain the current raw `write_deltalake` persistence;
+- scope each overwrite by `(project_id, connectome_id)`;
 - update verification to assert each output contains the expected
   `connectome_id`.
-
-Do not consolidate these folders in WP3. WP4 performs that migration after
-`CellCellConnectivityLong` gains a validated table writer.
 
 ### `code/etl_v1dd_03_synapses.ipynb`
 
@@ -182,9 +180,8 @@ Change only the cell-cell derivation section:
 - replace manual pair grouping and Pydantic row construction with
   `derive_cell_cell_connectivity`;
 - pass the existing size column and its unit explicitly;
-- retain the existing temporary cell-cell destination and raw
-  `write_deltalake` call, converting the schema-shaped result to Arrow as
-  needed;
+- write the schema-shaped result to canonical `cellcellconnectivitylong/` with
+  raw `write_deltalake`, converting to Arrow as needed;
 - verify the derived output includes the expected connectome ID and measurement
   counts.
 
@@ -194,8 +191,8 @@ write in WP3. Those remain WP4 work.
 ### `code/etl_examples_readme.ipynb`
 
 Update only descriptions made stale by the required `connectome_id` and
-derivation helper. Keep the temporary output paths documented until WP4
-consolidates them.
+derivation helper. Document canonical shared cell-cell storage and the remaining
+raw-write boundary.
 
 Do not edit `code/example_microns_query.ipynb`,
 `code/parse_minnie_clustering.ipynb`, other non-ETL notebooks, or unrelated
@@ -233,14 +230,14 @@ Recommended commits:
 
 Use `commit-and-push` after each boundary. The PR message must map #17 and #18 to
 numbered symbol-anchored changes, report only observed evidence, state that WP4
-#19 owns canonical persistence migration, and identify #23 as deferred reader
-work.
+#19 owns generic writer registration and raw-write replacement, and identify
+#23 as deferred reader work.
 
 ## Out of scope
 
 - Implementing or changing generic `write_table` validation
-- Registering `CellCellConnectivityLong` or migrating it to canonical storage
-- Registering or migrating `SynapseConnectivityLong`
+- Registering `CellCellConnectivityLong` with the generic writer
+- Registering `SynapseConnectivityLong` with the generic writer
 - Replacing raw Delta writes with `write_table`
 - Dynamic wide Parquet/Zarr payloads and pointer atomicity (#20)
 - Dataset/cluster cohort resolution (#23)

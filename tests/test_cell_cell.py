@@ -282,7 +282,9 @@ def test_ids_are_deterministic_and_separate_connectome_contexts():
 
     assert first["id"].to_list() == repeated["id"].to_list()
     assert first["id"].to_list() != other_context["id"].to_list()
-    assert first["id"].str.contains(r"^sha256:[0-9a-f]{64}$").all()
+    assert first["id"].to_list() == [
+        "connectome-1_pre-1_post-1_SYNAPSE_COUNT"
+    ]
 
 
 def test_source_synapse_table_does_not_change_identity():

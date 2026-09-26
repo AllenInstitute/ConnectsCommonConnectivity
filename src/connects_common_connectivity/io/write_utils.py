@@ -1,8 +1,6 @@
 """Write helpers for Delta Lake tables shared across ETL notebooks."""
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
@@ -51,10 +49,11 @@ def derive_cell_cell_connectivity(
     ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
     would report a partial sum as a total anatomical size.
 
-    Output IDs are full SHA-256 hashes of canonical JSON arrays containing the
-    project, connectome, endpoints, and measurement type. If every input row
-    has the same non-null ``synapse_table_id``, that value is preserved as
-    optional provenance; it does not affect grouping or output identity.
+    Output IDs are readable strings containing the connectome, endpoints, and
+    measurement type. Project scope is carried separately by ``project_id``.
+    If every input row has the same non-null ``synapse_table_id``, that value
+    is preserved as optional provenance; it does not affect grouping or output
+    identity.
     """
     missing = [
         column for column in _CELL_CELL_IDENTITY_COLUMNS if column not in synapses
@@ -165,15 +164,14 @@ def _shape_cell_cell_measurements(
 
 
 def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
-    values = [
-        identity["project_id"],
-        identity["connectome_id"],
-        identity["presynaptic_cell"],
-        identity["postsynaptic_cell"],
-        identity["measurement_type"],
-    ]
-    encoded = json.dumps(values, ensure_ascii=True, separators=(",", ":"))
-    return f"sha256:{hashlib.sha256(encoded.encode()).hexdigest()}"
+    return "_".join(
+        [
+            identity["connectome_id"],
+            identity["presynaptic_cell"],
+            identity["postsynaptic_cell"],
+            identity["measurement_type"],
+        ]
+    )
 
 
 def _single_synapse_table_id(synapses: pl.DataFrame) -> str | None:

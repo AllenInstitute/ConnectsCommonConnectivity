@@ -18,6 +18,7 @@ from connects_common_connectivity.models import (
 )
 
 __all__ = [
+    "cell_cell_connectivity_to_arrow",
     "derive_cell_cell_connectivity",
     "populate_region_coverage",
     "walk_ancestors",
@@ -32,6 +33,11 @@ _CELL_CELL_ARROW_SCHEMA = build_arrow_schema(CellCellConnectivityLong)
 _CELL_CELL_OUTPUT_SCHEMA = pl.from_arrow(
     pa.Table.from_batches([], schema=_CELL_CELL_ARROW_SCHEMA)
 ).schema
+
+
+def cell_cell_connectivity_to_arrow(connectivity: pl.DataFrame) -> pa.Table:
+    """Convert derived cell-cell measurements to their canonical Arrow schema."""
+    return connectivity.to_arrow().cast(_CELL_CELL_ARROW_SCHEMA)
 
 
 def derive_cell_cell_connectivity(

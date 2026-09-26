@@ -4,7 +4,11 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from connects_common_connectivity.io import derive_cell_cell_connectivity
+from connects_common_connectivity.io import (
+    cell_cell_connectivity_to_arrow,
+    derive_cell_cell_connectivity,
+)
+from connects_common_connectivity.io.arrow_utils import build_arrow_schema
 from connects_common_connectivity.models import (
     CellCellConnectivityLong,
     Modality,
@@ -258,6 +262,23 @@ def test_empty_input_returns_typed_schema_shaped_frame():
         for column in result.columns
         if column != "value"
     )
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_arrow_conversion_uses_model_schema(empty):
+    """Arrow conversion must preserve model types and required-field nullability."""
+    synapses = _synapse_frame()
+    if empty:
+        synapses = synapses.clear()
+    result = derive_cell_cell_connectivity(
+        synapses,
+        connectome_id="connectome-1",
+        modality=Modality.ELECTRON_MICROSCOPY,
+    )
+
+    table = cell_cell_connectivity_to_arrow(result)
+
+    assert table.schema == build_arrow_schema(CellCellConnectivityLong)
 
 
 def test_ids_are_deterministic_and_separate_connectome_contexts():

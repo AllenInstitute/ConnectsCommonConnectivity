@@ -95,6 +95,29 @@ manual cell-cell row and a derived row with the same identity receive the same
 ID. Keep the IDs readable unless an explicit fixed-length opaque-ID requirement
 is introduced.
 
+### Open decision: CellCell Arrow schema enforcement
+
+WP3's `derive_cell_cell_connectivity` returns a Polars frame. Polars preserves
+the column data types but not the model's Arrow field nullability, and
+`DataFrame.to_arrow()` emits `large_string` rather than the canonical `string`.
+Consequently, a direct Delta write can make the persisted CellCell schema depend
+on which producer creates the table first.
+
+Before migrating CellCell persistence, decide which WP4 boundary owns canonical
+conversion and required-field null validation:
+
+- a public CellCell writer converts the frame to
+  `build_arrow_schema(CellCellConnectivityLong)` and delegates persistence; or
+- generic `write_table` performs the same canonical normalization and exhaustive
+  validation for every eligible fixed-schema model.
+
+Prefer the generic `write_table` path if its validation contract can fully own
+this behavior without model-specific branches. The interim
+`cell_cell_connectivity_to_arrow` helper may remain as a producer convenience,
+but correctness must not depend on notebook callers remembering to invoke it.
+Add tests proving that Arrow and Polars inputs persist the same canonical field
+types and nullability regardless of table creation order.
+
 ## WriteSpec changes
 
 Extend `src/connects_common_connectivity/io/write_spec.py::WriteSpec` with an

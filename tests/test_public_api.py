@@ -17,6 +17,7 @@ EXPECTED = {
     "WrittenResult",
     "WRITABLE_CLASSES",
     "DatasetReader",
+    "cell_cell_connectivity_to_arrow",
     "derive_cell_cell_connectivity",
     "read_cell_cell_connectivity",
     "read_synapse_table",

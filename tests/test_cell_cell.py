@@ -106,29 +106,53 @@ def test_cell_cell_contract_requires_measurement_fields_not_provenance():
     ].is_required()
 
 
-def test_derives_counts_for_pairs_and_projects():
-    """Counts must aggregate independently by project and endpoint pair."""
+def test_derives_counts_for_endpoint_pairs_in_project():
+    """Counts must aggregate independently by endpoint pair."""
     synapses = pl.DataFrame(
         {
-            "project_id": ["project-1", "project-1", "project-1", "project-2"],
-            "synapse_table_id": ["synapses-1"] * 4,
-            "presynaptic_cell": ["pre-1", "pre-1", "pre-1", "pre-1"],
-            "postsynaptic_cell": ["post-1", "post-1", "post-2", "post-1"],
+            "project_id": ["project-1"] * 3,
+            "synapse_table_id": ["synapses-1"] * 3,
+            "presynaptic_cell": ["pre-1", "pre-1", "pre-1"],
+            "postsynaptic_cell": ["post-1", "post-1", "post-2"],
         }
     )
 
     result = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     ).sort("project_id", "presynaptic_cell", "postsynaptic_cell")
 
-    assert result["value"].to_list() == [2.0, 1.0, 1.0]
+    assert result["value"].to_list() == [2.0, 1.0]
     assert result["measurement_type"].unique().to_list() == [
         SynapticMeasurementType.SYNAPSE_COUNT.value
     ]
     assert result["unit"].unique().to_list() == [Unit.COUNT.value]
     assert result["connectome_id"].unique().to_list() == ["connectome-1"]
+
+
+@pytest.mark.parametrize(
+    "input_projects",
+    [["project-1", "project-2"], ["project-2"]],
+)
+def test_project_scope_must_match_all_input_rows(input_projects):
+    """A connectome derivation must not span or silently select projects."""
+    synapses = pl.DataFrame(
+        {
+            "project_id": input_projects,
+            "presynaptic_cell": ["pre-1"] * len(input_projects),
+            "postsynaptic_cell": ["post-1"] * len(input_projects),
+        }
+    )
+
+    with pytest.raises(ValueError, match="must all match 'project-1'"):
+        derive_cell_cell_connectivity(
+            synapses,
+            project_id="project-1",
+            connectome_id="connectome-1",
+            modality=Modality.ELECTRON_MICROSCOPY,
+        )
 
 
 def test_derives_optional_size_sum_with_explicit_unit():
@@ -145,6 +169,7 @@ def test_derives_optional_size_sum_with_explicit_unit():
 
     result = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
         size_column="size",
@@ -168,6 +193,7 @@ def test_size_arguments_must_be_supplied_together(size_column, size_unit):
     with pytest.raises(ValueError, match="supplied together"):
         derive_cell_cell_connectivity(
             synapses,
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
             size_column=size_column,
@@ -182,6 +208,7 @@ def test_size_column_must_exist_and_be_numeric_and_non_null():
     with pytest.raises(ValueError, match="not found"):
         derive_cell_cell_connectivity(
             base,
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
             size_column="missing",
@@ -190,6 +217,7 @@ def test_size_column_must_exist_and_be_numeric_and_non_null():
     with pytest.raises(TypeError, match="must be numeric"):
         derive_cell_cell_connectivity(
             base.with_columns(pl.lit("large").alias("size")),
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
             size_column="size",
@@ -198,6 +226,7 @@ def test_size_column_must_exist_and_be_numeric_and_non_null():
     with pytest.raises(ValueError, match="contains null"):
         derive_cell_cell_connectivity(
             base.with_columns(pl.lit(None, dtype=pl.Float64).alias("size")),
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
             size_column="size",
@@ -216,6 +245,7 @@ def test_identity_columns_must_exist(missing_column):
     with pytest.raises(ValueError, match="Missing required synapse columns"):
         derive_cell_cell_connectivity(
             synapses,
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
         )
@@ -232,6 +262,7 @@ def test_identity_columns_must_not_contain_nulls(null_column):
     with pytest.raises(ValueError, match="Identity columns contain null"):
         derive_cell_cell_connectivity(
             synapses,
+            project_id="project-1",
             connectome_id="connectome-1",
             modality=Modality.ELECTRON_MICROSCOPY,
         )
@@ -250,6 +281,7 @@ def test_empty_input_returns_typed_schema_shaped_frame():
 
     result = derive_cell_cell_connectivity(
         empty,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
@@ -272,6 +304,7 @@ def test_arrow_conversion_uses_model_schema(empty):
         synapses = synapses.clear()
     result = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
@@ -287,16 +320,19 @@ def test_ids_are_deterministic_and_separate_connectome_contexts():
 
     first = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
     repeated = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
     other_context = derive_cell_cell_connectivity(
         synapses,
+        project_id="project-1",
         connectome_id="connectome-2",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
@@ -304,7 +340,7 @@ def test_ids_are_deterministic_and_separate_connectome_contexts():
     assert first["id"].to_list() == repeated["id"].to_list()
     assert first["id"].to_list() != other_context["id"].to_list()
     assert first["id"].to_list() == [
-        "connectome-1_pre-1_post-1_SYNAPSE_COUNT"
+        "project-1_connectome-1_pre-1_post-1_SYNAPSE_COUNT"
     ]
 
 
@@ -312,6 +348,7 @@ def test_source_synapse_table_does_not_change_identity():
     """Optional source provenance must not change connectome row identity."""
     first = derive_cell_cell_connectivity(
         _synapse_frame(),
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
@@ -319,6 +356,7 @@ def test_source_synapse_table_does_not_change_identity():
         _synapse_frame().with_columns(
             pl.lit("synapses-2").alias("synapse_table_id")
         ),
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )
@@ -332,6 +370,7 @@ def test_transform_allows_rows_without_synapse_table_provenance():
     """Derivation must work when connectivity did not come from a table."""
     result = derive_cell_cell_connectivity(
         _synapse_frame().drop("synapse_table_id"),
+        project_id="project-1",
         connectome_id="connectome-1",
         modality=Modality.ELECTRON_MICROSCOPY,
     )

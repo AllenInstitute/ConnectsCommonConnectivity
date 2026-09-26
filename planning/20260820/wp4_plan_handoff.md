@@ -14,8 +14,8 @@ WP4 owns:
 - generic validated `write_table` support for explicitly opted-in flat,
   fixed-schema `overwrite_scoped` models;
 - `SynapseConnectivityLong` and `CellCellConnectivityLong` registration;
-- canonical scoped persistence for both classes;
-- all affected ETL write migrations.
+- validated registry-backed persistence for both classes;
+- migration of affected ETLs from direct canonical Delta writes.
 - a distinct wide-payload API for `CellFeatureMatrix` and
   `SynapseFeatureMatrix` workflows;
 - validation and ordering between each dynamic payload and its pointer row;
@@ -34,7 +34,7 @@ issues #17 and #18.
   `derive_cell_cell_connectivity` first.
 2. Base or rebase WP4 onto the completed WP3 state.
 3. Complete #19: add `write_table`, register both long classes, and migrate
-  their ETL writes.
+  their direct ETL writes to the generic writer.
 4. Complete #20 as a separate workstream after #19, retaining its dependency on
   #13's mode vocabulary. It may reuse low-level settings and Delta helpers but
   must not route dynamic payloads through fixed-schema model validation.
@@ -75,6 +75,26 @@ and association classes remain on `write_models`.
 `write_table` does not accept arbitrary dynamic columns and does not write a
 pointer model. Those behaviors belong exclusively to #20.
 
+### Open decision: long-table ID creation
+
+Before migrating the long-table ETLs, decide where canonical row IDs are
+created. WP3 only gives `derive_cell_cell_connectivity` a private, readable
+`connectome_pre_post_measurement-type` ID convention; it does not standardize
+manual producers.
+
+Choose and document one of these contracts for #19:
+
+- `write_table` creates model-specific IDs through an explicit `WriteSpec`
+  policy before validation; or
+- producers create IDs through shared public helpers and `write_table`
+  validates that the supplied IDs match those helpers.
+
+Do not silently preserve multiple conventions when Minnie and V1DD move to the
+same canonical table. Cover the selected contract with tests proving that a
+manual cell-cell row and a derived row with the same identity receive the same
+ID. Keep the IDs readable unless an explicit fixed-length opaque-ID requirement
+is introduced.
+
 ## WriteSpec changes
 
 Extend `src/connects_common_connectivity/io/write_spec.py::WriteSpec` with an
@@ -91,7 +111,7 @@ Register `SynapseConnectivityLong`:
 
 - subdirectory: `synapse`
 - partition: `project_id`
-- overwrite scope: `(project_id, dataset_id)`
+- overwrite scope: `(project_id, synapse_table_id)`
 - mode: `overwrite_scoped`
 - table-write eligible: yes
 - required-for-write fields: every nullable generated field needed for valid
@@ -230,7 +250,7 @@ Document:
 - the distinction between `write_models` and `write_table`;
 - fixed-schema table eligibility and `overwrite_scoped` restriction;
 - exhaustive columnar guarantees and explicit non-guarantees;
-- SynapseLong scope `(project_id, dataset_id)`;
+- SynapseLong scope `(project_id, synapse_table_id)`;
 - CellCellLong scope `(project_id, connectome_id)`;
 - that WP3 supplies the CellCellLong schema, reader, and transform consumed here;
 - that dynamic wide payload and pointer work remains #20.
@@ -249,13 +269,13 @@ Arrow or Polars representation.
 Requirements:
 
 - do not instantiate one Pydantic model per synapse;
-- preserve project and dataset scope;
+- preserve project and synapse-table scope;
 - preserve canonical `synapse/` path through the registry;
 - preserve LinkML metadata through the public writer;
 - verify with `read_synapse_table`;
 - keep WP3's `derive_cell_cell_connectivity` call, explicit size column/unit,
   and stable connectome ID unchanged;
-- replace only the derived cell-cell frame's temporary raw Delta persistence
+- replace only the derived cell-cell frame's direct canonical Delta persistence
   with `write_table`;
 - verify it through `read_cell_cell_connectivity`.
 
@@ -263,9 +283,9 @@ Requirements:
 
 - preserve the stable connectome IDs added by WP3;
 - construct schema-shaped columnar frames instead of Pydantic row lists;
-- replace separate `cellcellconnectivitylong_*` output directories with
-  canonical `cellcellconnectivitylong/` writes through `write_table`;
-- represent the former folders as separate `(project_id, connectome_id)` scopes;
+- replace direct canonical `cellcellconnectivitylong/` writes with
+  `write_table`;
+- preserve separate `(project_id, connectome_id)` scopes;
 - verify both scopes coexist through `read_cell_cell_connectivity`;
 - verify rewriting one scope preserves the other.
 

@@ -30,6 +30,7 @@ def test_populate_region_coverage_accepts_nested_list():
     """Region coverage must derive populated columns without mutating input."""
     pmm = ProjectionMeasurementMatrix(
         id="pmm_list",
+        project_id="proj_a",
         measurement_type=ProjectionMeasurementType.MICRONS_OF_AXON,
         modality=Modality.MORPHOLOGY,
         laterality=Laterality.IPSILATERAL,

@@ -2,6 +2,53 @@ import pytest
 from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
+# CellFeatureMeasurement
+# ---------------------------------------------------------------------------
+
+
+def test_cell_feature_measurement_exposes_feature_set_and_unit(models):
+    """Long-form measurements must retain their feature set and unit."""
+    CellFeatureMeasurement = models["CellFeatureMeasurement"]
+    Unit = models["Unit"]
+    measurement = CellFeatureMeasurement(
+        id="cell-1-feature-1",
+        dataitem_id="cell-1",
+        feature_id="feature-1",
+        feature_set_id="feature-set-1",
+        unit=Unit.MICRONS_LENGTH,
+        value_float=1.5,
+    )
+    assert measurement.feature_set_id == "feature-set-1"
+    assert measurement.unit == Unit.MICRONS_LENGTH
+
+
+@pytest.mark.parametrize("dtype", ["<f4", "<i2", "|u1", ">f8", "=i4"])
+def test_cell_feature_measurement_accepts_numpy_dtype(models, dtype):
+    """Long-form measurements must accept valid NumPy typestrings."""
+    CellFeatureMeasurement = models["CellFeatureMeasurement"]
+    measurement = CellFeatureMeasurement(
+        id="cell-1-feature-1",
+        dataitem_id="cell-1",
+        feature_id="feature-1",
+        dtype=dtype,
+    )
+    assert measurement.dtype == dtype
+
+
+@pytest.mark.parametrize("dtype", ["float32", "f4", "<float4", "<f"])
+def test_cell_feature_measurement_rejects_invalid_dtype(models, dtype):
+    """Long-form measurements must reject malformed NumPy typestrings."""
+    CellFeatureMeasurement = models["CellFeatureMeasurement"]
+    with pytest.raises(ValidationError, match=r"(?s)dtype"):
+        CellFeatureMeasurement(
+            id="cell-1-feature-1",
+            dataitem_id="cell-1",
+            feature_id="feature-1",
+            dtype=dtype,
+        )
+
+
+# ---------------------------------------------------------------------------
 # CellFeatureDefinition
 # ---------------------------------------------------------------------------
 

@@ -31,6 +31,29 @@ def test_milestone_scopes_use_taxonomy_and_project_identity():
     assert projection.partition_by == ["project_id"]
     assert projection.scope_columns == ["project_id", "id"]
 
+    assert REGISTRY["DataItem"].scope_columns == ["project_id", "id"]
+
+
+def test_cluster_membership_merge_keys_are_required_only_for_write():
+    """Nullable schema keys must be tightened at the IO boundary."""
+    spec = REGISTRY["ClusterMembership"]
+    assert spec.merge_on == ["project_id", "hierarchy_id", "item", "cluster"]
+    assert spec.required_for_write == ["hierarchy_id", "item", "cluster"]
+
+
+def test_set_scoped_rows_include_parent_set_in_merge_identity():
+    """Local child IDs must not collide across their parent sets."""
+    assert REGISTRY["CellToClusterMapping"].merge_on == [
+        "project_id",
+        "mapping_set",
+        "id",
+    ]
+    assert REGISTRY["CellFeatureMatrix"].merge_on == [
+        "project_id",
+        "feature_set_id",
+        "id",
+    ]
+
 
 @pytest.mark.parametrize("key", list(REGISTRY))
 def test_registry_key_matches_model_cls(key):
@@ -49,7 +72,11 @@ def test_spec_columns_exist_on_model(key):
     """Every configured writer column must exist on its model."""
     spec: WriteSpec = REGISTRY[key]
     fields = set(spec.model_cls.model_fields)
-    for col in spec.scope_columns + spec.partition_by + spec.required_for_write:
+    for col in (
+        spec.scope_columns
+        + spec.partition_by
+        + spec.required_for_write
+    ):
         assert col in fields, (
             f"{spec.model_cls.__name__}: column {col!r} is not a field "
             f"(have: {sorted(fields)})"
@@ -94,4 +121,42 @@ def test_write_spec_requires_pydantic_model_class():
             partition_by=[],
             scope_columns=["id"],
             write_mode="overwrite_scoped",
+        )
+
+
+def test_merge_scoped_requires_merge_keys():
+    """A merge writer without an identity must be rejected at registration."""
+    with pytest.raises(ValidationError, match="merge_on"):
+        WriteSpec(
+            model_cls=models_module.DataSet,
+            subdir="dataset",
+            partition_by=["project_id"],
+            scope_columns=["project_id", "id"],
+            write_mode="merge_scoped",
+        )
+
+
+def test_merge_keys_must_be_non_null_at_write_time():
+    """Nullable merge keys must be tightened before a spec can be registered."""
+    with pytest.raises(ValidationError, match="required_for_write.*hierarchy_id"):
+        WriteSpec(
+            model_cls=models_module.Cluster,
+            subdir="cluster",
+            partition_by=["hierarchy_id"],
+            scope_columns=["hierarchy_id"],
+            write_mode="merge_scoped",
+            merge_on=["hierarchy_id", "id"],
+        )
+
+
+def test_non_merge_mode_rejects_merge_keys():
+    """Merge keys must not be silently ignored by another write mode."""
+    with pytest.raises(ValidationError, match="merge_on"):
+        WriteSpec(
+            model_cls=models_module.DataSet,
+            subdir="dataset",
+            partition_by=["project_id"],
+            scope_columns=["project_id", "id"],
+            write_mode="overwrite_scoped",
+            merge_on=["project_id", "id"],
         )

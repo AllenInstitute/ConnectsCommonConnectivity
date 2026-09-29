@@ -147,11 +147,11 @@ def test_hierarchy_category_requires_id(models):
         HierarchyCategory(description="leaf")
 
 
-def test_hierarchy_category_level_optional(models):
-    """Hierarchy categories must allow an omitted level."""
+def test_hierarchy_category_requires_level(models):
+    """Hierarchy categories must require a level so the vocabulary stays ordered."""
     HierarchyCategory = models["HierarchyCategory"]
-    cat = HierarchyCategory(id="cluster", hierarchy_id="taxonomy-a")
-    assert cat.level is None
+    with pytest.raises(ValidationError, match=r"(?s)level.*Field required"):
+        HierarchyCategory(id="cluster", hierarchy_id="taxonomy-a")
 
 
 def test_hierarchy_category_is_scoped_per_taxonomy(models):

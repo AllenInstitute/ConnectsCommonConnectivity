@@ -133,6 +133,7 @@ classes:
     slot_usage:
       level:
         range: integer
+        required: true
         description: "this is to order the categories, where 0 is the lowest in the hierarchy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be achieved with uniformity across the taxonomy, and some clusters may not receive HierarchyCategory tags"
     
 slots:

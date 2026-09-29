@@ -528,7 +528,8 @@ class HierarchyCategory(ConfiguredBaseModel):
                                                  'some clusters may not receive '
                                                  'HierarchyCategory tags',
                                   'name': 'level',
-                                  'range': 'integer'}}})
+                                  'range': 'integer',
+                                  'required': True}}})
 
     id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
@@ -568,7 +569,7 @@ class HierarchyCategory(ConfiguredBaseModel):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
-    level: Optional[int] = Field(default=None, description="""this is to order the categories, where 0 is the lowest in the hierarchy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be achieved with uniformity across the taxonomy, and some clusters may not receive HierarchyCategory tags""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
+    level: int = Field(default=..., description="""this is to order the categories, where 0 is the lowest in the hierarchy. Note this does not need to have consistency with the level of the cluster, as equivalent levels of detail might not be achieved with uniformity across the taxonomy, and some clusters may not receive HierarchyCategory tags""", json_schema_extra = { "linkml_meta": {'alias': 'level', 'domain_of': ['Cluster', 'HierarchyCategory']} })
 
 
 class BrainRegion(ConfiguredBaseModel):

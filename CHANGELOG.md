@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `HierarchyCategory` now requires `level`, so every category has an unambiguous position in its taxonomy.
+
 ### Deprecated
 
 ### Removed

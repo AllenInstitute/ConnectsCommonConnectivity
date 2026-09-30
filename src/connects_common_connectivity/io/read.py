@@ -815,6 +815,9 @@ def read_cell_cell_connectivity(
     ------
     FileNotFoundError
         If the canonical ``cellcellconnectivitylong/`` table is absent.
+    ValueError
+        If ``synapse_table_id`` is requested but the stored table does not
+        contain source-synapse provenance.
     """
     root = _resolve_output_root(settings, output_root)
     table_path = root / CELL_CELL_CONNECTIVITY_SUBDIR
@@ -829,6 +832,11 @@ def read_cell_cell_connectivity(
         & (pl.col("connectome_id") == connectome_id)
     )
     if synapse_table_id is not None:
+        if "synapse_table_id" not in connectivity.columns:
+            raise ValueError(
+                "Cannot filter cell-cell connectivity by synapse_table_id: "
+                "the stored table does not contain source-synapse provenance."
+            )
         connectivity = connectivity.filter(
             pl.col("synapse_table_id") == synapse_table_id
         )

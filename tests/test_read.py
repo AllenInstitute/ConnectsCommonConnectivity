@@ -326,6 +326,67 @@ def test_read_cell_cell_connectivity_can_filter_optional_source_provenance(
     ]
 
 
+def test_read_cell_cell_connectivity_without_source_provenance(tmp_path: Path):
+    """Cell-cell tables need not identify a source synapse table."""
+    root = tmp_path / "cell-cell-without-provenance"
+    _write_table(
+        root,
+        "cellcellconnectivitylong",
+        {
+            "id": ["measurement-1"],
+            "connectome_id": ["connectome-1"],
+            "presynaptic_cell": ["pre-1"],
+            "postsynaptic_cell": ["post-1"],
+            "measurement_type": ["SYNAPSE_COUNT"],
+            "modality": ["ELECTRON_MICROSCOPY"],
+            "value": [2.0],
+            "unit": ["COUNT"],
+            "project_id": ["project-1"],
+        },
+    )
+
+    result = read_cell_cell_connectivity(
+        "project-1",
+        "connectome-1",
+        output_root=root,
+    )
+
+    assert result["id"].to_list() == ["measurement-1"]
+
+
+def test_read_cell_cell_connectivity_rejects_unavailable_provenance_filter(
+    tmp_path: Path,
+):
+    """An explicit provenance filter requires provenance in storage."""
+    root = tmp_path / "cell-cell-without-provenance"
+    _write_table(
+        root,
+        "cellcellconnectivitylong",
+        {
+            "id": ["measurement-1"],
+            "connectome_id": ["connectome-1"],
+            "presynaptic_cell": ["pre-1"],
+            "postsynaptic_cell": ["post-1"],
+            "measurement_type": ["SYNAPSE_COUNT"],
+            "modality": ["ELECTRON_MICROSCOPY"],
+            "value": [2.0],
+            "unit": ["COUNT"],
+            "project_id": ["project-1"],
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="stored table does not contain source-synapse provenance",
+    ):
+        read_cell_cell_connectivity(
+            "project-1",
+            "connectome-1",
+            synapse_table_id="synapses-1",
+            output_root=root,
+        )
+
+
 @pytest.mark.parametrize(
     ("filters", "expected_ids"),
     [

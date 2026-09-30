@@ -17,26 +17,14 @@ import polars as pl
 
 from connects_common_connectivity.config import Settings, get_settings
 from connects_common_connectivity.io.path_spec import (
-    CELL_CELL_CONNECTIVITY_SUBDIR,
-    CELL_FEATURE_MATRIX_SUBDIR,
-    CELL_FEATURE_SET_SUBDIR,
-    CELL_FEATURES_SUBDIR,
-    CLUSTER_HIERARCHY_SUBDIR,
-    CLUSTER_MEMBERSHIP_SUBDIR,
-    CLUSTER_SUBDIR,
-    DATAITEM_DATASET_ASSOCIATION_SUBDIR,
-    DATASET_SUBDIR,
-    SYNAPSE_FEATURES_SUBDIR,
-    SYNAPSE_SUBDIR,
+    MODEL_TABLE_PATHS,
+    WIDE_PAYLOAD_PATHS,
 )
 
 __all__ = [
-    "CELL_CELL_CONNECTIVITY_SUBDIR",
     "DatasetReader",
     "read_cell_cell_connectivity",
     "read_synapse_table",
-    "SYNAPSE_SUBDIR",
-    "SYNAPSE_FEATURES_SUBDIR",
 ]
 
 _FEATURESET_DISPLAY_SCHEMA = {
@@ -88,9 +76,11 @@ class DatasetReader:
                 f"{self.dataset_root}"
             )
 
-        self._datasets = self._read_table(DATASET_SUBDIR, required=True)
+        self._datasets = self._read_table(
+            MODEL_TABLE_PATHS["DataSet"], required=True
+        )
         self._associations = self._read_table(
-            DATAITEM_DATASET_ASSOCIATION_SUBDIR,
+            MODEL_TABLE_PATHS["DataItemDataSetAssociation"],
             required=True,
         )
 
@@ -179,7 +169,7 @@ class DatasetReader:
         """
         dataset = self._dataset_record(dataset_name)
         items = self.dataset_dataitem_ids(dataset_name)
-        matrices = self._read_table(CELL_FEATURE_MATRIX_SUBDIR)
+        matrices = self._read_table(MODEL_TABLE_PATHS["CellFeatureMatrix"])
         if matrices is None:
             return pl.DataFrame(schema=_FEATURESET_DISPLAY_SCHEMA)
 
@@ -187,7 +177,9 @@ class DatasetReader:
         if matrices.is_empty():
             return pl.DataFrame(schema=_FEATURESET_DISPLAY_SCHEMA)
 
-        feature_sets = self._read_table(CELL_FEATURE_SET_SUBDIR, required=True)
+        feature_sets = self._read_table(
+            MODEL_TABLE_PATHS["CellFeatureSet"], required=True
+        )
         feature_sets = feature_sets.filter(
             pl.col("project_id") == dataset["project_id"]
         )
@@ -289,7 +281,7 @@ class DatasetReader:
         items = self.dataset_dataitem_ids(dataset_name).rename(
             {"dataitem_id": "item"}
         )
-        memberships = self._read_table(CLUSTER_MEMBERSHIP_SUBDIR)
+        memberships = self._read_table(MODEL_TABLE_PATHS["ClusterMembership"])
         if memberships is None:
             return pl.DataFrame(schema=_CLUSTERSET_DISPLAY_SCHEMA)
 
@@ -302,7 +294,9 @@ class DatasetReader:
         if related_ids.is_empty():
             return pl.DataFrame(schema=_CLUSTERSET_DISPLAY_SCHEMA)
 
-        hierarchies = self._read_table(CLUSTER_HIERARCHY_SUBDIR, required=True)
+        hierarchies = self._read_table(
+            MODEL_TABLE_PATHS["ClusterHierarchy"], required=True
+        )
         related = related_ids.join(
             hierarchies,
             left_on="hierarchy_id",
@@ -513,7 +507,11 @@ class DatasetReader:
         ValueError
             If ``index_column`` is not present in the matrix.
         """
-        path = self.dataset_root / CELL_FEATURES_SUBDIR / feature_set_id
+        path = (
+            self.dataset_root
+            / WIDE_PAYLOAD_PATHS["cell_features"]
+            / feature_set_id
+        )
         if not path.exists():
             raise FileNotFoundError(
                 f"Feature matrix for {feature_set_id!r} is missing: {path}"
@@ -630,8 +628,10 @@ class DatasetReader:
         FileNotFoundError
             If the ``clustermembership`` or ``cluster`` table is missing.
         """
-        memberships = self._read_table(CLUSTER_MEMBERSHIP_SUBDIR, required=True)
-        clusters = self._read_table(CLUSTER_SUBDIR, required=True)
+        memberships = self._read_table(
+            MODEL_TABLE_PATHS["ClusterMembership"], required=True
+        )
+        clusters = self._read_table(MODEL_TABLE_PATHS["Cluster"], required=True)
         item_keys = items.rename({"dataitem_id": "item"})
         assignments = (
             memberships.filter(
@@ -820,7 +820,7 @@ def read_cell_cell_connectivity(
         contain source-synapse provenance.
     """
     root = _resolve_output_root(settings, output_root)
-    table_path = root / CELL_CELL_CONNECTIVITY_SUBDIR
+    table_path = root / MODEL_TABLE_PATHS["CellCellConnectivityLong"]
     if not table_path.exists():
         raise FileNotFoundError(
             f"No cell-cell connectivity table at {table_path}. Run a cell-cell "
@@ -898,7 +898,7 @@ def read_synapse_table(
     """
     root = _resolve_output_root(settings, output_root)
 
-    long_path = root / SYNAPSE_SUBDIR
+    long_path = root / MODEL_TABLE_PATHS["SynapseConnectivityLong"]
     if not long_path.exists():
         raise FileNotFoundError(
             f"No synapse table at {long_path}. Write SynapseConnectivityLong "
@@ -923,10 +923,14 @@ def read_synapse_table(
     if feature_matrix_id is None:
         raise ValueError(
             "features=... requires feature_matrix_id to identify which "
-            f"'{SYNAPSE_FEATURES_SUBDIR}/<id>/' wide table to join."
+            f"'{WIDE_PAYLOAD_PATHS['synapse_features']}/<id>/' wide table to join."
         )
 
-    feature_path = root / SYNAPSE_FEATURES_SUBDIR / feature_matrix_id
+    feature_path = (
+        root
+        / WIDE_PAYLOAD_PATHS["synapse_features"]
+        / feature_matrix_id
+    )
     if not feature_path.exists():
         raise FileNotFoundError(f"No synapse feature table at {feature_path}.")
 

@@ -110,6 +110,7 @@ def test_derives_counts_for_endpoint_pairs_in_project():
     """Counts must aggregate independently by endpoint pair."""
     synapses = pl.DataFrame(
         {
+            "id": ["synapse-1", "synapse-2", "synapse-3"],
             "project_id": ["project-1"] * 3,
             "synapse_table_id": ["synapses-1"] * 3,
             "presynaptic_cell": ["pre-1", "pre-1", "pre-1"],
@@ -140,6 +141,7 @@ def test_project_scope_must_match_all_input_rows(input_projects):
     """A connectome derivation must not span or silently select projects."""
     synapses = pl.DataFrame(
         {
+            "id": [f"synapse-{index}" for index in range(len(input_projects))],
             "project_id": input_projects,
             "presynaptic_cell": ["pre-1"] * len(input_projects),
             "postsynaptic_cell": ["post-1"] * len(input_projects),
@@ -159,6 +161,7 @@ def test_derives_optional_size_sum_with_explicit_unit():
     """Requested size totals must use the caller's explicit unit."""
     synapses = pl.DataFrame(
         {
+            "id": ["synapse-1", "synapse-2"],
             "project_id": ["project-1", "project-1"],
             "synapse_table_id": ["synapses-1", "synapses-1"],
             "presynaptic_cell": ["pre-1", "pre-1"],
@@ -236,7 +239,7 @@ def test_size_column_must_exist_and_be_numeric_and_non_null():
 
 @pytest.mark.parametrize(
     "missing_column",
-    ["project_id", "presynaptic_cell", "postsynaptic_cell"],
+    ["id", "project_id", "presynaptic_cell", "postsynaptic_cell"],
 )
 def test_identity_columns_must_exist(missing_column):
     """Every aggregation identity column must be present in the source."""
@@ -253,7 +256,7 @@ def test_identity_columns_must_exist(missing_column):
 
 @pytest.mark.parametrize(
     "null_column",
-    ["project_id", "presynaptic_cell", "postsynaptic_cell"],
+    ["id", "project_id", "presynaptic_cell", "postsynaptic_cell"],
 )
 def test_identity_columns_must_not_contain_nulls(null_column):
     """Aggregation identity columns must never contain null values."""
@@ -268,10 +271,37 @@ def test_identity_columns_must_not_contain_nulls(null_column):
         )
 
 
+def test_duplicate_synapse_ids_are_rejected_before_aggregation():
+    """Repeated source identities must not inflate count or size totals."""
+    synapses = pl.DataFrame(
+        {
+            "id": ["synapse-1", "synapse-1"],
+            "project_id": ["project-1", "project-1"],
+            "presynaptic_cell": ["pre-1", "pre-2"],
+            "postsynaptic_cell": ["post-1", "post-2"],
+            "size": [2, 3],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Duplicate synapse ids found: \['synapse-1'\]",
+    ):
+        derive_cell_cell_connectivity(
+            synapses,
+            project_id="project-1",
+            connectome_id="connectome-1",
+            modality=Modality.ELECTRON_MICROSCOPY,
+            size_column="size",
+            size_unit=Unit.MICRONS_SQUARE,
+        )
+
+
 def test_empty_input_returns_typed_schema_shaped_frame():
     """An empty transform must retain the generated model's table schema."""
     empty = pl.DataFrame(
         schema={
+            "id": pl.String,
             "project_id": pl.String,
             "synapse_table_id": pl.String,
             "presynaptic_cell": pl.String,
@@ -382,6 +412,7 @@ def _synapse_frame() -> pl.DataFrame:
     """Return one valid source synapse for focused transform tests."""
     return pl.DataFrame(
         {
+            "id": ["synapse-1"],
             "project_id": ["project-1"],
             "synapse_table_id": ["synapses-1"],
             "presynaptic_cell": ["pre-1"],

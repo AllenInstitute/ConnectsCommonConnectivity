@@ -51,7 +51,8 @@ def derive_cell_cell_connectivity(
     """Aggregate single-synapse rows into cell-cell connectivity measurements.
 
     One ``SYNAPSE_COUNT`` row is emitted for every endpoint pair in the given
-    project. Every input row must belong to ``project_id``.
+    project. Every input row must belong to ``project_id`` and have a unique,
+    non-null synapse ``id``.
     Supplying both ``size_column`` and ``size_unit`` additionally emits a
     ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
     would report a partial sum as a total anatomical size.
@@ -62,7 +63,7 @@ def derive_cell_cell_connectivity(
     is preserved as optional provenance; it does not affect grouping or output
     identity.
     """
-    required_columns = ["project_id", *_CELL_CELL_IDENTITY_COLUMNS]
+    required_columns = ["id", "project_id", *_CELL_CELL_IDENTITY_COLUMNS]
     missing = [column for column in required_columns if column not in synapses]
     if missing:
         raise ValueError(f"Missing required synapse columns: {missing}")
@@ -94,6 +95,14 @@ def derive_cell_cell_connectivity(
     null_columns = [column for column in required_columns if synapses[column].null_count()]
     if null_columns:
         raise ValueError(f"Identity columns contain null values: {null_columns}")
+    duplicate_ids = (
+        synapses.filter(pl.col("id").is_duplicated())["id"]
+        .unique(maintain_order=True)
+        .head(5)
+        .to_list()
+    )
+    if duplicate_ids:
+        raise ValueError(f"Duplicate synapse ids found: {duplicate_ids!r}")
     input_projects = synapses["project_id"].cast(pl.String).unique().to_list()
     if input_projects and input_projects != [project_id]:
         raise ValueError(

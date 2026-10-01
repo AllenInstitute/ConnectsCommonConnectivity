@@ -172,30 +172,17 @@ def _shape_cell_cell_measurements(
         pl.lit(unit).alias("unit"),
     )
     return measurements.with_columns(
-        pl.struct(
+        pl.concat_str(
             [
                 "project_id",
                 "connectome_id",
                 "presynaptic_cell",
                 "postsynaptic_cell",
                 "measurement_type",
-            ]
-        )
-        .map_elements(_cell_cell_measurement_id, return_dtype=pl.String)
-        .alias("id")
+            ],
+            separator="_",
+        ).alias("id")
     ).select(_CELL_CELL_OUTPUT_SCHEMA.keys())
-
-
-def _cell_cell_measurement_id(identity: dict[str, str]) -> str:
-    return "_".join(
-        [
-            identity["project_id"],
-            identity["connectome_id"],
-            identity["presynaptic_cell"],
-            identity["postsynaptic_cell"],
-            identity["measurement_type"],
-        ]
-    )
 
 
 def _single_synapse_table_id(synapses: pl.DataFrame) -> str | None:

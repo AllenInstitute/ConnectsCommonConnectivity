@@ -11,6 +11,7 @@ from connects_common_connectivity.io import (
 from connects_common_connectivity.io.arrow_utils import build_arrow_schema
 from connects_common_connectivity.models import (
     CellCellConnectivityLong,
+    CellCellMeasurementMatrix,
     Modality,
     SynapseConnectivityLong,
     SynapseFeatureMatrix,
@@ -54,6 +55,11 @@ def test_cell_cell_connectivity_accepts_connectome_id():
 
     assert measurement.connectome_id == "connectome-1"
     assert measurement.synapse_table_id is None
+
+
+def test_cell_cell_measurement_matrix_requires_connectome_id():
+    """Wide cell-cell measurements must identify their measurement context."""
+    assert CellCellMeasurementMatrix.model_fields["connectome_id"].is_required()
 
 
 @pytest.mark.parametrize(

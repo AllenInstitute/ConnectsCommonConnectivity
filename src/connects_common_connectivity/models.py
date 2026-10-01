@@ -2157,7 +2157,8 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
-    connectome_id: str = Field(default=..., description="""Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'connectome_id', 'domain_of': ['CellCellConnectivityLong']} })
+    connectome_id: str = Field(default=..., description="""Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'connectome_id',
+         'domain_of': ['CellCellConnectivityLong', 'CellCellMeasurementMatrix']} })
     synapse_table_id: Optional[str] = Field(default=None, description="""Identifier for a logical table of single-synapse connectivity rows within a project.""", json_schema_extra = { "linkml_meta": {'alias': 'synapse_table_id',
          'domain_of': ['CellCellConnectivityLong',
                        'SynapseConnectivityLong',
@@ -2193,7 +2194,8 @@ class CellCellMeasurementMatrix(ProjectScoped):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-cell-cell-schema',
          'mixins': ['ProjectScoped'],
-         'slot_usage': {'description': {'description': 'Free-text description of what '
+         'slot_usage': {'connectome_id': {'name': 'connectome_id', 'required': True},
+                        'description': {'description': 'Free-text description of what '
                                                        'this measurement matrix '
                                                        'represents.',
                                         'name': 'description',
@@ -2268,6 +2270,8 @@ class CellCellMeasurementMatrix(ProjectScoped):
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
+    connectome_id: str = Field(default=..., description="""Identifier for the measurement context, including segmentation version, proofreading state, and measurement semantics; not a cohort or dataset identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'connectome_id',
+         'domain_of': ['CellCellConnectivityLong', 'CellCellMeasurementMatrix']} })
     presynaptic_index: Optional[list[str]] = Field(default=None, description="""Ordered data items defining rows of the matrix, where each row is a presynpatic data item (cell, injection location, etc).""", json_schema_extra = { "linkml_meta": {'alias': 'presynaptic_index', 'domain_of': ['CellCellMeasurementMatrix']} })
     postsynaptic_index: Optional[list[str]] = Field(default=None, description="""Ordered data items defining columns of the matrix, where each column is a postsynaptic data item (cell, region, etc).""", json_schema_extra = { "linkml_meta": {'alias': 'postsynaptic_index', 'domain_of': ['CellCellMeasurementMatrix']} })
     measurement_type: Optional[SynapticMeasurementType] = Field(default=None, description="""The specific projection measurement type (enum) for this set.""", json_schema_extra = { "linkml_meta": {'alias': 'measurement_type',

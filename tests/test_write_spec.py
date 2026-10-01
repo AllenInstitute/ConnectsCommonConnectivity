@@ -27,6 +27,23 @@ def test_registry_uses_canonical_model_table_paths():
         assert spec.subdir == MODEL_TABLE_PATHS[model_name]
 
 
+def test_all_project_scoped_models_have_canonical_paths():
+    """Every concrete project-scoped model must have a canonical table path."""
+    project_scoped_models = {
+        name
+        for name, model_cls in vars(models_module).items()
+        if isinstance(model_cls, type)
+        and issubclass(model_cls, models_module.ProjectScoped)
+        and model_cls is not models_module.ProjectScoped
+    }
+
+    missing = project_scoped_models - set(MODEL_TABLE_PATHS)
+    assert not missing, (
+        "Project-scoped models missing canonical paths: "
+        f"{sorted(missing)}"
+    )
+
+
 def test_path_spec_includes_unregistered_connectivity_tables():
     """Readers and raw ETLs need canonical paths before writer registration."""
     assert MODEL_TABLE_PATHS["SynapseConnectivityLong"] == "synapse"

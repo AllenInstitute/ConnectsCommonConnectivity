@@ -11,8 +11,95 @@ from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io import (
     DatasetReader,
     read_cell_cell_connectivity,
+    read_reference_spaces,
+    read_spatial_locations,
     read_synapse_table,
+    write_models,
 )
+from connects_common_connectivity.models import (
+    Default2DView,
+    LocationType,
+    ReferenceSpace,
+    SignedAxis,
+    SpatialLocation,
+)
+
+
+@pytest.fixture
+def spatial_root(tmp_path):
+    """Provide global and project-owned spaces with coordinates across cells and location types."""
+    write_models([
+        ReferenceSpace(id="CCF_v3", default_2d_view=Default2DView(
+            left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y)),
+        ReferenceSpace(id="first_original", project_id="first"),
+        ReferenceSpace(id="second_original", project_id="second"),
+    ], output_root=tmp_path)
+    write_models([
+        SpatialLocation(project_id=project, dataitem_id=cell, reference_space=space,
+                        location_type=kind, x=1.0, y=2.0, z=3.0)
+        for project in ("first", "second")
+        for cell in ("a", "b")
+        for space in ("CCF_v3", f"{project}_original")
+        for kind in (LocationType.SOMA, LocationType.CENTROID)
+    ], output_root=tmp_path)
+    return tmp_path
+
+
+def test_spatial_reader_filters_and_preserves_coordinates(spatial_root):
+    """Spatial filters must compose within a project without transforming coordinate values."""
+    result = read_spatial_locations(
+        "first", reference_spaces="CCF_v3", dataitem_ids=["a"],
+        location_types=LocationType.SOMA, output_root=spatial_root,
+    )
+    assert result.select(
+        "project_id", "dataitem_id", "location_type", "x", "y", "z"
+    ).rows() == [
+        ("first", "a", "SOMA", 1.0, 2.0, 3.0)
+    ]
+    assert read_spatial_locations("first", output_root=spatial_root).height == 8
+    assert read_spatial_locations(
+        "second", location_types=[LocationType.CENTROID],
+        settings=Settings(output_root=spatial_root),
+    ).height == 4
+
+
+@pytest.mark.parametrize("filters", [
+    {"dataitem_ids": []}, {"dataitem_ids": "missing"},
+    {"reference_spaces": []}, {"location_types": []},
+])
+def test_spatial_reader_empty_matches_keep_schema(spatial_root, filters):
+    """Empty selections and unmatched IDs must return zero rows with the stored column types."""
+    expected = read_spatial_locations("first", output_root=spatial_root)
+    empty = read_spatial_locations("first", output_root=spatial_root, **filters)
+    assert empty.is_empty()
+    assert empty.schema == expected.schema
+
+
+def test_reference_space_reader_includes_global_and_project_spaces(spatial_root):
+    """Project reads include global spaces and preserve view structs, nulls, and empty schemas."""
+    assert read_reference_spaces(output_root=spatial_root).height == 3
+    visible = read_reference_spaces(project_id="first", output_root=spatial_root)
+    assert set(visible["id"]) == {"CCF_v3", "first_original"}
+    assert isinstance(visible.schema["default_2d_view"], pl.Struct)
+    original = read_reference_spaces(reference_space_ids="first_original", output_root=spatial_root)
+    assert original["default_2d_view"].to_list() == [None]
+    assert read_reference_spaces(
+        project_id="missing", settings=Settings(output_root=spatial_root)
+    )["id"].to_list() == ["CCF_v3"]
+    empty = read_reference_spaces(reference_space_ids=[], output_root=spatial_root)
+    assert empty.is_empty()
+    assert empty.schema == visible.schema
+
+
+@pytest.mark.parametrize("reader,args", [
+    (read_spatial_locations, ("first",)), (read_reference_spaces, ()),
+])
+def test_spatial_readers_missing_tables_and_root_conflict(reader, args, tmp_path):
+    """Both spatial readers must reject missing storage and conflicting root overrides."""
+    with pytest.raises(FileNotFoundError):
+        reader(*args, output_root=tmp_path)
+    with pytest.raises(TypeError, match="either settings=.*output_root"):
+        reader(*args, output_root=tmp_path, settings=Settings(output_root=tmp_path))
 
 
 def _write_table(root: Path, subdir: str, data: dict) -> None:

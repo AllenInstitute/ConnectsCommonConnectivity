@@ -21,15 +21,11 @@ classes:
     slots:
       - id
       - ccf_registered_file
-      - soma_location
     slot_usage:
       id:
         range: DataItem
         required: true
         description: Reference to the core DataItem this reconstruction belongs to.
-      soma_location:
-        range: SpatialLocation
-        description: 3D coordinates of the soma in CCF space.
 
 slots:
   ccf_registered_file:
@@ -44,5 +40,3 @@ slots:
       protocol+path string containing the image-space reconstruction data. 
       for example: swc://s3://my_bucket/53434.swc
       or: precomputed://gs://my_bucket/precomputed/skeletons/53434
-  soma_location:
-    description: 3D spatial location of the soma.

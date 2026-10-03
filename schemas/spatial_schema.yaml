@@ -1,0 +1,125 @@
+id: https://brain-connects.org/ic3-spatial-schema
+name: spatial_schema
+description: Spatial reference spaces, default views, and DataItem coordinates.
+imports:
+  - base_schema
+  - core_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+enums:
+  SignedAxis:
+    description: A data axis and its increasing or decreasing screen direction.
+    permissible_values:
+      PLUS_X:
+      MINUS_X:
+      PLUS_Y:
+      MINUS_Y:
+      PLUS_Z:
+      MINUS_Z:
+  LocationType:
+    description: The anatomical point represented by a coordinate row.
+    permissible_values:
+      SOMA:
+      CENTROID:
+      INJECTION_SITE:
+      OTHER:
+
+classes:
+  ReferenceSpace:
+    description: >-
+      A coordinate frame and version with a globally unique id. A null project_id
+      denotes a global space; otherwise the project owns the space. Record units
+      and axis meanings in description. Different frames or versions need distinct
+      ids, including project-owned spaces. A missing view implies no display default.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - name
+      - description
+      - default_2d_view
+    slot_usage:
+      id:
+        required: true
+      name:
+        required: false
+      project_id:
+        required: false
+
+  Default2DView:
+    description: >-
+      Embedded default screen layout. The two signed axes must use different
+      underlying data axes; the unused axis is depth. Negate MINUS axes to display.
+    slots:
+      - left_to_right
+      - bottom_to_top
+    slot_usage:
+      left_to_right:
+        required: true
+      bottom_to_top:
+        required: true
+
+  SpatialLocation:
+    description: >-
+      One anatomical point for a DataItem in a reference space. Within a project,
+      each DataItem has at most one row per reference space and location type.
+      Coordinates are stored without implicit unit conversion or transformation.
+    mixins:
+      - ProjectScoped
+    slots:
+      - dataitem_id
+      - reference_space
+      - location_type
+      - x
+      - y
+      - z
+    slot_usage:
+      dataitem_id:
+        required: true
+      reference_space:
+        required: true
+      location_type:
+        required: true
+      x:
+        required: true
+      y:
+        required: true
+      z:
+        required: true
+    unique_keys:
+      location_identity:
+        unique_key_slots:
+          - project_id
+          - dataitem_id
+          - reference_space
+          - location_type
+
+slots:
+  x:
+    range: float
+    description: X coordinate in the reference space.
+  y:
+    range: float
+    description: Y coordinate in the reference space.
+  z:
+    range: float
+    description: Z coordinate in the reference space.
+  reference_space:
+    range: ReferenceSpace
+    description: Globally unique identifier of the coordinate frame and version.
+  location_type:
+    range: LocationType
+    description: Anatomical point represented by these coordinates.
+  default_2d_view:
+    range: Default2DView
+    inlined: true
+    description: Optional screen layout; null means the consumer chooses the view.
+  left_to_right:
+    range: SignedAxis
+    description: Signed data axis that increases from left to right on screen.
+  bottom_to_top:
+    range: SignedAxis
+    description: Signed data axis that increases from bottom to top on screen.

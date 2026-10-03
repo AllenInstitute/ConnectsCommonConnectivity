@@ -51,47 +51,9 @@ classes:
         required: true
         description: Identifier of the DataSet you are linking
     
-  SpatialLocation:
-    description: 3D spatial coordinates in a reference space.
-    slots:
-      - x
-      - y
-      - z
-      - reference_space
-    # Typically global reference spaces; omit project scoping here.
-    slot_usage:
-      x:
-        range: float
-        required: true
-        description: X coordinate in the reference space.
-      y:
-        range: float
-        required: true
-        description: Y coordinate in the reference space.
-      z:
-        range: float
-        required: true
-        description: Z coordinate in the reference space.
-      reference_space:
-        range: string
-        required: true
-        description: Reference space (e.g., 'CCF_v3', 'CCF_v4').
-
 slots:
   dataitem_id:
     range: DataItem
-  x:
-    description: X coordinate in the reference space.
-    range: float
-  y:
-    description: Y coordinate in the reference space.
-    range: float
-  z:
-    description: Z coordinate in the reference space.
-    range: float
-  reference_space:
-    description: Name/version of the spatial reference space (e.g., CCF_v3, CCF_v4).
-    range: string  
   dataset_id:
     description: Identifier of the DataSet (string key). If a DataSet class is referenced this slot holds its id.
     range: DataSet

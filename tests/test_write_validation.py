@@ -16,7 +16,37 @@ from connects_common_connectivity.models import (
     Cluster,
     ClusterMembership,
     DataSet,
+    Default2DView,
+    ReferenceSpace,
+    SignedAxis,
 )
+
+
+@pytest.mark.parametrize("horizontal", list(SignedAxis))
+@pytest.mark.parametrize("vertical", list(SignedAxis))
+def test_reference_space_axes_checked_before_io(horizontal, vertical, tmp_path):
+    """Repeated underlying axes fail before IO regardless of sign; distinct axes remain valid."""
+    space = ReferenceSpace(id="frame", default_2d_view=Default2DView(
+        left_to_right=horizontal, bottom_to_top=vertical,
+    ))
+    if horizontal.value[-1] == vertical.value[-1]:
+        root = tmp_path / "must-not-exist"
+        with pytest.raises(ValueError, match="different data axes.*frame"):
+            write_models(space, output_root=root)
+        assert not root.exists()
+    else:
+        assert validate_for_write([space], REGISTRY["ReferenceSpace"])[0] is space
+
+
+def test_reference_space_revalidates_constructed_view(tmp_path):
+    """An incomplete view created without Pydantic validation must still fail before writing."""
+    space = ReferenceSpace.model_construct(
+        id="invalid", default_2d_view={"left_to_right": "PLUS_X"}
+    )
+    root = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match="bottom_to_top"):
+        write_models(space, output_root=root)
+    assert not root.exists()
 
 # ---------------------------------------------------------------------------
 # strict_model_for

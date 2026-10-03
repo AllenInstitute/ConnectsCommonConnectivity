@@ -24,7 +24,9 @@ _MODEL_TABLE_PATHS = {
     "HierarchyCategory": "hierarchycategory",
     "MappingSet": "mappingset",
     "ProjectionMeasurementMatrix": "projectionmeasurementmatrix",
+    "ReferenceSpace": "referencespace",
     "SingleCellReconstruction": "singlecellreconstruction",
+    "SpatialLocation": "spatiallocation",
     "SynapseConnectivityLong": "synapse",
     "SynapseFeatureMatrix": "synapsefeaturematrix",
 }

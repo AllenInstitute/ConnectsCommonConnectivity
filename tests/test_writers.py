@@ -49,12 +49,17 @@ from connects_common_connectivity.models import (
     DataItem,
     DataItemDataSetAssociation,
     DataSet,
+    Default2DView,
     HierarchyCategory,
     Laterality,
+    LocationType,
     MappingSet,
     Modality,
     ProjectionMeasurementMatrix,
     ProjectionMeasurementType,
+    ReferenceSpace,
+    SignedAxis,
+    SpatialLocation,
     SynapseFeatureMatrix,
     Unit,
 )
@@ -742,6 +747,11 @@ def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
 
 
 INSTANCE_FACTORIES = {
+    ReferenceSpace: lambda: ReferenceSpace(id="CCF_v3"),
+    SpatialLocation: lambda: SpatialLocation(
+        project_id="p1", dataitem_id="di1", reference_space="CCF_v3",
+        location_type=LocationType.SOMA, x=1, y=2, z=3,
+    ),
     DataSet: lambda: DataSet(id="ds1", name="ds", project_id="p1"),
     DataItem: lambda: DataItem(id="di1", name="di1", project_id="p1"),
     DataItemDataSetAssociation: lambda: DataItemDataSetAssociation(
@@ -798,6 +808,49 @@ INSTANCE_FACTORIES = {
         synapse_index_column="id",
     ),
 }
+
+
+def test_reference_space_struct_merge_round_trip(settings, read_delta):
+    """View updates and nulls round-trip without rewriting unchanged or unrelated rows."""
+    space = ReferenceSpace(id="CCF_v3")
+    other = ReferenceSpace(id="other", project_id="other-project")
+    assert write_models([space, other], settings=settings).rows_written == 2
+    assert write_models(space, settings=settings).rows_written == 0
+    for horizontal in [SignedAxis.PLUS_Z, SignedAxis.PLUS_X, None]:
+        view = None if horizontal is None else Default2DView(
+            left_to_right=horizontal, bottom_to_top=SignedAxis.MINUS_Y
+        )
+        space = ReferenceSpace(id="CCF_v3", default_2d_view=view)
+        assert write_models(space, settings=settings).rows_written == 1
+        assert write_models(space, settings=settings).rows_written == 0
+        rows = read_delta(settings.output_root / "referencespace")
+        assert rows.height == 2
+        assert isinstance(rows.schema["default_2d_view"], pl.Struct)
+        restored = ReferenceSpace.model_validate(
+            rows.filter(pl.col("id") == space.id).to_dicts()[0]
+        )
+        assert restored == space
+        assert rows.filter(pl.col("id") == "other")["project_id"].to_list() == ["other-project"]
+
+
+def test_spatial_location_merge_uses_complete_identity(settings, read_delta):
+    """Coordinate upserts change only the matching project, cell, space, and location type."""
+    rows = [
+        SpatialLocation(project_id=project, dataitem_id="cell", reference_space=space,
+                        location_type=kind, x=1, y=2, z=3)
+        for project in ("first", "second")
+        for space in ("original", "corrected")
+        for kind in (LocationType.SOMA, LocationType.CENTROID)
+    ]
+    assert write_models(rows, settings=settings).rows_written == 8
+    assert write_models(rows, settings=settings).rows_written == 0
+    changed = rows[0].model_copy(update={"x": 9.0})
+    assert write_models([rows[0], changed], settings=settings).rows_written == 1
+    result = read_delta(settings.output_root / "spatiallocation")
+    assert result.height == 8
+    assert result.filter(pl.col("x") == 9).select(
+        "project_id", "dataitem_id", "reference_space", "location_type"
+    ).rows() == [("first", "cell", "original", "SOMA")]
 
 
 def _make_instance(cls):

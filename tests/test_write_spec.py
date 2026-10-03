@@ -21,6 +21,17 @@ def test_registry_contains_seed_entries():
     assert seed.issubset(set(REGISTRY))
 
 
+def test_spatial_registry_identity():
+    """Spaces merge by global ID, coordinates by project-scoped keys, and views stay embedded."""
+    assert REGISTRY["ReferenceSpace"].merge_on == ["id"]
+    assert REGISTRY["ReferenceSpace"].partition_by == []
+    assert REGISTRY["SpatialLocation"].merge_on == [
+        "project_id", "dataitem_id", "reference_space", "location_type"
+    ]
+    assert REGISTRY["SpatialLocation"].partition_by == ["project_id"]
+    assert "Default2DView" not in REGISTRY
+
+
 def test_registry_uses_canonical_model_table_paths():
     """Every writer must use the neutral IO path specification."""
     for model_name, spec in REGISTRY.items():

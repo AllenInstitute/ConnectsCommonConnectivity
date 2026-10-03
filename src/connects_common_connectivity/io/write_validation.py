@@ -22,6 +22,7 @@ from typing import Any, Union, get_args, get_origin
 from pydantic import BaseModel, Field, ValidationError, create_model
 
 from connects_common_connectivity.io.write_spec import WriteSpec
+from connects_common_connectivity.models import ReferenceSpace
 
 __all__ = ["strict_model_for", "validate_for_write"]
 
@@ -141,7 +142,7 @@ def _build_strict_model_cached(
 def validate_for_write(
     models: Sequence[BaseModel], spec: WriteSpec
 ) -> list[BaseModel]:
-    """Enforce a write spec's model-type and required-field contract.
+    """Enforce model types, write-required fields, and reference-space view axes.
 
     Parameters
     ----------
@@ -168,8 +169,8 @@ def validate_for_write(
         If ``models`` is not a sequence or a member's exact type differs from
         ``spec.model_cls``.
     ValueError
-        If the sequence is empty or a member fails strict required-field
-        validation.
+        If the sequence is empty, a member fails strict required-field
+        validation, or a reference space has an invalid default view.
 
     Notes
     -----
@@ -190,6 +191,20 @@ def validate_for_write(
                 f"row {index} has type {type(model).__name__}, "
                 f"expected {spec.model_cls.__name__}"
             )
+        if isinstance(model, ReferenceSpace):
+            try:
+                space = ReferenceSpace.model_validate(model.model_dump(warnings=False))
+            except ValidationError as err:
+                raise ValueError(f"ReferenceSpace: invalid row {index}. {err}") from err
+            view = space.default_2d_view
+            if view is not None and (
+                view.left_to_right.rsplit("_", 1)[1]
+                == view.bottom_to_top.rsplit("_", 1)[1]
+            ):
+                raise ValueError(
+                    f"ReferenceSpace: default_2d_view must use different data axes "
+                    f"at row {index} (id={space.id})"
+                )
 
     strict = strict_model_for(spec)
     if strict is spec.model_cls:

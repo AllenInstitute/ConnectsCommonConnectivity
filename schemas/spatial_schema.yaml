@@ -31,8 +31,11 @@ classes:
   ReferenceSpace:
     description: >-
       A coordinate frame and version with a globally unique id. A null project_id
-      denotes a global space; otherwise the project owns the space. Record units
-      and axis meanings in description. Different frames or versions need distinct
+      denotes a global space; otherwise the project owns the space. Unit applies
+      to all coordinate axes; record axis meanings in description. For voxel
+      coordinates, specify voxel_size and voxel_size_unit to describe physical
+      scale. Omitted unit or voxel size means unspecified, not an implicit default.
+      Different frames or versions need distinct
       ids, including project-owned spaces. A missing view implies no display default.
     mixins:
       - ProjectScoped
@@ -40,6 +43,9 @@ classes:
       - id
       - name
       - description
+      - unit
+      - voxel_size
+      - voxel_size_unit
       - default_2d_view
     slot_usage:
       id:
@@ -48,6 +54,12 @@ classes:
         required: false
       project_id:
         required: false
+      unit:
+        required: false
+        description: >-
+          Unit shared by x, y, and z coordinates in this reference space. Use
+          VOXELS for voxel indices, or NANOMETERS_LENGTH, MICRONS_LENGTH,
+          MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH for physical coordinates.
 
   Default2DView:
     description: >-
@@ -66,7 +78,8 @@ classes:
     description: >-
       One anatomical point for a DataItem in a reference space. Within a project,
       each DataItem has at most one row per reference space and location type.
-      Coordinates are stored without implicit unit conversion or transformation.
+      Coordinates use the reference space's unit and are stored without implicit
+      unit conversion or transformation.
     mixins:
       - ProjectScoped
     slots:
@@ -98,6 +111,22 @@ classes:
           - location_type
 
 slots:
+  voxel_size:
+    range: float
+    multivalued: true
+    list_elements_ordered: true
+    minimum_cardinality: 3
+    maximum_cardinality: 3
+    description: >-
+      Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit.
+      Only applicable when the reference space unit is VOXELS. Each dimension
+      must be positive; unequal dimensions describe anisotropic voxels.
+  voxel_size_unit:
+    range: Unit
+    description: >-
+      Physical length unit shared by all three voxel_size dimensions. Supply
+      alongside voxel_size; use NANOMETERS_LENGTH, MICRONS_LENGTH,
+      MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.
   x:
     range: float
     description: X coordinate in the reference space.

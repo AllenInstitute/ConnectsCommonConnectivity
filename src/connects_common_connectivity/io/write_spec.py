@@ -30,6 +30,8 @@ from connects_common_connectivity.models import (
     HierarchyCategory,
     MappingSet,
     ProjectionMeasurementMatrix,
+    ReferenceSpace,
+    SpatialLocation,
     SynapseFeatureMatrix,
 )
 
@@ -116,6 +118,22 @@ class WriteSpec(BaseModel):
 
 
 REGISTRY: dict[str, WriteSpec] = {
+    "ReferenceSpace": WriteSpec(
+        model_cls=ReferenceSpace,
+        subdir=MODEL_TABLE_PATHS["ReferenceSpace"],
+        partition_by=[],
+        scope_columns=["id"],
+        write_mode="merge_scoped",
+        merge_on=["id"],
+    ),
+    "SpatialLocation": WriteSpec(
+        model_cls=SpatialLocation,
+        subdir=MODEL_TABLE_PATHS["SpatialLocation"],
+        partition_by=["project_id"],
+        scope_columns=["project_id", "reference_space"],
+        write_mode="merge_scoped",
+        merge_on=["project_id", "dataitem_id", "reference_space", "location_type"],
+    ),
     "DataSet": WriteSpec(
         model_cls=DataSet,
         subdir=MODEL_TABLE_PATHS["DataSet"],

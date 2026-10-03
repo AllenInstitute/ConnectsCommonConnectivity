@@ -24,6 +24,8 @@ from connects_common_connectivity.io.path_spec import (
 __all__ = [
     "DatasetReader",
     "read_cell_cell_connectivity",
+    "read_reference_spaces",
+    "read_spatial_locations",
     "read_synapse_table",
 ]
 
@@ -769,6 +771,104 @@ def _filter_explicit_values(
             values = [requested] if isinstance(requested, str) else list(requested)
             frame = frame.filter(pl.col(column).is_in(values))
     return frame
+
+
+def read_spatial_locations(
+    project_id: str,
+    *,
+    reference_spaces: str | Iterable[str] | None = None,
+    dataitem_ids: str | Iterable[str] | None = None,
+    location_types: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read flat coordinate rows within one project, without transforming values.
+
+    Parameters
+    ----------
+    project_id:
+        Required project scope for DataItem identifiers.
+    reference_spaces, dataitem_ids, location_types:
+        Optional identifiers or iterables of identifiers to retain. Location
+        types also accept ``LocationType`` enum members. ``None`` imposes no
+        restriction; an empty iterable selects no rows.
+    output_root, settings:
+        Mutually exclusive root overrides, matching ``write_models``. With
+        neither supplied, use the discovered application settings.
+
+    Returns
+    -------
+    polars.DataFrame
+        Stored rows with identity columns and numeric x/y/z. Empty matches
+        retain the table schema. No reference joins, display-axis changes,
+        or unit conversions are applied.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical spatiallocation table is absent.
+    TypeError
+        If both output_root and settings are supplied.
+    """
+    root = _resolve_output_root(settings, output_root)
+    path = root / MODEL_TABLE_PATHS["SpatialLocation"]
+    if not path.exists():
+        raise FileNotFoundError(f"No spatial location table at {path}.")
+    locations = pl.read_delta(str(path)).filter(pl.col("project_id") == project_id)
+    return _filter_explicit_values(
+        locations,
+        (
+            ("reference_space", reference_spaces),
+            ("dataitem_id", dataitem_ids),
+            ("location_type", location_types),
+        ),
+    )
+
+
+def read_reference_spaces(
+    *,
+    project_id: str | None = None,
+    reference_space_ids: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read coordinate-frame metadata, retaining optional default-view structs.
+
+    Parameters
+    ----------
+    project_id:
+        When supplied, include spaces owned by this project and global spaces
+        (null project_id). ``None`` returns spaces from all projects.
+    reference_space_ids:
+        Optional globally unique frame identifiers to retain. A string selects
+        one ID, an iterable selects several, and an empty iterable selects none.
+    output_root, settings:
+        Mutually exclusive root overrides, matching ``write_models``. With
+        neither supplied, use the discovered application settings.
+
+    Returns
+    -------
+    polars.DataFrame
+        ReferenceSpace rows, with default_2d_view as a struct or null. A null
+        view has no implicit fallback. Empty matches retain the table schema.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical referencespace table is absent.
+    TypeError
+        If both output_root and settings are supplied.
+    """
+    root = _resolve_output_root(settings, output_root)
+    path = root / MODEL_TABLE_PATHS["ReferenceSpace"]
+    if not path.exists():
+        raise FileNotFoundError(f"No reference space table at {path}.")
+    spaces = pl.read_delta(str(path))
+    if project_id is not None:
+        spaces = spaces.filter(
+            pl.col("project_id").is_null() | (pl.col("project_id") == project_id)
+        )
+    return _filter_explicit_values(spaces, (("id", reference_space_ids),))
 
 
 def read_cell_cell_connectivity(

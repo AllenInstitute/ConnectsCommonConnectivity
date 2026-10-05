@@ -9,6 +9,7 @@ Design goals:
 from __future__ import annotations
 
 from enum import Enum
+from types import UnionType
 from typing import Any, Iterable, List, Dict, Union, get_origin, get_args
 import hashlib
 import re
@@ -55,12 +56,20 @@ def normalize_value(v: Any) -> Any:
     return v
 
 
-def flatten_refs(row: Dict[str, Any]) -> Dict[str, Any]:
+def flatten_refs(
+    row: Dict[str, Any], *, schema: pa.Schema | None = None
+) -> Dict[str, Any]:
     """Flatten object reference dicts to id form when they contain an identifier field.
 
-    Example: {'parent_identifier': {'id': 'BR123'}} -> {'parent_identifier_id': 'BR123'}
-    Leaves the original key removed for simpler Arrow schema.
+    With a schema, only string-valued references are collapsed; struct fields
+    retain their contents, even when they contain an identifier. Without a
+    schema, the legacy identifier heuristic is used. Keys are unchanged.
     """
+    if schema is not None:
+        for field in schema:
+            if field.name in row:
+                row[field.name] = _flatten_typed_value(row[field.name], field.type)
+        return row
     for key, val in list(row.items()):
         # Single embedded reference -> promote to *_id
         if isinstance(val, dict):
@@ -83,7 +92,25 @@ def flatten_refs(row: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
-def model_to_row(model: Any, *, flatten: bool = True) -> Dict[str, Any]:
+def _flatten_typed_value(value: Any, arrow_type: pa.DataType) -> Any:
+    if pa.types.is_struct(arrow_type) and isinstance(value, dict):
+        return flatten_refs(dict(value), schema=pa.schema(list(arrow_type)))
+    if (pa.types.is_list(arrow_type) or pa.types.is_large_list(arrow_type)) and isinstance(
+        value, list
+    ):
+        return [_flatten_typed_value(item, arrow_type.value_type) for item in value]
+    if pa.types.is_string(arrow_type) and isinstance(value, dict):
+        identifier = value.get("id")
+        if identifier is None:
+            identifier = value.get("identifier")
+        if identifier is not None:
+            return identifier
+    return value
+
+
+def model_to_row(
+    model: Any, *, flatten: bool = True, schema: pa.Schema | None = None
+) -> Dict[str, Any]:
     """Convert a single Pydantic model instance to a normalized row dict.
 
     Parameters
@@ -91,17 +118,23 @@ def model_to_row(model: Any, *, flatten: bool = True) -> Dict[str, Any]:
     model: BaseModel
         Pydantic instance.
     flatten: bool
-        If True, attempt to flatten object references to *_id columns.
+        If True, flatten references according to the target schema.
+    schema: pyarrow.Schema, optional
+        Target schema; defaults to the model's generated Arrow schema.
     """
     raw = model.model_dump(mode="python", exclude_none=True)
     norm = {k: normalize_value(v) for k, v in raw.items()}
-    return flatten_refs(norm) if flatten else norm
+    if not flatten:
+        return norm
+    if schema is None:
+        schema = build_arrow_schema(type(model))
+    return flatten_refs(norm, schema=schema)
 
 
 def _arrow_field_for(name: str, annotation: Any, required: bool) -> pa.Field:
     """Infer an Arrow Field from a Python type annotation.
 
-    Handles Optional[T], List[T], Enums, and basic primitives.
+    Handles optional fields, lists, embedded models, enums, and primitives.
     Fallback is string.
     """
     nullable = not required
@@ -109,7 +142,7 @@ def _arrow_field_for(name: str, annotation: Any, required: bool) -> pa.Field:
     args = get_args(annotation)
 
     # Optional / Union[T, None]
-    if origin is Union and type(None) in args:
+    if origin in (Union, UnionType) and type(None) in args:
         non_none = [a for a in args if a is not type(None)]
         if non_none:
             annotation = non_none[0]
@@ -127,11 +160,13 @@ def _arrow_field_for(name: str, annotation: Any, required: bool) -> pa.Field:
     if isinstance(annotation, type) and issubclass(annotation, Enum):
         return pa.field(name, pa.string(), nullable=nullable)
 
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return pa.field(name, pa.struct(build_arrow_schema(annotation)), nullable=nullable)
+
     # Primitive direct map
     if annotation in PRIMITIVE_TYPE_MAP:
         return pa.field(name, PRIMITIVE_TYPE_MAP[annotation], nullable=nullable)
 
-    # Fallback struct for embedded BaseModel? treat as JSON/string for now.
     return pa.field(name, pa.string(), nullable=nullable)
 
 
@@ -153,11 +188,11 @@ def models_to_table(models: Iterable[Any], schema: Union[pa.Schema, None] = None
     """Convert an iterable of Pydantic models to a PyArrow Table.
 
     If no schema is provided, one is generated from the class of the first model.
-    Column-oriented assembly for speed (single pass). Nested dicts become stringified.
+    Column-oriented assembly preserves schema-declared structs and references.
     """
     models = list(models)
     if not models:
-        return pa.Table.from_arrays([], schema=schema or pa.schema([]))
+        return pa.Table.from_pylist([], schema=schema or pa.schema([]))
 
     # Build schema if absent
     if schema is None:
@@ -169,21 +204,11 @@ def models_to_table(models: Iterable[Any], schema: Union[pa.Schema, None] = None
     buffers: Dict[str, List[Any]] = {field.name: [] for field in schema}  # type: ignore[arg-type]
 
     for m in models:
-        row: Dict[str, Any] = model_to_row(m, flatten=flatten)
+        row: Dict[str, Any] = model_to_row(m, flatten=flatten, schema=schema)
         for field in schema:  # type: ignore[arg-type]
             val = row.get(field.name)
-            if isinstance(val, dict):
+            if isinstance(val, dict) and pa.types.is_string(field.type):
                 val = str(val)
-            # If list contains dicts, attempt to reduce each dict to id/identifier, else stringify
-            if isinstance(val, list) and val and any(isinstance(x, dict) for x in val):
-                reduced: List[Any] = []
-                for x in val:
-                    if isinstance(x, dict):
-                        ident = x.get("id") or x.get("identifier")
-                        reduced.append(ident if ident is not None else str(x))
-                    else:
-                        reduced.append(x)
-                val = reduced
             buffers[field.name].append(val)
     # Build arrays now that buffers are filled
     arrays: List[pa.Array] = []

@@ -10,6 +10,7 @@ single project and connectome scope from the canonical cell-cell table.
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -825,9 +826,15 @@ def read_spatial_locations(
     )
 
 
+class _ProjectScope(Enum):
+    """Distinguish an omitted project filter from the global null scope."""
+
+    ALL = "all"
+
+
 def read_reference_spaces(
     *,
-    project_id: str | None = None,
+    project_id: str | None | _ProjectScope = _ProjectScope.ALL,
     reference_space_ids: str | Iterable[str] | None = None,
     output_root: str | Path | None = None,
     settings: Settings | None = None,
@@ -837,11 +844,13 @@ def read_reference_spaces(
     Parameters
     ----------
     project_id:
-        When supplied, include spaces owned by this project and global spaces
-        (null project_id). ``None`` returns spaces from all projects.
+        Omit to return all scopes. Explicit ``None`` selects only global
+        spaces (null project_id); a string selects only that project's spaces,
+        without falling back to global spaces.
     reference_space_ids:
-        Optional globally unique frame identifiers to retain. A string selects
-        one ID, an iterable selects several, and an empty iterable selects none.
+        Optional frame identifiers, unique within each project or global scope,
+        to retain. A string selects one ID, an iterable selects several, and an
+        empty iterable selects none.
     output_root, settings:
         Mutually exclusive root overrides, matching ``write_models``. With
         neither supplied, use the discovered application settings.
@@ -864,10 +873,10 @@ def read_reference_spaces(
     if not path.exists():
         raise FileNotFoundError(f"No reference space table at {path}.")
     spaces = pl.read_delta(str(path))
-    if project_id is not None:
-        spaces = spaces.filter(
-            pl.col("project_id").is_null() | (pl.col("project_id") == project_id)
-        )
+    if project_id is None:
+        spaces = spaces.filter(pl.col("project_id").is_null())
+    elif project_id is not _ProjectScope.ALL:
+        spaces = spaces.filter(pl.col("project_id") == project_id)
     return _filter_explicit_values(spaces, (("id", reference_space_ids),))
 
 

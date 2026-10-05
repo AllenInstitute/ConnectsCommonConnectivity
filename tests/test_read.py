@@ -31,6 +31,8 @@ def spatial_root(tmp_path):
     write_models([
         ReferenceSpace(id="CCF_v3", default_2d_view=Default2DView(
             left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y)),
+        ReferenceSpace(id="CCF_v3", project_id="first"),
+        ReferenceSpace(id="CCF_v3", project_id="second"),
         ReferenceSpace(id="first_original", project_id="first"),
         ReferenceSpace(id="second_original", project_id="second"),
     ], output_root=tmp_path)
@@ -75,20 +77,45 @@ def test_spatial_reader_empty_matches_keep_schema(spatial_root, filters):
     assert empty.schema == expected.schema
 
 
-def test_reference_space_reader_includes_global_and_project_spaces(spatial_root):
-    """Project reads include global spaces and preserve view structs, nulls, and empty schemas."""
-    assert read_reference_spaces(output_root=spatial_root).height == 3
+def test_reference_space_reader_selects_exact_scope(spatial_root):
+    """Exact scope reads preserve view structs, nulls, and empty schemas."""
+    assert read_reference_spaces(output_root=spatial_root).height == 5
     visible = read_reference_spaces(project_id="first", output_root=spatial_root)
     assert set(visible["id"]) == {"CCF_v3", "first_original"}
+    assert visible["project_id"].to_list() == ["first", "first"]
     assert isinstance(visible.schema["default_2d_view"], pl.Struct)
+    global_spaces = read_reference_spaces(project_id=None, output_root=spatial_root)
+    assert global_spaces["id"].to_list() == ["CCF_v3"]
+    assert global_spaces["project_id"].to_list() == [None]
+    assert global_spaces["default_2d_view"].to_list() == [
+        {"left_to_right": "PLUS_Z", "bottom_to_top": "MINUS_Y"}
+    ]
     original = read_reference_spaces(reference_space_ids="first_original", output_root=spatial_root)
     assert original["default_2d_view"].to_list() == [None]
     assert read_reference_spaces(
         project_id="missing", settings=Settings(output_root=spatial_root)
-    )["id"].to_list() == ["CCF_v3"]
+    ).is_empty()
     empty = read_reference_spaces(reference_space_ids=[], output_root=spatial_root)
     assert empty.is_empty()
     assert empty.schema == visible.schema
+
+
+@pytest.mark.parametrize("filters,expected_projects", [
+    ({}, {None, "first", "second"}),
+    ({"project_id": None}, {None}),
+    ({"project_id": "first"}, {"first"}),
+    ({"project_id": "second"}, {"second"}),
+    ({"project_id": "missing"}, set()),
+])
+def test_reference_space_reader_disambiguates_shared_ids(
+    spatial_root, filters, expected_projects
+):
+    """Scope filters must distinguish reference spaces that share an ID without global fallback."""
+    result = read_reference_spaces(
+        reference_space_ids="CCF_v3", output_root=spatial_root, **filters
+    )
+    assert set(result["project_id"]) == expected_projects
+    assert result.height == len(expected_projects)
 
 
 @pytest.mark.parametrize("reader,args", [

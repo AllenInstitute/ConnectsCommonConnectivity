@@ -449,7 +449,7 @@ class DataItemDataSetAssociation(ProjectScoped):
 
 class ReferenceSpace(ProjectScoped):
     """
-    A coordinate frame and version with a globally unique id. A null project_id denotes a global space; otherwise the project owns the space. Unit applies to all coordinate axes; record axis meanings in description. For voxel coordinates, specify voxel_size and voxel_size_unit to describe physical scale. Omitted unit or voxel size means unspecified, not an implicit default. Different frames or versions need distinct ids, including project-owned spaces. A missing view implies no display default.
+    A coordinate frame and version identified by (project_id, id). A null project_id denotes the global scope; otherwise the space belongs to that project. The same id may occur independently in different scopes. Unit applies to all coordinate axes; record axis meanings in description. For voxel coordinates, specify voxel_size and voxel_size_unit to describe physical scale. Omitted unit or voxel size means unspecified, not an implicit default. Different frames or versions within a scope need distinct ids. A missing view implies no display default.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
          'mixins': ['ProjectScoped'],
@@ -464,7 +464,10 @@ class ReferenceSpace(ProjectScoped):
                                                 'CENTIMETERS_LENGTH for physical '
                                                 'coordinates.',
                                  'name': 'unit',
-                                 'required': False}}})
+                                 'required': False}},
+         'unique_keys': {'reference_space_identity': {'unique_key_name': 'reference_space_identity',
+                                                      'unique_key_slots': ['project_id',
+                                                                           'id']}}})
 
     id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
@@ -565,7 +568,7 @@ class SpatialLocation(ProjectScoped):
                        'BrainRegionAssociation',
                        'CellFeatureMeasurement',
                        'CellGeneData']} })
-    reference_space: str = Field(default=..., description="""Globally unique identifier of the coordinate frame and version.""", json_schema_extra = { "linkml_meta": {'alias': 'reference_space', 'domain_of': ['SpatialLocation']} })
+    reference_space: str = Field(default=..., description="""Identifier of the coordinate frame and version, unique within the selected project or global scope.""", json_schema_extra = { "linkml_meta": {'alias': 'reference_space', 'domain_of': ['SpatialLocation']} })
     location_type: LocationType = Field(default=..., description="""Anatomical point represented by these coordinates.""", json_schema_extra = { "linkml_meta": {'alias': 'location_type', 'domain_of': ['SpatialLocation']} })
     x: float = Field(default=..., description="""X coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'x', 'domain_of': ['SpatialLocation']} })
     y: float = Field(default=..., description="""Y coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'y', 'domain_of': ['SpatialLocation']} })

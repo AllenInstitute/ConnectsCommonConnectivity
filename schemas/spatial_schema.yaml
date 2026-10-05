@@ -30,13 +30,14 @@ enums:
 classes:
   ReferenceSpace:
     description: >-
-      A coordinate frame and version with a globally unique id. A null project_id
-      denotes a global space; otherwise the project owns the space. Unit applies
+      A coordinate frame and version identified by (project_id, id). A null project_id
+      denotes the global scope; otherwise the space belongs to that project. The same
+      id may occur independently in different scopes. Unit applies
       to all coordinate axes; record axis meanings in description. For voxel
       coordinates, specify voxel_size and voxel_size_unit to describe physical
       scale. Omitted unit or voxel size means unspecified, not an implicit default.
-      Different frames or versions need distinct
-      ids, including project-owned spaces. A missing view implies no display default.
+      Different frames or versions within a scope need distinct ids.
+      A missing view implies no display default.
     mixins:
       - ProjectScoped
     slots:
@@ -60,6 +61,11 @@ classes:
           Unit shared by x, y, and z coordinates in this reference space. Use
           VOXELS for voxel indices, or NANOMETERS_LENGTH, MICRONS_LENGTH,
           MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH for physical coordinates.
+    unique_keys:
+      reference_space_identity:
+        unique_key_slots:
+          - project_id
+          - id
 
   Default2DView:
     description: >-
@@ -138,7 +144,9 @@ slots:
     description: Z coordinate in the reference space.
   reference_space:
     range: ReferenceSpace
-    description: Globally unique identifier of the coordinate frame and version.
+    description: >-
+      Identifier of the coordinate frame and version, unique within the selected
+      project or global scope.
   location_type:
     range: LocationType
     description: Anatomical point represented by these coordinates.

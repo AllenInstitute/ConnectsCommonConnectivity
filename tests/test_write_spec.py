@@ -22,8 +22,14 @@ def test_registry_contains_seed_entries():
 
 
 def test_spatial_registry_identity():
-    """Spaces merge by global ID, coordinates by project-scoped keys, and views stay embedded."""
-    assert REGISTRY["ReferenceSpace"].merge_on == ["id"]
+    """Spaces and coordinates use scoped identities; only space projects may be null."""
+    assert REGISTRY["ReferenceSpace"].merge_on == ["project_id", "id"]
+    assert REGISTRY["ReferenceSpace"].scope_columns == ["project_id", "id"]
+    assert REGISTRY["ReferenceSpace"].nullable_merge_on == ["project_id"]
+    assert all(
+        not spec.nullable_merge_on
+        for name, spec in REGISTRY.items() if name != "ReferenceSpace"
+    )
     assert REGISTRY["ReferenceSpace"].partition_by == []
     assert REGISTRY["SpatialLocation"].merge_on == [
         "project_id", "dataitem_id", "reference_space", "location_type"
@@ -190,6 +196,26 @@ def test_merge_keys_must_be_non_null_at_write_time():
             write_mode="merge_scoped",
             merge_on=["hierarchy_id", "id"],
         )
+
+
+@pytest.mark.parametrize("overrides,match", [
+    ({"nullable_merge_on": ["name"]}, "subset of merge_on"),
+    ({"required_for_write": ["project_id"]}, "overlap required_for_write"),
+    ({"merge_on": [], "write_mode": "overwrite_scoped"}, "subset of merge_on"),
+])
+def test_nullable_merge_keys_reject_invalid_policies(overrides, match):
+    """Nullable identity policies must reject non-key fields and required-for-write conflicts."""
+    policy = {
+        "model_cls": models_module.ReferenceSpace,
+        "subdir": "referencespace",
+        "partition_by": [],
+        "scope_columns": ["project_id", "id"],
+        "write_mode": "merge_scoped",
+        "merge_on": ["project_id", "id"],
+        "nullable_merge_on": ["project_id"],
+    }
+    with pytest.raises(ValidationError, match=match):
+        WriteSpec(**(policy | overrides))
 
 
 def test_non_merge_mode_rejects_merge_keys():

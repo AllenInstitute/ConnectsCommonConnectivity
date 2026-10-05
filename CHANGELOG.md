@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Changed `read_reference_spaces` to select all scopes when `project_id` is omitted, only global spaces for explicit `None`, and only the named project's spaces for a string, without including global spaces automatically.
 - Changed the Minnie and V1DD cell-cell ETLs to share canonical `cellcellconnectivitylong/` storage with connectome-scoped overwrites.
 - Changed identity-bearing metadata and association writes through `write_models` from scoped replacement to pure upserts; rerunning with fewer `Cluster`, `CellFeatureDefinition`, or `ClusterMembership` rows no longer deletes omitted rows. Explicit deletion support is tracked in #21.
 - `HierarchyCategory` now requires `level`, so every category has an unambiguous position in its taxonomy.
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `ReferenceSpace` writes with the same ID overwriting rows in other scopes; identity now combines `project_id` and `id`, with null `project_id` representing a separate global scope.
 - Fixed embedded Pydantic models being stringified or mistaken for ID references during Arrow conversion; schema-declared structs, including lists of structs, now round-trip through Parquet.
 - Fixed Delta writes for column names that overlap SQL keywords or contain special characters.
 - Fixed later writes deleting rows contributed by other ETL notebooks in shared dataset and hierarchy scopes.

@@ -63,7 +63,11 @@ class WriteSpec(BaseModel):
         Dispatch strategy used by :func:`~connects_common_connectivity.io.writers.write_models`.
     merge_on:
         Complete row identity for ``merge_scoped`` writes. It must be non-empty
-        only for that mode, and every key must be non-null at write time.
+        only for that mode. Keys must be non-null unless explicitly opted in
+        through ``nullable_merge_on``.
+    nullable_merge_on:
+        Subset of merge keys for which null is a valid identity value. These
+        keys use null-safe equality and cannot also be required for write.
     required_for_write:
         Model fields made required and non-null by IO-layer validation without
         changing the shared LinkML schema.
@@ -80,6 +84,7 @@ class WriteSpec(BaseModel):
     scope_columns: list[str]
     write_mode: Literal["overwrite_scoped", "merge_scoped"]
     merge_on: list[str] = Field(default_factory=list)
+    nullable_merge_on: list[str] = Field(default_factory=list)
     required_for_write: list[str] = Field(default_factory=list)
     cross_field_rules: list[str] = Field(default_factory=list)
 
@@ -90,6 +95,11 @@ class WriteSpec(BaseModel):
             raise ValueError("merge_on must be non-empty for merge_scoped writes")
         if self.write_mode != "merge_scoped" and self.merge_on:
             raise ValueError("merge_on is only valid for merge_scoped writes")
+
+        if not set(self.nullable_merge_on).issubset(self.merge_on):
+            raise ValueError("nullable_merge_on must be a subset of merge_on")
+        if set(self.nullable_merge_on).intersection(self.required_for_write):
+            raise ValueError("nullable_merge_on cannot overlap required_for_write")
 
         missing_keys = [
             name for name in self.merge_on if name not in self.model_cls.model_fields
@@ -106,25 +116,32 @@ class WriteSpec(BaseModel):
             schema_enforces_non_null = (
                 field.is_required() and not _allows_none(field.annotation)
             )
-            if not schema_enforces_non_null and name not in self.required_for_write:
+            if (
+                not schema_enforces_non_null
+                and name not in self.required_for_write
+                and name not in self.nullable_merge_on
+            ):
                 unsafe_keys.append(name)
         if unsafe_keys:
             raise ValueError(
                 "merge_on fields must be non-null at write time; make each field "
-                "schema-required and non-nullable or add it to required_for_write: "
+                "schema-required and non-nullable, add it to required_for_write, "
+                "or explicitly allow null identity values with nullable_merge_on: "
                 f"{unsafe_keys!r}"
             )
         return self
 
 
 REGISTRY: dict[str, WriteSpec] = {
+    # Reference-space IDs are scoped by project; null identifies the global scope.
     "ReferenceSpace": WriteSpec(
         model_cls=ReferenceSpace,
         subdir=MODEL_TABLE_PATHS["ReferenceSpace"],
         partition_by=[],
-        scope_columns=["id"],
+        scope_columns=["project_id", "id"],
         write_mode="merge_scoped",
-        merge_on=["id"],
+        merge_on=["project_id", "id"],
+        nullable_merge_on=["project_id"],
     ),
     "SpatialLocation": WriteSpec(
         model_cls=SpatialLocation,

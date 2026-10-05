@@ -14,12 +14,14 @@ schemas/base_schema.yaml          # HasId, ProjectScoped, and other base mixins
 schemas/core_schema.yaml          # DataSet, DataItem, DataItemDataSetAssociation, Modality
 schemas/cell_features_schema.yaml # CellFeatureDefinition, CellFeatureSet, CellFeatureMatrix
 ```
-Read the relevant domain schema too if writing projection, clustering, or mapping data:
+Read the relevant domain schema too if writing projection, clustering, mapping, or spatial data:
 ```
 schemas/clustering_schema.yaml
 schemas/mappings_schema.yaml
 schemas/projection_schema.yaml
 schemas/single_cell_schema.yaml
+schemas/spatial_schema.yaml
+schemas/cell_gene_schema.yaml
 ```
 
 ### Package utilities (read-only reference)
@@ -30,6 +32,7 @@ src/connects_common_connectivity/io/arrow_utils.py # build_arrow_schema, models_
                                                     # build_cell_feature_matrix_schema
 src/connects_common_connectivity/io/write_utils.py # walk_ancestors
 src/connects_common_connectivity/io/writers.py     # write_models, write_projection_matrix
+src/connects_common_connectivity/io/read.py        # read_spatial_locations, read_reference_spaces
 ```
 
 ### Example notebooks (read for patterns)
@@ -55,7 +58,7 @@ Also read `code/etl_examples_readme.ipynb` for a plain-language summary of exist
 1. **Never edit `src/` or `models.py` directly.**
    `models.py` is auto-generated. If a schema change is needed, edit the relevant `schemas/*.yaml` file and regenerate:
    ```bash
-   uv run gen-pydantic schemas/connectivity_schema.yaml > src/connects_common_connectivity/models.py
+    bash scripts/generate_models.sh
    ```
 
 2. **Schemas are the contract.** Do not invent fields that aren't in the schema. If a field you need doesn't exist, ask whether the schema should be extended first.
@@ -73,6 +76,7 @@ Also read `code/etl_examples_readme.ipynb` for a plain-language summary of exist
    - **Global cluster taxonomy** (`Cluster`, `ClusterHierarchy`, `AlgorithmRun`): no `project_id`. Scoped by `hierarchy_id` (or `id` for the hierarchy/run rows themselves) so multiple taxonomies share one table.
    - **Global category vocabulary** (`HierarchyCategory`): no `project_id`, no `hierarchy_id`. Category ids (`class`, `subclass`, `cluster`) are intentionally shared across taxonomies — see §11.
    - **Project-scoped *and* taxonomy-scoped**: `ClusterMembership` (project + `hierarchy_id`), `CellToClusterMapping` (project + `mapping_set`).
+    - **Spatial coordinates**: `SpatialLocation` merges on `(project_id, dataitem_id, reference_space, location_type)`. `ReferenceSpace` merges on globally unique `id`; its optional `project_id` identifies ownership, not identity. See §5k.
 
 8. **Output root.** All notebooks obtain the write root with `OUTPUT_ROOT = get_settings().output_root` (imported from `connects_common_connectivity.config`) — an absolute `pathlib.Path` sourced from `ccc_config.yaml`. Define this in cell 3 and build subpaths with `/`, e.g. `OUTPUT_ROOT / "dataset"`.
 
@@ -229,6 +233,134 @@ for ancestor_id, is_leaf in walk_ancestors(leaf_id, parent_by_child):
 `probability` (mapping) and `membership_score`/`distance` (membership) are set on the leaf row only; null on parents.
 
 ---
+
+### 5k. Spatial coordinates and reference spaces
+
+Use `SpatialLocation` for anatomical coordinates, not a generic cell feature set.
+`SingleCellReconstruction.soma_location` and `CellMetadata.spatial_location` have
+been removed. Choose an explicit `LocationType`: `SOMA`, `CENTROID`,
+`INJECTION_SITE`, or `OTHER`. There is no default location type. One DataItem can
+have several types in one space, and locations in several spaces, but only one
+row per type/space within its project.
+
+Before writing coordinates:
+
+1. Register every referenced cell as a `DataItem` in the same project. Preserve
+     its existing ID. For cell x gene data, `CellGeneData.cell_index` is the ordered
+     list of DataItem IDs, not an unrelated Zarr row-number namespace. Preserve the
+     mapping from matrix rows to those IDs. Writers do not enforce foreign keys;
+     check these references in the ETL.
+2. Establish a `ReferenceSpace` ID for each distinct coordinate frame/version.
+     IDs must be globally unique even for project-owned spaces. Do not reuse an
+     ID for different units, transforms, or frame versions. Record known units,
+     provenance, and axis meanings in `description`; units are not a typed field.
+3. Give each space a single owning ETL. Global spaces use `project_id=None`;
+     dataset-local spaces use that dataset's project. Consumers read existing
+     space definitions rather than repeatedly overwriting shared metadata.
+4. Set `default_2d_view` only when its directions are confirmed. A missing view
+     means no recommendation, not an implicit x/y or y-up fallback. Both axes are
+     required when a view is supplied, and they must refer to different underlying
+     axes: `PLUS_X` / `MINUS_X` is invalid.
+
+Write `ReferenceSpace` and `SpatialLocation` through `write_models`, never a
+hand-built Delta predicate. Storage is `referencespace/` (unpartitioned) and
+`spatiallocation/` (partitioned by project). These are upserts: reruns update the
+same identity and preserve other rows; they do not delete stale coordinates.
+
+Example write and verification cells, using a previously registered `CELL_ID`
+and a space owned by this ETL:
+
+```python
+from connects_common_connectivity.io import (
+        read_reference_spaces, read_spatial_locations, write_models,
+)
+from connects_common_connectivity.models import (
+        Default2DView, LocationType, ReferenceSpace, SignedAxis, SpatialLocation,
+)
+
+SPACE_ID = "v1dd_streamline"
+space = ReferenceSpace(
+        id=SPACE_ID,
+        project_id=PROJECT_ID,
+        description="V1DD streamline coordinates in micrometers; y increases toward white matter.",
+        default_2d_view=Default2DView(
+                left_to_right=SignedAxis.PLUS_X.value,
+                bottom_to_top=SignedAxis.MINUS_Y.value,
+        ),
+)
+write_models(space, output_root=OUTPUT_ROOT)
+```
+
+```python
+spaces = read_reference_spaces(
+        project_id=PROJECT_ID, reference_space_ids=SPACE_ID, output_root=OUTPUT_ROOT,
+)
+print(spaces.shape, spaces.head(3))
+assert spaces.height == 1
+assert spaces["default_2d_view"].struct.field("bottom_to_top").to_list() == ["MINUS_Y"]
+```
+
+```python
+location = SpatialLocation(
+        project_id=PROJECT_ID, dataitem_id=CELL_ID, reference_space=SPACE_ID,
+        location_type=LocationType.SOMA.value,
+        x=soma_x, y=soma_y, z=soma_z,
+)
+write_models(location, output_root=OUTPUT_ROOT)
+```
+
+```python
+locations = read_spatial_locations(
+        PROJECT_ID, reference_spaces=SPACE_ID, dataitem_ids=CELL_ID,
+        location_types=LocationType.SOMA.value, output_root=OUTPUT_ROOT,
+)
+print(locations.shape, locations.head(3))
+assert locations.height == 1
+assert locations.select("x", "y", "z").row(0) == (soma_x, soma_y, soma_z)
+```
+
+For larger batches, verify complete identity uniqueness, reference membership,
+and source-coordinate equality, not just row count. The writer resolves duplicate
+incoming keys using the final row, so detect unintended duplicates before writing.
+Reject or explicitly report missing coordinate triplets; do not silently invent
+zero coordinates. Read helpers preserve numerical values and do not transform
+coordinates or join reference-space metadata automatically.
+
+To display a confirmed view, select the axis named by each signed value and
+negate it for `MINUS_`. For the streamline example, screen horizontal is x and
+screen vertical is -y, putting pia above white matter. The view remains metadata;
+do not negate stored y values just to orient a plot.
+
+#### V1DD pilot handoff (future Code Ocean work)
+
+The current V1DD notebooks still contain the legacy `v1dd_soma_spatial` feature
+output. This guide defines the new contract; no notebook execution, production
+backfill, or scientific transform verification has been performed locally.
+
+- Coordinate production is in `code/etl_v1dd_02_cave.ipynb`; coordinate read
+    examples are in `code/etl_v1dd_04_read.ipynb`. Restrict the future change to
+    their relevant spatial write/read cells rather than reworking the full ETL.
+- Preserve registered DataItem IDs and produce two `SOMA` rows per eligible cell:
+    one in a separately identified original EM space, one in `v1dd_streamline`.
+- Preserve original EM source values. The query requests CAVE resolution
+    `[1, 1, 1]` despite the old `soma_voxel_*` names. Verify the source unit contract
+    in Code Ocean before choosing the space ID/description; never infer units from
+    those names or label unknown values as voxels. Leave this space's view unset.
+- Reuse the current transformed values, including the existing conversion to
+    micrometers. Do not apply that conversion twice or recalculate the transform.
+    `v1dd_streamline` uses the confirmed `PLUS_X` / `MINUS_Y` default.
+- For global `CCF_v3`, the agreed reference view is `PLUS_Z` / `MINUS_Y` with
+    `project_id=None`. Its owner seeds it once; do not relabel V1DD-local coordinates
+    as CCF without an actual registration transform.
+- Keep nucleus volume and other non-coordinate measurements as cell features.
+    Split the mixed legacy output deliberately, updating feature definitions,
+    feature-set metadata, and matrix pointers together. Do not drop volume while
+    removing the six coordinate feature columns.
+- Verify source units, coordinate equality, expected rows per space, complete
+    identity uniqueness, DataItem membership, and pia-up display on real data.
+    Rerun the targeted write to confirm idempotency and preservation of other scopes.
+- Do not delete or backfill existing published feature matrices as part of this
+    change. Their cleanup and any compatibility period need a separate ETL scope.
 
 ## 6. Building arrow tables
 

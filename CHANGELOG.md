@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added writable `ReferenceSpace` and `SpatialLocation` tables, explicit `LocationType` values, and optional `SignedAxis` enum `Default2DView` metadata for spatial coordinates.
+- Added `read_spatial_locations` and `read_reference_spaces` to the public IO API, with project and identity filters and preserved default-view structs.
 - Added required measurement-context `connectome_id` values to
   `CellCellConnectivityLong` and `CellCellMeasurementMatrix`.
 - Added required `synapse_table_id` identity to single-synapse rows and feature pointers, plus optional source provenance on derived cell-cell measurements; DataSet IDs remain reserved for DataItem collections.
@@ -35,10 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed unused `SingleCellReconstruction.soma_location` and `CellMetadata.spatial_location` fields; write project-scoped `SpatialLocation` rows with an explicit reference space and location type instead.
 - Removed the unused `io.write_utils.append_new_dataitems` helper; use merge-scoped `write_models` calls with `DataItem` models instead.
 
 ### Fixed
 
+- Fixed embedded Pydantic models being stringified or mistaken for ID references during Arrow conversion; schema-declared structs, including lists of structs, now round-trip through Parquet.
 - Fixed Delta writes for column names that overlap SQL keywords or contain special characters.
 - Fixed later writes deleting rows contributed by other ETL notebooks in shared dataset and hierarchy scopes.
 - Fixed mappings and feature-matrix pointers with the same local ID merging across different parent sets.

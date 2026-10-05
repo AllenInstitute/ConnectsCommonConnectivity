@@ -252,8 +252,10 @@ Before writing coordinates:
      check these references in the ETL.
 2. Establish a `ReferenceSpace` ID for each distinct coordinate frame/version.
      IDs must be globally unique even for project-owned spaces. Do not reuse an
-     ID for different units, transforms, or frame versions. Record known units,
-     provenance, and axis meanings in `description`; units are not a typed field.
+    ID for different units, transforms, or frame versions. Record known coordinate
+    units in `unit`. For voxel coordinates, use `unit=Unit.VOXELS` and specify
+    physical scale with `voxel_size` (ordered x, y, z) and `voxel_size_unit`.
+    Record provenance and axis meanings in `description`.
 3. Give each space a single owning ETL. Global spaces use `project_id=None`;
      dataset-local spaces use that dataset's project. Consumers read existing
      space definitions rather than repeatedly overwriting shared metadata.
@@ -275,13 +277,14 @@ from connects_common_connectivity.io import (
         read_reference_spaces, read_spatial_locations, write_models,
 )
 from connects_common_connectivity.models import (
-        Default2DView, LocationType, ReferenceSpace, SignedAxis, SpatialLocation,
+    Default2DView, LocationType, ReferenceSpace, SignedAxis, SpatialLocation, Unit,
 )
 
 SPACE_ID = "v1dd_streamline"
 space = ReferenceSpace(
         id=SPACE_ID,
         project_id=PROJECT_ID,
+    unit=Unit.MICRONS_LENGTH,
         description="V1DD streamline coordinates in micrometers; y increases toward white matter.",
         default_2d_view=Default2DView(
                 left_to_right=SignedAxis.PLUS_X.value,

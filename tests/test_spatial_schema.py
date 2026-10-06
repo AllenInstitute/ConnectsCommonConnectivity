@@ -78,6 +78,18 @@ def test_coordinates_require_all_identity_and_position_fields(missing):
         SpatialLocation(**values)
 
 
+@pytest.mark.parametrize("description", [None, "Axon initial segment origin."])
+def test_other_location_description_round_trip(description):
+    """OTHER locations may omit details or preserve them through JSON serialization."""
+    values = dict(project_id="p", dataitem_id="cell", reference_space="CCF_v3",
+                  location_type=LocationType.OTHER, x=1.0, y=2.0, z=3.0)
+    if description is not None:
+        values["description"] = description
+    location = SpatialLocation(**values)
+    assert location.description == description
+    assert SpatialLocation.model_validate_json(location.model_dump_json()) == location
+
+
 def test_view_requires_two_valid_signed_axes():
     """Views require two recognized signed axes, and location types retain the agreed vocabulary."""
     view = Default2DView(left_to_right=SignedAxis.PLUS_X, bottom_to_top=SignedAxis.MINUS_Y)
@@ -95,6 +107,9 @@ def test_spatial_schema_identity_and_removed_slots():
     """Schemas retain the coordinate key and DataItem index contract, not old embedded slots."""
     schemas = Path(__file__).resolve().parents[1] / "schemas"
     spatial = yaml.safe_load((schemas / "spatial_schema.yaml").read_text())
+    for enum_name in ["SignedAxis", "LocationType"]:
+        for value in spatial["enums"][enum_name]["permissible_values"].values():
+            assert value and value.get("description", "").strip()
     identity = spatial["classes"]["SpatialLocation"]["unique_keys"]["location_identity"]
     assert identity["unique_key_slots"] == [
         "project_id", "dataitem_id", "reference_space", "location_type"

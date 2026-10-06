@@ -65,6 +65,21 @@ def test_spatial_reader_filters_and_preserves_coordinates(spatial_root):
     ).height == 4
 
 
+@pytest.mark.parametrize("description", [None, "Axon initial segment origin."])
+def test_spatial_reader_preserves_other_description(tmp_path, description):
+    """Optional details for OTHER locations survive writing and public-reader retrieval."""
+    location = SpatialLocation(
+        project_id="first", dataitem_id="cell", reference_space="original",
+        location_type=LocationType.OTHER, description=description, x=1, y=2, z=3,
+    )
+    write_models(location, output_root=tmp_path)
+    result = read_spatial_locations(
+        "first", location_types=LocationType.OTHER, output_root=tmp_path,
+    )
+    assert result.height == 1
+    assert SpatialLocation.model_validate(result.to_dicts()[0]) == location
+
+
 @pytest.mark.parametrize("filters", [
     {"dataitem_ids": []}, {"dataitem_ids": "missing"},
     {"reference_spaces": []}, {"reference_spaces": "missing"},

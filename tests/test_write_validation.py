@@ -5,11 +5,12 @@ from __future__ import annotations
 import pytest
 
 from connects_common_connectivity.config import Settings
-from connects_common_connectivity.io.write_spec import REGISTRY
-from connects_common_connectivity.io.write_validation import (
-    strict_model_for,
-    validate_for_write,
+from connects_common_connectivity.io.write_spec import (
+    DATA_AXIS_BY_SIGNED_AXIS,
+    REGISTRY,
+    ClusterWrite,
 )
+from connects_common_connectivity.io.write_validation import validate_for_write
 from connects_common_connectivity.io.writers import write_models
 from connects_common_connectivity.models import (
     CellFeatureDefinition,
@@ -29,13 +30,19 @@ def test_reference_space_axes_checked_before_io(horizontal, vertical, tmp_path):
     space = ReferenceSpace(id="frame", default_2d_view=Default2DView(
         left_to_right=horizontal, bottom_to_top=vertical,
     ))
-    if horizontal.value[-1] == vertical.value[-1]:
+    if DATA_AXIS_BY_SIGNED_AXIS[horizontal] == DATA_AXIS_BY_SIGNED_AXIS[vertical]:
         root = tmp_path / "must-not-exist"
-        with pytest.raises(ValueError, match="different data axes.*frame"):
+        with pytest.raises(ValueError, match="different data axes") as ei:
             write_models(space, output_root=root)
+        assert "id=frame" in str(ei.value)
         assert not root.exists()
     else:
         assert validate_for_write([space], REGISTRY["ReferenceSpace"])[0] is space
+
+
+def test_every_signed_axis_maps_to_a_data_axis():
+    """A new enum member must be mapped, not silently parsed from its name."""
+    assert set(DATA_AXIS_BY_SIGNED_AXIS) == set(SignedAxis)
 
 
 def test_reference_space_revalidates_constructed_view(tmp_path):
@@ -48,70 +55,47 @@ def test_reference_space_revalidates_constructed_view(tmp_path):
         write_models(space, output_root=root)
     assert not root.exists()
 
+
+def test_constructed_row_revalidated_without_a_write_class(tmp_path):
+    """Schema re-validation must not depend on a spec declaring a write class."""
+    spec = REGISTRY["DataSet"]
+    assert spec.write_cls is None
+    bad = DataSet.model_construct(id="d1", name="d")  # project_id missing
+    root = tmp_path / "must-not-exist"
+
+    with pytest.raises(ValueError, match="project_id"):
+        write_models(bad, output_root=root)
+    assert not root.exists()
+
+
 # ---------------------------------------------------------------------------
-# strict_model_for
+# write classes
 # ---------------------------------------------------------------------------
 
 
-def test_strict_model_subclasses_parent_without_mutating_it():
-    """Tightening fields must derive a subclass without mutating generated fields."""
-    before = dict(Cluster.model_fields)
-    strict = strict_model_for(REGISTRY["Cluster"])
-    after = dict(Cluster.model_fields)
-
-    assert before.keys() == after.keys()
-    for k in before:
-        assert before[k].is_required() == after[k].is_required(), (
-            f"Cluster.model_fields[{k!r}] was mutated"
-        )
-    assert issubclass(strict, Cluster)
-    assert strict is not Cluster
+def test_write_class_tightens_field_without_mutating_parent():
+    """A write class must narrow its slot without touching the generated model."""
+    assert issubclass(ClusterWrite, Cluster)
+    assert not Cluster.model_fields["hierarchy_id"].is_required()
+    assert ClusterWrite.model_fields["hierarchy_id"].is_required()
 
 
-def test_strict_model_for_is_cached():
-    """Equivalent model and required-field policies must reuse one strict class."""
-    spec = REGISTRY["Cluster"]
-    equivalent_spec = spec.model_copy(deep=True)
-
-    a = strict_model_for(spec)
-    b = strict_model_for(equivalent_spec)
-
-    assert a is b
-
-
-def test_strict_model_returns_parent_when_no_required_for_write():
-    """A spec with no tightened fields must reuse its generated parent model."""
+def test_spec_without_write_class_validates_against_generated_model():
+    """A spec with no extra constraints must validate rows against its model class."""
     spec = REGISTRY["DataSet"]
 
-    assert spec.required_for_write == []
-    assert strict_model_for(spec) is DataSet
+    assert spec.write_cls is None
+    assert spec.validation_cls is DataSet
 
 
-def test_strict_model_flips_optional_field_to_required():
-    """A write-required optional field must become required only on the strict class."""
-    strict = strict_model_for(REGISTRY["Cluster"])
-
-    assert not Cluster.model_fields["hierarchy_id"].is_required()
-    assert strict.model_fields["hierarchy_id"].is_required()
-
-
-def test_custom_spec_controls_validation_and_cache_policy():
-    """Custom required fields must control validation and remain cache-isolated."""
+def test_custom_spec_controls_validation():
+    """The supplied spec, not the registry, must decide what a row needs."""
     registry_spec = REGISTRY["Cluster"]
-    equivalent_registry_spec = registry_spec.model_copy(deep=True)
-    custom_spec = registry_spec.model_copy(
-        update={"required_for_write": ["hierarchy_id", "level"]}
-    )
-    equivalent_custom_spec = custom_spec.model_copy(
-        update={"required_for_write": ["level", "hierarchy_id"]}
-    )
 
-    registry_strict = strict_model_for(registry_spec)
-    custom_strict = strict_model_for(custom_spec)
+    class StricterCluster(ClusterWrite):
+        level: int
 
-    assert strict_model_for(equivalent_registry_spec) is registry_strict
-    assert strict_model_for(equivalent_custom_spec) is custom_strict
-    assert custom_strict is not registry_strict
+    custom_spec = registry_spec.model_copy(update={"write_cls": StricterCluster})
 
     model = Cluster(id="c1", hierarchy_id="h1")
     result = validate_for_write([model], registry_spec)
@@ -132,7 +116,7 @@ def test_missing_required_for_write_slot_raises_before_io():
     spec = REGISTRY["Cluster"]
     bad = Cluster(id="c1")  # hierarchy_id missing
     with pytest.raises(
-        ValueError, match=r"invalid required_for_write slot\(s\): hierarchy_id"
+        ValueError, match=r"invalid slot\(s\): hierarchy_id"
     ):
         validate_for_write([bad], spec)
 
@@ -209,7 +193,7 @@ def test_validate_for_write_list_reports_failing_row():
 
 
 def test_validate_for_write_passthrough_when_required_is_empty():
-    """A no-requirements spec must still return a list of the original objects."""
+    """A spec without a write class must still return a list of the original objects."""
     spec = REGISTRY["DataSet"]
     ds = DataSet(id="d1", name="d", project_id="p1")
     result = validate_for_write([ds], spec)

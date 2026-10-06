@@ -6,143 +6,26 @@ the write actually depends on. Many generated fields are ``Optional`` in
 contexts, but the *write* path needs them concretely (e.g. the predicate
 columns, the partition columns, the id used for dedupe).
 
-The :class:`WriteSpec` for each writable class records this in
-``required_for_write``. This module turns that list into a real check by
-deriving a strict pydantic subclass of the generated model and re-validating each
+The :class:`WriteSpec` for each writable class names the class those
+constraints live on through ``validation_cls``. This module re-validates every
 instance through it before any IO during runtime.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from functools import lru_cache
-from types import UnionType
-from typing import Any, Union, get_args, get_origin
 
-from pydantic import BaseModel, Field, ValidationError, create_model
+from pydantic import BaseModel, ValidationError
 
 from connects_common_connectivity.io.write_spec import WriteSpec
-from connects_common_connectivity.models import ReferenceSpace
 
-__all__ = ["strict_model_for", "validate_for_write"]
-
-
-def _strip_optional(annotation: Any) -> Any:
-    """Return ``annotation`` with ``None`` removed from any top-level Union.
-
-    A field annotated ``Optional[str]`` (``str | None``) accepts ``None`` as
-    a valid value even when ``Field(...)`` makes it required. For write-time
-    enforcement we want ``None`` to be a validation error, so we strip the
-    ``NoneType`` arm of any top-level union.
-
-    Parameters
-    ----------
-    annotation:
-        Field annotation to tighten. Only a top-level ``typing.Union`` or
-        PEP 604 union is inspected; nested unions and other annotations are
-        returned unchanged.
-
-    Returns
-    -------
-    Any
-        The original annotation when it is not optional, its sole non-null
-        member when one remains, or a union of all remaining members.
-    """
-    origin = get_origin(annotation)
-    if origin is Union or origin is UnionType:
-        args = tuple(a for a in get_args(annotation) if a is not type(None))
-        if len(args) == 0:
-            return annotation
-        if len(args) == 1:
-            return args[0]
-        return Union[args]  # type: ignore[return-value]
-    return annotation
-
-
-def strict_model_for(spec: WriteSpec) -> type[BaseModel]:
-    """Return ``spec.model_cls`` with the supplied write-required slots forced.
-
-    Parameters
-    ----------
-    spec:
-        Complete validation policy. Its model class becomes the parent, and
-        each field named by ``required_for_write`` becomes required and
-        non-null on the derived class. The global registry is not consulted.
-
-    Returns
-    -------
-    type[BaseModel]
-        A cached strict subclass, or ``spec.model_cls`` itself when no fields
-        require tightening. The generated parent model is never mutated.
-
-    Raises
-    ------
-    ValueError
-        If a required-for-write name is not declared by ``spec.model_cls``.
-
-    Notes
-    -----
-    Cache identity is determined by the model class and sorted required field
-    names, so equivalent policies reuse a class while different policies
-    remain isolated.
-    """
-    required = tuple(sorted(spec.required_for_write))
-    return _build_strict_model_cached(spec.model_cls, required)
-
-
-@lru_cache(maxsize=128)
-def _build_strict_model_cached(
-    model_cls: type[BaseModel], required: tuple[str, ...]
-) -> type[BaseModel]:
-    """Build the strict model for one canonical validation policy.
-
-    Parameters
-    ----------
-    model_cls:
-        Generated model class to subclass without mutation.
-    required:
-        Canonical tuple of field names to make required and non-null. The
-        caller sorts this tuple so equivalent policies share the cache entry.
-
-    Returns
-    -------
-    type[BaseModel]
-        A derived strict model, or ``model_cls`` when ``required`` is empty.
-
-    Raises
-    ------
-    ValueError
-        If any required field name is absent from ``model_cls``.
-
-    Notes
-    -----
-    The ``lru_cache`` retains up to 128 model-and-policy combinations.
-    """
-    if len(required) == 0:
-        return model_cls
-
-    overrides: dict[str, Any] = {}
-    for name in required:
-        finfo = model_cls.model_fields.get(name)
-        if finfo is None:
-            raise ValueError(
-                f"{model_cls.__name__}: required_for_write field {name!r} "
-                f"is not declared on the model"
-            )
-        overrides[name] = (_strip_optional(finfo.annotation), Field(...))
-
-    strict = create_model(
-        f"{model_cls.__name__}_StrictWrite",
-        __base__=model_cls,
-        **overrides,
-    )
-    return strict
+__all__ = ["validate_for_write"]
 
 
 def validate_for_write(
     models: Sequence[BaseModel], spec: WriteSpec
 ) -> list[BaseModel]:
-    """Enforce model types, write-required fields, and reference-space view axes.
+    """Enforce model types and the spec's write-time constraints before IO.
 
     Parameters
     ----------
@@ -152,16 +35,16 @@ def validate_for_write(
         model or materialize an iterable.
     spec:
         The write policy for the batch. ``spec.model_cls`` determines the
-        accepted exact type, and ``spec.required_for_write`` identifies fields
-        that must be present and non-null even when the generated model makes
-        them optional.
+        accepted exact type, and ``spec.validation_cls`` carries the write-time
+        constraints every row is re-validated against: fields that must be
+        present and non-null even when the generated model makes them optional,
+        plus any cross-field rules declared on that class.
 
     Returns
     -------
     list[BaseModel]
-        A new list containing the original model instances in input order.
-        Strict derived models are used only for validation and are not
-        returned.
+        A new list containing the original model instances in input order. The
+        validated copies are used only for checking and are not returned.
 
     Raises
     ------
@@ -169,12 +52,14 @@ def validate_for_write(
         If ``models`` is not a sequence or a member's exact type differs from
         ``spec.model_cls``.
     ValueError
-        If the sequence is empty, a member fails strict required-field
-        validation, or a reference space has an invalid default view.
+        If the sequence is empty, or a member fails validation against
+        ``spec.validation_cls``.
 
     Notes
     -----
-    Validation performs no IO and does not mutate the supplied models.
+    Every row is re-validated whether or not the spec tightens any field, so
+    rows built through ``model_construct`` are schema-checked too. Validation
+    performs no IO and does not mutate the supplied models.
     """
     if isinstance(models, (str, bytes)) or not isinstance(models, Sequence):
         raise TypeError(
@@ -184,6 +69,7 @@ def validate_for_write(
     if len(models) == 0:
         raise ValueError("validate_for_write received an empty sequence")
 
+    validation_cls = spec.validation_cls
     for index, model in enumerate(models):
         if type(model) is not spec.model_cls:
             raise TypeError(
@@ -191,47 +77,26 @@ def validate_for_write(
                 f"row {index} has type {type(model).__name__}, "
                 f"expected {spec.model_cls.__name__}"
             )
-        if isinstance(model, ReferenceSpace):
-            try:
-                space = ReferenceSpace.model_validate(model.model_dump(warnings=False))
-            except ValidationError as err:
-                raise ValueError(f"ReferenceSpace: invalid row {index}. {err}") from err
-            view = space.default_2d_view
-            if view is not None and (
-                view.left_to_right.rsplit("_", 1)[1]
-                == view.bottom_to_top.rsplit("_", 1)[1]
-            ):
-                raise ValueError(
-                    f"ReferenceSpace: default_2d_view must use different data axes "
-                    f"at row {index} (id={space.id})"
-                )
-
-    strict = strict_model_for(spec)
-    if strict is spec.model_cls:
-        return list(models)
-
-    validated: list[BaseModel] = []
-    for index, model in enumerate(models):
         try:
-            strict.model_validate(model.model_dump())
+            validation_cls.model_validate(model.model_dump(warnings=False))
         except ValidationError as err:
-            invalid = sorted(
-                {
-                    ".".join(str(p) for p in e.get("loc", ()))
-                    for e in err.errors()
-                }
-            )
-            slot_text = ", ".join(invalid) if invalid else "(see below)"
-            row_id = getattr(model, "id", None)
-            row_hint = (
-                f"row {index}"
-                if row_id is None
-                else f"row {index} (id={row_id})"
-            )
-            raise ValueError(
-                f"{spec.model_cls.__name__}: invalid required_for_write slot(s): "
-                f"{slot_text} at {row_hint}. {err}"
-            ) from err
-        validated.append(model)
+            raise ValueError(_failure_message(spec, model, index, err)) from err
 
-    return validated
+    return list(models)
+
+
+def _failure_message(
+    spec: WriteSpec, model: BaseModel, index: int, err: ValidationError
+) -> str:
+    """Describe one failing row by position, id, and offending slots."""
+    slots = sorted(
+        {
+            ".".join(str(part) for part in error.get("loc", ()))
+            for error in err.errors()
+            if error.get("loc")
+        }
+    )
+    row_id = getattr(model, "id", None)
+    located = f"row {index}" if row_id is None else f"row {index} (id={row_id})"
+    slot_text = f"; invalid slot(s): {', '.join(slots)}" if slots else ""
+    return f"{spec.model_cls.__name__}: invalid write {located}{slot_text}. {err}"

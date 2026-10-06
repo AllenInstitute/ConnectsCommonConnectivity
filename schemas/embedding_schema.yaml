@@ -5,6 +5,7 @@ imports:
   - linkml:types
   - base_schema
   - core_schema
+  - cell_features_schema
 prefixes:
   linkml: https://w3id.org/linkml/
   cc: https://brain-connects.org/cc/
@@ -70,7 +71,7 @@ classes:
       DataItem and embedding space belong to the same project. Use x and y
       for a 2D embedding and supply z for a 3D embedding; dimensionality must
       be consistent throughout a space. Omitted z means a 2D embedding, not
-      a third coordinate of zero. Axis meanings belong in the space's
+      a third coordinate of zero. Axis meanings belong in the embedding space's
       description; coordinates do not imply physical length units.
     mixins:
       - ProjectScoped
@@ -110,12 +111,12 @@ slots:
     range: EmbeddingSpace
     description: Identifier of the embedding space within the row's project.
   input_feature_set_id:
-    range: string
+    range: CellFeatureSet
+    required: false
     description: >-
-      Optional identifier of the input feature set. May identify a
-      CellFeatureSet in the same project or an externally defined feature set;
-      it is not restricted to cell features. Describe the source and any
-      feature selection or preprocessing in input_features_description.
+      Optional identifier of an existing CellFeatureSet in the same project.
+      For inputs not represented by a CellFeatureSet, omit this field and
+      describe them in input_features_description.
   input_features_description:
     range: string
     description: >-

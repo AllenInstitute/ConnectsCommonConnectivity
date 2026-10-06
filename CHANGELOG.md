@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `write_models` skipping schema validation for models with no write-only
+  constraints; every row is now re-validated before any IO, so rows built with
+  `model_construct` can no longer reach a Delta table with missing or
+  wrongly typed slots.
 - Fixed `ReferenceSpace` writes with the same ID overwriting rows in other scopes; identity now combines `project_id` and `id`, with null `project_id` representing a separate global scope.
 - Fixed embedded Pydantic models being stringified or mistaken for ID references during Arrow conversion; schema-declared structs, including lists of structs, now round-trip through Parquet.
 - Fixed Delta writes for column names that overlap SQL keywords or contain special characters.

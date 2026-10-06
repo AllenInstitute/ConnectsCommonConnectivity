@@ -5,6 +5,13 @@ the shared Delta lake: which subdirectory, which partition columns, which scope
 columns, and which write mode the backend should dispatch on. :data:`REGISTRY`
 is the source of truth for which classes are writable; add an entry here to
 make a new class writable through :func:`write_models`.
+
+Constraints that only the write path depends on live here too, as ``*Write``
+subclasses of the generated models. ``models.py`` is generated from the shared
+LinkML schemas and cannot express them: slots other consumers may omit but a
+partition or merge key needs, and cross-field rules LinkML has no syntax for.
+A spec names its subclass through ``write_cls``, and every row is validated
+against it before IO.
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ from connects_common_connectivity.models import (
     MappingSet,
     ProjectionMeasurementMatrix,
     ReferenceSpace,
+    SignedAxis,
     SpatialLocation,
     SynapseFeatureMatrix,
 )
@@ -44,6 +52,12 @@ def _allows_none(annotation: Any) -> bool:
     return origin in (Union, UnionType) and type(None) in get_args(annotation)
 
 
+def _enforces_non_null(model_cls: type[BaseModel], name: str) -> bool:
+    """Return whether ``model_cls`` rejects a missing or null value for ``name``."""
+    field = model_cls.model_fields[name]
+    return field.is_required() and not _allows_none(field.annotation)
+
+
 class WriteSpec(BaseModel):
     """Declarative policy for validating and writing one model class to Delta.
 
@@ -51,6 +65,11 @@ class WriteSpec(BaseModel):
     ----------
     model_cls:
         Exact generated Pydantic model class accepted by this policy.
+    write_cls:
+        Subclass of ``model_cls`` that every row is validated against before
+        IO, carrying write-only constraints the shared LinkML schema cannot
+        express. ``None`` validates rows against ``model_cls`` itself. It may
+        not declare fields absent from ``model_cls``.
     subdir:
         Delta table directory relative to the configured output root.
     partition_by:
@@ -67,26 +86,25 @@ class WriteSpec(BaseModel):
         through ``nullable_merge_on``.
     nullable_merge_on:
         Subset of merge keys for which null is a valid identity value. These
-        keys use null-safe equality and cannot also be required for write.
-    required_for_write:
-        Model fields made required and non-null by IO-layer validation without
-        changing the shared LinkML schema.
-    cross_field_rules:
-        Reserved names for cross-field validation rules. The current write path
-        does not consume them.
+        keys use null-safe equality and cannot also be required by
+        ``validation_cls``.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model_cls: type[BaseModel]
+    write_cls: type[BaseModel] | None = None
     subdir: str
     partition_by: list[str]
     scope_columns: list[str]
     write_mode: Literal["overwrite_scoped", "merge_scoped"]
     merge_on: list[str] = Field(default_factory=list)
     nullable_merge_on: list[str] = Field(default_factory=list)
-    required_for_write: list[str] = Field(default_factory=list)
-    cross_field_rules: list[str] = Field(default_factory=list)
+
+    @property
+    def validation_cls(self) -> type[BaseModel]:
+        """Class every row is validated against, defaulting to ``model_cls``."""
+        return self.write_cls or self.model_cls
 
     @model_validator(mode="after")
     def validate_merge_on(self) -> WriteSpec:
@@ -96,10 +114,24 @@ class WriteSpec(BaseModel):
         if self.write_mode != "merge_scoped" and self.merge_on:
             raise ValueError("merge_on is only valid for merge_scoped writes")
 
+        if self.write_cls is not None:
+            if not issubclass(self.write_cls, self.model_cls):
+                raise ValueError(
+                    f"write_cls {self.write_cls.__name__} must subclass "
+                    f"{self.model_cls.__name__}"
+                )
+            # Catches a write class left behind by a renamed generated slot.
+            undeclared = sorted(
+                set(self.write_cls.model_fields) - set(self.model_cls.model_fields)
+            )
+            if undeclared:
+                raise ValueError(
+                    f"write_cls {self.write_cls.__name__} declares fields absent "
+                    f"from {self.model_cls.__name__}: {undeclared!r}"
+                )
+
         if not set(self.nullable_merge_on).issubset(self.merge_on):
             raise ValueError("nullable_merge_on must be a subset of merge_on")
-        if set(self.nullable_merge_on).intersection(self.required_for_write):
-            raise ValueError("nullable_merge_on cannot overlap required_for_write")
 
         missing_keys = [
             name for name in self.merge_on if name not in self.model_cls.model_fields
@@ -110,24 +142,144 @@ class WriteSpec(BaseModel):
                 f"{missing_keys!r}"
             )
 
-        unsafe_keys = []
-        for name in self.merge_on:
-            field = self.model_cls.model_fields[name]
-            schema_enforces_non_null = (
-                field.is_required() and not _allows_none(field.annotation)
+        contradictory_keys = [
+            name
+            for name in self.nullable_merge_on
+            if _enforces_non_null(self.validation_cls, name)
+        ]
+        if contradictory_keys:
+            raise ValueError(
+                "nullable_merge_on cannot name keys that "
+                f"{self.validation_cls.__name__} requires to be non-null: "
+                f"{contradictory_keys!r}"
             )
-            if (
-                not schema_enforces_non_null
-                and name not in self.required_for_write
-                and name not in self.nullable_merge_on
-            ):
-                unsafe_keys.append(name)
+
+        unsafe_keys = [
+            name
+            for name in self.merge_on
+            if not _enforces_non_null(self.validation_cls, name)
+            and name not in self.nullable_merge_on
+        ]
         if unsafe_keys:
             raise ValueError(
                 "merge_on fields must be non-null at write time; make each field "
-                "schema-required and non-nullable, add it to required_for_write, "
+                "schema-required and non-nullable, require it on a write_cls, "
                 "or explicitly allow null identity values with nullable_merge_on: "
                 f"{unsafe_keys!r}"
+            )
+        return self
+
+
+DATA_AXIS_BY_SIGNED_AXIS: dict[SignedAxis, str] = {
+    SignedAxis.PLUS_X: "X",
+    SignedAxis.MINUS_X: "X",
+    SignedAxis.PLUS_Y: "Y",
+    SignedAxis.MINUS_Y: "Y",
+    SignedAxis.PLUS_Z: "Z",
+    SignedAxis.MINUS_Z: "Z",
+}
+"""Unsigned data axis carried by each signed axis, independent of direction."""
+
+
+class ClusterWrite(Cluster):
+    """``Cluster`` with the taxonomy scope the shared cluster table needs.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Owning taxonomy. Optional in the schema because a cluster is
+        meaningful without one, but required here because it partitions the
+        table and forms part of the merge identity.
+    """
+
+    hierarchy_id: str
+
+
+class ClusterMembershipWrite(ClusterMembership):
+    """``ClusterMembership`` with its complete row identity present.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Taxonomy that disambiguates memberships when one project has rows
+        against several hierarchies.
+    item:
+        Member data item.
+    cluster:
+        Cluster the item belongs to.
+    """
+
+    hierarchy_id: str
+    item: str
+    cluster: str
+
+
+class CellFeatureDefinitionWrite(CellFeatureDefinition):
+    """``CellFeatureDefinition`` bound to the feature set it describes.
+
+    Attributes
+    ----------
+    feature_set_id:
+        Owning feature set. It partitions the table and forms part of the
+        merge identity, so a null would merge definitions across sets.
+    """
+
+    feature_set_id: str
+
+
+class HierarchyCategoryWrite(HierarchyCategory):
+    """``HierarchyCategory`` with the taxonomy scope its table is keyed by.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Owning taxonomy, which partitions the table and forms part of the
+        merge identity.
+    """
+
+    hierarchy_id: str
+
+
+class ReferenceSpaceWrite(ReferenceSpace):
+    """``ReferenceSpace`` whose optional default view is checked for coherence."""
+
+    @model_validator(mode="after")
+    def validate_default_view_axes(self) -> ReferenceSpaceWrite:
+        """Require the two screen directions to come from different data axes.
+
+        Returns
+        -------
+        ReferenceSpaceWrite
+            The validated instance, unchanged.
+
+        Raises
+        ------
+        ValueError
+            If both directions resolve to the same data axis, or if either
+            signed axis has no entry in :data:`DATA_AXIS_BY_SIGNED_AXIS`.
+        """
+        view = self.default_2d_view
+        if view is None:
+            return self
+
+        axes = []
+        for direction, signed_axis in (
+            ("left_to_right", view.left_to_right),
+            ("bottom_to_top", view.bottom_to_top),
+        ):
+            axis = DATA_AXIS_BY_SIGNED_AXIS.get(signed_axis)
+            if axis is None:
+                raise ValueError(
+                    f"default_2d_view.{direction}={signed_axis!r} has no data axis; "
+                    f"add it to DATA_AXIS_BY_SIGNED_AXIS"
+                )
+            axes.append(axis)
+
+        if axes[0] == axes[1]:
+            raise ValueError(
+                "default_2d_view must use different data axes, but "
+                f"{view.left_to_right} and {view.bottom_to_top} "
+                f"are both axis {axes[0]}"
             )
         return self
 
@@ -136,6 +288,7 @@ REGISTRY: dict[str, WriteSpec] = {
     # Reference-space IDs are scoped by project; null identifies the global scope.
     "ReferenceSpace": WriteSpec(
         model_cls=ReferenceSpace,
+        write_cls=ReferenceSpaceWrite,
         subdir=MODEL_TABLE_PATHS["ReferenceSpace"],
         partition_by=[],
         scope_columns=["project_id", "id"],
@@ -184,12 +337,12 @@ REGISTRY: dict[str, WriteSpec] = {
     # cluster ETL notebooks.
     "Cluster": WriteSpec(
         model_cls=Cluster,
+        write_cls=ClusterWrite,
         subdir=MODEL_TABLE_PATHS["Cluster"],
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id"],
         write_mode="merge_scoped",
         merge_on=["hierarchy_id", "id"],
-        required_for_write=["hierarchy_id"],
     ),
     "ClusterHierarchy": WriteSpec(
         model_cls=ClusterHierarchy,
@@ -201,12 +354,12 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "ClusterMembership": WriteSpec(
         model_cls=ClusterMembership,
+        write_cls=ClusterMembershipWrite,
         subdir=MODEL_TABLE_PATHS["ClusterMembership"],
         partition_by=["project_id", "hierarchy_id"],
         scope_columns=["project_id", "hierarchy_id"],
         write_mode="merge_scoped",
         merge_on=["project_id", "hierarchy_id", "item", "cluster"],
-        required_for_write=["hierarchy_id", "item", "cluster"],
     ),
     "MappingSet": WriteSpec(
         model_cls=MappingSet,
@@ -234,12 +387,12 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "CellFeatureDefinition": WriteSpec(
         model_cls=CellFeatureDefinition,
+        write_cls=CellFeatureDefinitionWrite,
         subdir=MODEL_TABLE_PATHS["CellFeatureDefinition"],
         partition_by=["project_id", "feature_set_id"],
         scope_columns=["project_id", "feature_set_id"],
         write_mode="merge_scoped",
         merge_on=["project_id", "feature_set_id", "id"],
-        required_for_write=["feature_set_id"],
     ),
     "CellFeatureMatrix": WriteSpec(
         model_cls=CellFeatureMatrix,
@@ -274,12 +427,12 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "HierarchyCategory": WriteSpec(
         model_cls=HierarchyCategory,
+        write_cls=HierarchyCategoryWrite,
         subdir=MODEL_TABLE_PATHS["HierarchyCategory"],
         partition_by=["hierarchy_id"],
         scope_columns=["hierarchy_id", "id"],
         write_mode="merge_scoped",
         merge_on=["hierarchy_id", "id"],
-        required_for_write=["hierarchy_id"],
     ),
 #    "SynapseConnectivityLong": WriteSpec(
 #        model_cls=SynapseConnectivityLong,
@@ -330,4 +483,14 @@ def get_spec(model_or_cls: type[BaseModel] | BaseModel) -> WriteSpec:
     return spec
 
 
-__all__ = ["WriteSpec", "REGISTRY", "get_spec"]
+__all__ = [
+    "DATA_AXIS_BY_SIGNED_AXIS",
+    "REGISTRY",
+    "CellFeatureDefinitionWrite",
+    "ClusterMembershipWrite",
+    "ClusterWrite",
+    "HierarchyCategoryWrite",
+    "ReferenceSpaceWrite",
+    "WriteSpec",
+    "get_spec",
+]

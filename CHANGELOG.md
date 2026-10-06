@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added writable `ReferenceSpace` and `SpatialLocation` tables, explicit `LocationType` values, and optional `SignedAxis` enum `Default2DView` metadata for spatial coordinates.
+- Added optional `SpatialLocation.description` details for anatomical points,
+  particularly those with location type `OTHER`, preserved through writes and reads.
 - Added `read_spatial_locations` and `read_reference_spaces` to the public IO API, with project and identity filters and preserved default-view structs.
 - Added required measurement-context `connectome_id` values to
   `CellCellConnectivityLong` and `CellCellMeasurementMatrix`.
@@ -43,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `read_spatial_locations` filters mixing `LocationType` members and
+  strings; matching rows are retained even when other requested values are unknown.
+- Fixed `ReferenceSpace` writes accepting inconsistent voxel-scale metadata;
+  supplied scale now requires paired size/unit fields, `VOXELS` coordinates,
+  and three finite positive dimensions in supported physical length units.
+  Omitting physical scale remains valid.
+- Fixed `ReferenceSpace` writes accepting default-view directions that reuse
+  the same data axis, regardless of sign.
 - Fixed `write_models` skipping schema validation for models with no write-only
   constraints; every row is now re-validated before any IO, so rows built with
   `model_construct` can no longer reach a Delta table with missing or

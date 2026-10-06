@@ -279,11 +279,29 @@ class SignedAxis(str, Enum):
     A data axis and its increasing or decreasing screen direction.
     """
     PLUS_X = "PLUS_X"
+    """
+    Increasing X coordinates along the selected screen direction.
+    """
     MINUS_X = "MINUS_X"
+    """
+    Decreasing X coordinates along the selected screen direction.
+    """
     PLUS_Y = "PLUS_Y"
+    """
+    Increasing Y coordinates along the selected screen direction.
+    """
     MINUS_Y = "MINUS_Y"
+    """
+    Decreasing Y coordinates along the selected screen direction.
+    """
     PLUS_Z = "PLUS_Z"
+    """
+    Increasing Z coordinates along the selected screen direction.
+    """
     MINUS_Z = "MINUS_Z"
+    """
+    Decreasing Z coordinates along the selected screen direction.
+    """
 
 
 class LocationType(str, Enum):
@@ -291,9 +309,21 @@ class LocationType(str, Enum):
     The anatomical point represented by a coordinate row.
     """
     SOMA = "SOMA"
+    """
+    Location of the cell soma.
+    """
     CENTROID = "CENTROID"
+    """
+    Geometric centroid of the represented structure.
+    """
     INJECTION_SITE = "INJECTION_SITE"
+    """
+    Location of the injection site.
+    """
     OTHER = "OTHER"
+    """
+    Another anatomical point; specify its type in description.
+    """
 
 
 
@@ -506,6 +536,7 @@ class ReferenceSpace(ProjectScoped):
                        'MappingSet']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -550,6 +581,10 @@ class SpatialLocation(ProjectScoped):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
          'mixins': ['ProjectScoped'],
          'slot_usage': {'dataitem_id': {'name': 'dataitem_id', 'required': True},
+                        'description': {'description': 'Details of the anatomical '
+                                                       'point, particularly when '
+                                                       'location_type is OTHER.',
+                                        'name': 'description'},
                         'location_type': {'name': 'location_type', 'required': True},
                         'reference_space': {'name': 'reference_space',
                                             'required': True},
@@ -570,6 +605,17 @@ class SpatialLocation(ProjectScoped):
                        'CellGeneData']} })
     reference_space: str = Field(default=..., description="""Identifier of the coordinate frame and version, unique within the selected project or global scope.""", json_schema_extra = { "linkml_meta": {'alias': 'reference_space', 'domain_of': ['SpatialLocation']} })
     location_type: LocationType = Field(default=..., description="""Anatomical point represented by these coordinates.""", json_schema_extra = { "linkml_meta": {'alias': 'location_type', 'domain_of': ['SpatialLocation']} })
+    description: Optional[str] = Field(default=None, description="""Details of the anatomical point, particularly when location_type is OTHER.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'MappingSet',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseFeatureMatrix']} })
     x: float = Field(default=..., description="""X coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'x', 'domain_of': ['SpatialLocation']} })
     y: float = Field(default=..., description="""Y coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'y', 'domain_of': ['SpatialLocation']} })
     z: float = Field(default=..., description="""Z coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'z', 'domain_of': ['SpatialLocation']} })
@@ -898,6 +944,7 @@ class HierarchyCategory(ConfiguredBaseModel):
          'domain_of': ['Cluster', 'ClusterMembership', 'HierarchyCategory']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -1319,6 +1366,7 @@ class ProjectionMeasurementMatrix(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -1415,6 +1463,7 @@ class CellFeatureSet(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Longer human description of what this feature set measures and where it came from.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -1493,6 +1542,7 @@ class CellFeatureDefinition(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Detailed description of what this feature measures.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -2009,6 +2059,7 @@ class MappingSet(ProjectScoped):
                        'MappingSet']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -2335,6 +2386,7 @@ class CellCellConnectivityLong(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -2451,6 +2503,7 @@ class CellCellMeasurementMatrix(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text description of what this measurement matrix represents.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
@@ -2628,6 +2681,7 @@ class SynapseFeatureMatrix(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
          'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
                        'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',

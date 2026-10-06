@@ -8,6 +8,8 @@ The V1DD production pilot remains a separate Code Ocean task.
    replaces the embedded coordinate object with a project-scoped row keyed by
    `(project_id, dataitem_id, reference_space, location_type)`.
    `LocationType` distinguishes soma, centroid, injection-site, and other points.
+  Optional `description` details, especially for `OTHER`, survive JSON and
+  table round-trips; they are not part of the identity key.
 
 2. **Added reference-space metadata.** `spatial_schema.yaml::ReferenceSpace`
   identifies a frame/version by `(project_id, id)`, with null project denoting
@@ -31,6 +33,9 @@ The V1DD production pilot remains a separate Code Ocean task.
   when project is omitted, only global rows for explicit `None`, and only the
   named project otherwise. Both are exported through `io/__init__.py` without
   applying transforms or view defaults.
+  `read_spatial_locations` accepts mixed `LocationType` members and strings;
+  unknown filter values are ignored, and empty or unmatched selections retain
+  the table schema instead of raising `KeyError`.
 
 6. **Removed redundant fields and documented the handoff.**
    `single_cell_schema.yaml::SingleCellReconstruction.soma_location` and
@@ -97,11 +102,15 @@ the validation module while the spec selects them. Voxel coordinates with
 unknown physical scale remain valid; partially supplied or invalid scale does
 not.
 
+**Filter compatibility (review follow-up).** Mixed enum/string selections could
+fail during Polars filter construction. Change 5 normalizes filter values to
+strings so known values still match when unknown values are also requested.
+
 ## How to test
 
 ```bash
 uv run pytest -q --tb=short
-# 414 passed, 12 skipped
+# 423 passed, 12 skipped
 
 uv run ruff check \
   src/connects_common_connectivity/io/{arrow_utils,path_spec,write_spec,write_validation,read,__init__}.py \
@@ -119,7 +128,8 @@ git show wp3-cell-conn:src/connects_common_connectivity/io/arrow_utils.py | \
 
 Diff and assertion review covered coordinate-key isolation, unchanged reruns,
 view updates and null transitions, struct/reference distinctions, typed empty
-reads, global/project scope isolation, and voxel-scale validation. The scale
+reads, mixed enum/string filters, optional location descriptions,
+global/project scope isolation, and voxel-scale validation. The scale
 tests include nonfinite and nonpositive dimensions, incomplete metadata,
 invalid unit combinations, and constructed rows. The cell-gene fixture verifies
 identifier compatibility, not referential integrity in a real Zarr dataset.
@@ -129,11 +139,11 @@ orientation still require source verification; its default view stays unset.
 No external dataset, production seeding, or notebook execution supplies evidence
 for this draft.
 
-> Results were obtained on 2026-10-06 from the worktree based on `296d64c`,
-> including uncommitted voxel-scale validation, validator relocation, schema
-> descriptions, regenerated models, and tests. These results do not describe
-> pushed HEAD alone. Rerun on the final committed revision before merge;
-> production-data validation remains pending.
+> Results were obtained on 2026-10-06 from the worktree based on `356b9fe`,
+> including uncommitted `SpatialLocation.description`, enum descriptions,
+> regenerated models, round-trip tests, and an Arrow comment correction.
+> These results do not describe pushed HEAD alone. Rerun on the final committed
+> revision before merge; production-data validation remains pending.
 
 ## Reviewer focus (optional)
 

@@ -71,7 +71,7 @@ def flatten_refs(
                 row[field.name] = _flatten_typed_value(row[field.name], field.type)
         return row
     for key, val in list(row.items()):
-        # Single embedded reference -> promote to *_id
+        # Single embedded reference -> replace with id, keeping the key
         if isinstance(val, dict):
             ident = val.get("id") or val.get("identifier")
             if ident is not None:  # heuristic: treat as ref not complex struct

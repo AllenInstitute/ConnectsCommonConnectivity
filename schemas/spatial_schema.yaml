@@ -14,18 +14,28 @@ enums:
     description: A data axis and its increasing or decreasing screen direction.
     permissible_values:
       PLUS_X:
+        description: Increasing X coordinates along the selected screen direction.
       MINUS_X:
+        description: Decreasing X coordinates along the selected screen direction.
       PLUS_Y:
+        description: Increasing Y coordinates along the selected screen direction.
       MINUS_Y:
+        description: Decreasing Y coordinates along the selected screen direction.
       PLUS_Z:
+        description: Increasing Z coordinates along the selected screen direction.
       MINUS_Z:
+        description: Decreasing Z coordinates along the selected screen direction.
   LocationType:
     description: The anatomical point represented by a coordinate row.
     permissible_values:
       SOMA:
+        description: Location of the cell soma.
       CENTROID:
+        description: Geometric centroid of the represented structure.
       INJECTION_SITE:
+        description: Location of the injection site.
       OTHER:
+        description: Another anatomical point; specify its type in SpatialLocation.description.
 
 classes:
   ReferenceSpace:
@@ -92,6 +102,7 @@ classes:
       - dataitem_id
       - reference_space
       - location_type
+      - description
       - x
       - y
       - z
@@ -102,6 +113,8 @@ classes:
         required: true
       location_type:
         required: true
+      description:
+        description: Details of the anatomical point, particularly when location_type is OTHER.
       x:
         required: true
       y:

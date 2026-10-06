@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 
 from connects_common_connectivity.config import Settings
-from connects_common_connectivity.io.write_spec import (
+from connects_common_connectivity.io.write_spec import REGISTRY
+from connects_common_connectivity.io.write_validation import (
     DATA_AXIS_BY_SIGNED_AXIS,
-    REGISTRY,
     ClusterWrite,
+    validate_for_write,
 )
-from connects_common_connectivity.io.write_validation import validate_for_write
 from connects_common_connectivity.io.writers import write_models
 from connects_common_connectivity.models import (
     CellFeatureDefinition,
@@ -20,7 +20,88 @@ from connects_common_connectivity.models import (
     Default2DView,
     ReferenceSpace,
     SignedAxis,
+    Unit,
 )
+
+
+@pytest.mark.parametrize("construct", [False, True])
+@pytest.mark.parametrize("index", [0, 1, 2])
+@pytest.mark.parametrize("dimension", [0.0, -1.0, float("nan"), float("inf"), -float("inf")])
+def test_reference_space_invalid_voxel_dimensions_before_io(
+    construct, index, dimension, tmp_path
+):
+    """Every dimension must be finite and positive, including on unvalidated rows."""
+    dimensions = [4.0, 4.0, 40.0]
+    dimensions[index] = dimension
+    factory = ReferenceSpace.model_construct if construct else ReferenceSpace
+    space = factory(
+        id="frame", unit=Unit.VOXELS, voxel_size=dimensions,
+        voxel_size_unit=Unit.NANOMETERS_LENGTH,
+    )
+    root = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match="finite and strictly positive") as error:
+        write_models(space, output_root=root)
+    assert "id=frame" in str(error.value)
+    assert f"voxel_size[{index}]" in str(error.value)
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("construct", [False, True])
+@pytest.mark.parametrize("overrides,match", [
+    ({"voxel_size": None}, "supplied together"),
+    ({"voxel_size_unit": None}, "supplied together"),
+    ({"unit": None}, "reference space unit VOXELS"),
+    ({"unit": Unit.MICRONS_LENGTH}, "reference space unit VOXELS"),
+    ({"voxel_size_unit": Unit.VOXELS}, "physical length unit"),
+])
+def test_reference_space_inconsistent_voxel_scale_before_io(
+    construct, overrides, match, tmp_path
+):
+    """Scale needs a physical unit and voxel coordinates, even on constructed rows."""
+    values = dict(
+        id="frame", unit=Unit.VOXELS, voxel_size=[4.0, 4.0, 40.0],
+        voxel_size_unit=Unit.NANOMETERS_LENGTH,
+    )
+    values.update(overrides)
+    factory = ReferenceSpace.model_construct if construct else ReferenceSpace
+    space = factory(**values)
+    root = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match=match):
+        write_models(space, output_root=root)
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("unit", [
+    Unit.NANOMETERS_LENGTH, Unit.MICRONS_LENGTH,
+    Unit.MILLIMETERS_LENGTH, Unit.CENTIMETERS_LENGTH,
+])
+def test_reference_space_voxel_scale_accepts_physical_units(unit):
+    """Valid anisotropic scale survives write validation without mutation."""
+    space = ReferenceSpace(
+        id="frame", unit=Unit.VOXELS, voxel_size=[4.0, 4.0, 40.0],
+        voxel_size_unit=unit,
+    )
+    before = space.model_dump()
+    assert validate_for_write([space], REGISTRY["ReferenceSpace"])[0] is space
+    assert space.model_dump() == before
+
+
+@pytest.mark.parametrize("unit", [None, Unit.VOXELS, Unit.MICRONS_LENGTH])
+def test_reference_space_scale_may_be_unspecified(unit):
+    """Voxel coordinates do not require a known physical scale."""
+    space = ReferenceSpace(id="frame", unit=unit)
+    assert validate_for_write([space], REGISTRY["ReferenceSpace"])[0] is space
+
+
+@pytest.mark.parametrize("dimensions", [[], [4.0, 4.0], [4.0, 4.0, 40.0, 40.0]])
+def test_reference_space_constructed_voxel_size_requires_three_dimensions(dimensions):
+    """Write validation preserves schema cardinality for constructed rows."""
+    space = ReferenceSpace.model_construct(
+        id="frame", unit=Unit.VOXELS, voxel_size=dimensions,
+        voxel_size_unit=Unit.NANOMETERS_LENGTH,
+    )
+    with pytest.raises(ValueError, match="voxel_size"):
+        validate_for_write([space], REGISTRY["ReferenceSpace"])
 
 
 @pytest.mark.parametrize("horizontal", list(SignedAxis))

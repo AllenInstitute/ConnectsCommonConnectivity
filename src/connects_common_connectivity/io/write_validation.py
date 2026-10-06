@@ -6,20 +6,194 @@ the write actually depends on. Many generated fields are ``Optional`` in
 contexts, but the *write* path needs them concretely (e.g. the predicate
 columns, the partition columns, the id used for dedupe).
 
-The :class:`WriteSpec` for each writable class names the class those
-constraints live on through ``validation_cls``. This module re-validates every
-instance through it before any IO during runtime.
+The ``*Write`` subclasses here define required-field and cross-field row
+constraints not enforced by the generated models. The :class:`WriteSpec` for
+each writable class selects one through ``validation_cls``. This module
+re-validates every instance through it before any IO during runtime.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import isfinite
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 
-from connects_common_connectivity.io.write_spec import WriteSpec
+from connects_common_connectivity.models import (
+    CellFeatureDefinition,
+    Cluster,
+    ClusterMembership,
+    HierarchyCategory,
+    ReferenceSpace,
+    SignedAxis,
+    Unit,
+)
 
-__all__ = ["validate_for_write"]
+if TYPE_CHECKING:
+    from connects_common_connectivity.io.write_spec import WriteSpec
+
+__all__ = [
+    "DATA_AXIS_BY_SIGNED_AXIS",
+    "CellFeatureDefinitionWrite",
+    "ClusterMembershipWrite",
+    "ClusterWrite",
+    "HierarchyCategoryWrite",
+    "ReferenceSpaceWrite",
+    "validate_for_write",
+]
+
+
+DATA_AXIS_BY_SIGNED_AXIS: dict[SignedAxis, str] = {
+    SignedAxis.PLUS_X: "X",
+    SignedAxis.MINUS_X: "X",
+    SignedAxis.PLUS_Y: "Y",
+    SignedAxis.MINUS_Y: "Y",
+    SignedAxis.PLUS_Z: "Z",
+    SignedAxis.MINUS_Z: "Z",
+}
+"""Unsigned data axis carried by each signed axis, independent of direction."""
+
+
+class ClusterWrite(Cluster):
+    """``Cluster`` with the taxonomy scope the shared cluster table needs.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Owning taxonomy. Optional in the schema because a cluster is
+        meaningful without one, but required here because it partitions the
+        table and forms part of the merge identity.
+    """
+
+    hierarchy_id: str
+
+
+class ClusterMembershipWrite(ClusterMembership):
+    """``ClusterMembership`` with its complete row identity present.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Taxonomy that disambiguates memberships when one project has rows
+        against several hierarchies.
+    item:
+        Member data item.
+    cluster:
+        Cluster the item belongs to.
+    """
+
+    hierarchy_id: str
+    item: str
+    cluster: str
+
+
+class CellFeatureDefinitionWrite(CellFeatureDefinition):
+    """``CellFeatureDefinition`` bound to the feature set it describes.
+
+    Attributes
+    ----------
+    feature_set_id:
+        Owning feature set. It partitions the table and forms part of the
+        merge identity, so a null would merge definitions across sets.
+    """
+
+    feature_set_id: str
+
+
+class HierarchyCategoryWrite(HierarchyCategory):
+    """``HierarchyCategory`` with the taxonomy scope its table is keyed by.
+
+    Attributes
+    ----------
+    hierarchy_id:
+        Owning taxonomy, which partitions the table and forms part of the
+        merge identity.
+    """
+
+    hierarchy_id: str
+
+
+class ReferenceSpaceWrite(ReferenceSpace):
+    """``ReferenceSpace`` with coherent optional voxel scale and default view."""
+
+    @model_validator(mode="after")
+    def validate_voxel_scale(self) -> ReferenceSpaceWrite:
+        """Check supplied physical scale while allowing unspecified voxel scale.
+
+        Returns
+        -------
+        ReferenceSpaceWrite
+            The validated instance, unchanged.
+
+        Raises
+        ------
+        ValueError
+            If voxel_size and voxel_size_unit are not supplied together, scale
+            is supplied for coordinates not in VOXELS, the scale unit is not a
+            supported physical length unit, or a dimension is nonfinite or
+            nonpositive.
+        """
+        if (self.voxel_size is None) != (self.voxel_size_unit is None):
+            raise ValueError("voxel_size and voxel_size_unit must be supplied together")
+        if self.voxel_size is None:
+            return self
+        if self.unit != Unit.VOXELS:
+            raise ValueError("voxel_size requires reference space unit VOXELS")
+        if self.voxel_size_unit not in (
+            Unit.NANOMETERS_LENGTH,
+            Unit.MICRONS_LENGTH,
+            Unit.MILLIMETERS_LENGTH,
+            Unit.CENTIMETERS_LENGTH,
+        ):
+            raise ValueError("voxel_size_unit must be a supported physical length unit")
+        for index, dimension in enumerate(self.voxel_size):
+            if not isfinite(dimension) or dimension <= 0:
+                raise ValueError(
+                    f"voxel_size[{index}] must be finite and strictly positive"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_default_view_axes(self) -> ReferenceSpaceWrite:
+        """Require the two screen directions to come from different data axes.
+
+        Returns
+        -------
+        ReferenceSpaceWrite
+            The validated instance, unchanged.
+
+        Raises
+        ------
+        ValueError
+            If both directions resolve to the same data axis, or if either
+            signed axis has no entry in :data:`DATA_AXIS_BY_SIGNED_AXIS`.
+        """
+        view = self.default_2d_view
+        if view is None:
+            return self
+
+        axes = []
+        for direction, signed_axis in (
+            ("left_to_right", view.left_to_right),
+            ("bottom_to_top", view.bottom_to_top),
+        ):
+            axis = DATA_AXIS_BY_SIGNED_AXIS.get(signed_axis)
+            if axis is None:
+                raise ValueError(
+                    f"default_2d_view.{direction}={signed_axis!r} has no data axis; "
+                    f"add it to DATA_AXIS_BY_SIGNED_AXIS"
+                )
+            axes.append(axis)
+
+        if axes[0] == axes[1]:
+            raise ValueError(
+                "default_2d_view must use different data axes, but "
+                f"{view.left_to_right} and {view.bottom_to_top} "
+                f"are both axis {axes[0]}"
+            )
+        return self
+
 
 
 def validate_for_write(

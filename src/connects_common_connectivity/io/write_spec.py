@@ -6,12 +6,9 @@ columns, and which write mode the backend should dispatch on. :data:`REGISTRY`
 is the source of truth for which classes are writable; add an entry here to
 make a new class writable through :func:`write_models`.
 
-Constraints that only the write path depends on live here too, as ``*Write``
-subclasses of the generated models. ``models.py`` is generated from the shared
-LinkML schemas and cannot express them: slots other consumers may omit but a
-partition or merge key needs, and cross-field rules LinkML has no syntax for.
-A spec names its subclass through ``write_cls``, and every row is validated
-against it before IO.
+Row constraints live in :mod:`write_validation` as ``*Write`` subclasses of
+the generated models. A spec names its subclass through ``write_cls``, and
+every row is validated against it before IO.
 """
 
 from __future__ import annotations
@@ -22,6 +19,13 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from connects_common_connectivity.io.path_spec import MODEL_TABLE_PATHS
+from connects_common_connectivity.io.write_validation import (
+    CellFeatureDefinitionWrite,
+    ClusterMembershipWrite,
+    ClusterWrite,
+    HierarchyCategoryWrite,
+    ReferenceSpaceWrite,
+)
 from connects_common_connectivity.models import (
     AlgorithmRun,
     CellFeatureDefinition,
@@ -38,7 +42,6 @@ from connects_common_connectivity.models import (
     MappingSet,
     ProjectionMeasurementMatrix,
     ReferenceSpace,
-    SignedAxis,
     SpatialLocation,
     SynapseFeatureMatrix,
 )
@@ -67,8 +70,8 @@ class WriteSpec(BaseModel):
         Exact generated Pydantic model class accepted by this policy.
     write_cls:
         Subclass of ``model_cls`` that every row is validated against before
-        IO, carrying write-only constraints the shared LinkML schema cannot
-        express. ``None`` validates rows against ``model_cls`` itself. It may
+        IO, carrying write-time constraints not enforced by the generated
+        model. ``None`` validates rows against ``model_cls`` itself. It may
         not declare fields absent from ``model_cls``.
     subdir:
         Delta table directory relative to the configured output root.
@@ -166,120 +169,6 @@ class WriteSpec(BaseModel):
                 "schema-required and non-nullable, require it on a write_cls, "
                 "or explicitly allow null identity values with nullable_merge_on: "
                 f"{unsafe_keys!r}"
-            )
-        return self
-
-
-DATA_AXIS_BY_SIGNED_AXIS: dict[SignedAxis, str] = {
-    SignedAxis.PLUS_X: "X",
-    SignedAxis.MINUS_X: "X",
-    SignedAxis.PLUS_Y: "Y",
-    SignedAxis.MINUS_Y: "Y",
-    SignedAxis.PLUS_Z: "Z",
-    SignedAxis.MINUS_Z: "Z",
-}
-"""Unsigned data axis carried by each signed axis, independent of direction."""
-
-
-class ClusterWrite(Cluster):
-    """``Cluster`` with the taxonomy scope the shared cluster table needs.
-
-    Attributes
-    ----------
-    hierarchy_id:
-        Owning taxonomy. Optional in the schema because a cluster is
-        meaningful without one, but required here because it partitions the
-        table and forms part of the merge identity.
-    """
-
-    hierarchy_id: str
-
-
-class ClusterMembershipWrite(ClusterMembership):
-    """``ClusterMembership`` with its complete row identity present.
-
-    Attributes
-    ----------
-    hierarchy_id:
-        Taxonomy that disambiguates memberships when one project has rows
-        against several hierarchies.
-    item:
-        Member data item.
-    cluster:
-        Cluster the item belongs to.
-    """
-
-    hierarchy_id: str
-    item: str
-    cluster: str
-
-
-class CellFeatureDefinitionWrite(CellFeatureDefinition):
-    """``CellFeatureDefinition`` bound to the feature set it describes.
-
-    Attributes
-    ----------
-    feature_set_id:
-        Owning feature set. It partitions the table and forms part of the
-        merge identity, so a null would merge definitions across sets.
-    """
-
-    feature_set_id: str
-
-
-class HierarchyCategoryWrite(HierarchyCategory):
-    """``HierarchyCategory`` with the taxonomy scope its table is keyed by.
-
-    Attributes
-    ----------
-    hierarchy_id:
-        Owning taxonomy, which partitions the table and forms part of the
-        merge identity.
-    """
-
-    hierarchy_id: str
-
-
-class ReferenceSpaceWrite(ReferenceSpace):
-    """``ReferenceSpace`` whose optional default view is checked for coherence."""
-
-    @model_validator(mode="after")
-    def validate_default_view_axes(self) -> ReferenceSpaceWrite:
-        """Require the two screen directions to come from different data axes.
-
-        Returns
-        -------
-        ReferenceSpaceWrite
-            The validated instance, unchanged.
-
-        Raises
-        ------
-        ValueError
-            If both directions resolve to the same data axis, or if either
-            signed axis has no entry in :data:`DATA_AXIS_BY_SIGNED_AXIS`.
-        """
-        view = self.default_2d_view
-        if view is None:
-            return self
-
-        axes = []
-        for direction, signed_axis in (
-            ("left_to_right", view.left_to_right),
-            ("bottom_to_top", view.bottom_to_top),
-        ):
-            axis = DATA_AXIS_BY_SIGNED_AXIS.get(signed_axis)
-            if axis is None:
-                raise ValueError(
-                    f"default_2d_view.{direction}={signed_axis!r} has no data axis; "
-                    f"add it to DATA_AXIS_BY_SIGNED_AXIS"
-                )
-            axes.append(axis)
-
-        if axes[0] == axes[1]:
-            raise ValueError(
-                "default_2d_view must use different data axes, but "
-                f"{view.left_to_right} and {view.bottom_to_top} "
-                f"are both axis {axes[0]}"
             )
         return self
 
@@ -484,7 +373,6 @@ def get_spec(model_or_cls: type[BaseModel] | BaseModel) -> WriteSpec:
 
 
 __all__ = [
-    "DATA_AXIS_BY_SIGNED_AXIS",
     "REGISTRY",
     "CellFeatureDefinitionWrite",
     "ClusterMembershipWrite",

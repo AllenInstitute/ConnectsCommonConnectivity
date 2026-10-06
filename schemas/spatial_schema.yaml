@@ -125,14 +125,17 @@ slots:
     maximum_cardinality: 3
     description: >-
       Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit.
-      Only applicable when the reference space unit is VOXELS. Each dimension
-      must be positive; unequal dimensions describe anisotropic voxels.
+      Omit when physical scale is unspecified. At write time, a supplied value
+      requires reference space unit VOXELS and a voxel_size_unit; each dimension
+      must be finite and strictly positive. Unequal dimensions describe
+      anisotropic voxels.
   voxel_size_unit:
     range: Unit
     description: >-
-      Physical length unit shared by all three voxel_size dimensions. Supply
-      alongside voxel_size; use NANOMETERS_LENGTH, MICRONS_LENGTH,
-      MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.
+      Physical length unit shared by all three voxel_size dimensions.
+      At write time, voxel_size and voxel_size_unit must either both be omitted
+      or both be supplied. A supplied unit must be NANOMETERS_LENGTH,
+      MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.
   x:
     range: float
     description: X coordinate in the reference space.

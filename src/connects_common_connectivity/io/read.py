@@ -21,6 +21,7 @@ from connects_common_connectivity.io.path_spec import (
     MODEL_TABLE_PATHS,
     WIDE_PAYLOAD_PATHS,
 )
+from connects_common_connectivity.models import LocationType
 
 __all__ = [
     "DatasetReader",
@@ -770,7 +771,9 @@ def _filter_explicit_values(
     for column, requested in filters:
         if requested is not None:
             values = [requested] if isinstance(requested, str) else list(requested)
-            frame = frame.filter(pl.col(column).is_in(values))
+            frame = frame.filter(
+                pl.col(column).is_in(pl.Series(values, dtype=pl.String).implode())
+            )
     return frame
 
 
@@ -779,7 +782,7 @@ def read_spatial_locations(
     *,
     reference_spaces: str | Iterable[str] | None = None,
     dataitem_ids: str | Iterable[str] | None = None,
-    location_types: str | Iterable[str] | None = None,
+    location_types: str | LocationType | Iterable[str | LocationType] | None = None,
     output_root: str | Path | None = None,
     settings: Settings | None = None,
 ) -> pl.DataFrame:
@@ -793,6 +796,10 @@ def read_spatial_locations(
         Optional identifiers or iterables of identifiers to retain. Location
         types also accept ``LocationType`` enum members. ``None`` imposes no
         restriction; an empty iterable selects no rows.
+        Filter values are not validated against known identifiers: unmatched
+        values are ignored, and no matches returns an empty frame retaining
+        the table schema. Unlike ``DatasetReader`` name selectors, unknown
+        values do not raise ``KeyError``.
     output_root, settings:
         Mutually exclusive root overrides, matching ``write_models``. With
         neither supplied, use the discovered application settings.

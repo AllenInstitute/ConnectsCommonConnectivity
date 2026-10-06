@@ -67,7 +67,8 @@ def test_spatial_reader_filters_and_preserves_coordinates(spatial_root):
 
 @pytest.mark.parametrize("filters", [
     {"dataitem_ids": []}, {"dataitem_ids": "missing"},
-    {"reference_spaces": []}, {"location_types": []},
+    {"reference_spaces": []}, {"reference_spaces": "missing"},
+    {"location_types": []}, {"location_types": "missing"},
 ])
 def test_spatial_reader_empty_matches_keep_schema(spatial_root, filters):
     """Empty selections and unmatched IDs must return zero rows with the stored column types."""
@@ -75,6 +76,19 @@ def test_spatial_reader_empty_matches_keep_schema(spatial_root, filters):
     empty = read_spatial_locations("first", output_root=spatial_root, **filters)
     assert empty.is_empty()
     assert empty.schema == expected.schema
+
+
+@pytest.mark.parametrize("filters,expected_filters", [
+    ({"dataitem_ids": ["a", "missing"]}, {"dataitem_ids": "a"}),
+    ({"reference_spaces": ["CCF_v3", "missing"]}, {"reference_spaces": "CCF_v3"}),
+    ({"location_types": [LocationType.SOMA, "missing"]}, {"location_types": "SOMA"}),
+])
+def test_spatial_reader_mixed_values_keep_matches(spatial_root, filters, expected_filters):
+    """Unknown filter values must not discard rows matching known values."""
+    expected = read_spatial_locations("first", output_root=spatial_root, **expected_filters)
+    result = read_spatial_locations("first", output_root=spatial_root, **filters)
+    assert not result.is_empty()
+    assert result.equals(expected)
 
 
 def test_reference_space_reader_selects_exact_scope(spatial_root):

@@ -11,8 +11,151 @@ from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io import (
     DatasetReader,
     read_cell_cell_connectivity,
+    read_reference_spaces,
+    read_spatial_locations,
     read_synapse_table,
+    write_models,
 )
+from connects_common_connectivity.models import (
+    Default2DView,
+    LocationType,
+    ReferenceSpace,
+    SignedAxis,
+    SpatialLocation,
+)
+
+
+@pytest.fixture
+def spatial_root(tmp_path):
+    """Provide global and project-owned spaces with coordinates across cells and location types."""
+    write_models([
+        ReferenceSpace(id="CCF_v3", default_2d_view=Default2DView(
+            left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y)),
+        ReferenceSpace(id="CCF_v3", project_id="first"),
+        ReferenceSpace(id="CCF_v3", project_id="second"),
+        ReferenceSpace(id="first_original", project_id="first"),
+        ReferenceSpace(id="second_original", project_id="second"),
+    ], output_root=tmp_path)
+    write_models([
+        SpatialLocation(project_id=project, dataitem_id=cell, reference_space=space,
+                        location_type=kind, x=1.0, y=2.0, z=3.0)
+        for project in ("first", "second")
+        for cell in ("a", "b")
+        for space in ("CCF_v3", f"{project}_original")
+        for kind in (LocationType.SOMA, LocationType.CENTROID)
+    ], output_root=tmp_path)
+    return tmp_path
+
+
+def test_spatial_reader_filters_and_preserves_coordinates(spatial_root):
+    """Spatial filters must compose within a project without transforming coordinate values."""
+    result = read_spatial_locations(
+        "first", reference_spaces="CCF_v3", dataitem_ids=["a"],
+        location_types=LocationType.SOMA, output_root=spatial_root,
+    )
+    assert result.select(
+        "project_id", "dataitem_id", "location_type", "x", "y", "z"
+    ).rows() == [
+        ("first", "a", "SOMA", 1.0, 2.0, 3.0)
+    ]
+    assert read_spatial_locations("first", output_root=spatial_root).height == 8
+    assert read_spatial_locations(
+        "second", location_types=[LocationType.CENTROID],
+        settings=Settings(output_root=spatial_root),
+    ).height == 4
+
+
+@pytest.mark.parametrize("description", [None, "Axon initial segment origin."])
+def test_spatial_reader_preserves_other_description(tmp_path, description):
+    """Optional details for OTHER locations survive writing and public-reader retrieval."""
+    location = SpatialLocation(
+        project_id="first", dataitem_id="cell", reference_space="original",
+        location_type=LocationType.OTHER, description=description, x=1, y=2, z=3,
+    )
+    write_models(location, output_root=tmp_path)
+    result = read_spatial_locations(
+        "first", location_types=LocationType.OTHER, output_root=tmp_path,
+    )
+    assert result.height == 1
+    assert SpatialLocation.model_validate(result.to_dicts()[0]) == location
+
+
+@pytest.mark.parametrize("filters", [
+    {"dataitem_ids": []}, {"dataitem_ids": "missing"},
+    {"reference_spaces": []}, {"reference_spaces": "missing"},
+    {"location_types": []}, {"location_types": "missing"},
+])
+def test_spatial_reader_empty_matches_keep_schema(spatial_root, filters):
+    """Empty selections and unmatched IDs must return zero rows with the stored column types."""
+    expected = read_spatial_locations("first", output_root=spatial_root)
+    empty = read_spatial_locations("first", output_root=spatial_root, **filters)
+    assert empty.is_empty()
+    assert empty.schema == expected.schema
+
+
+@pytest.mark.parametrize("filters,expected_filters", [
+    ({"dataitem_ids": ["a", "missing"]}, {"dataitem_ids": "a"}),
+    ({"reference_spaces": ["CCF_v3", "missing"]}, {"reference_spaces": "CCF_v3"}),
+    ({"location_types": [LocationType.SOMA, "missing"]}, {"location_types": "SOMA"}),
+])
+def test_spatial_reader_mixed_values_keep_matches(spatial_root, filters, expected_filters):
+    """Unknown filter values must not discard rows matching known values."""
+    expected = read_spatial_locations("first", output_root=spatial_root, **expected_filters)
+    result = read_spatial_locations("first", output_root=spatial_root, **filters)
+    assert not result.is_empty()
+    assert result.equals(expected)
+
+
+def test_reference_space_reader_selects_exact_scope(spatial_root):
+    """Exact scope reads preserve view structs, nulls, and empty schemas."""
+    assert read_reference_spaces(output_root=spatial_root).height == 5
+    visible = read_reference_spaces(project_id="first", output_root=spatial_root)
+    assert set(visible["id"]) == {"CCF_v3", "first_original"}
+    assert visible["project_id"].to_list() == ["first", "first"]
+    assert isinstance(visible.schema["default_2d_view"], pl.Struct)
+    global_spaces = read_reference_spaces(project_id=None, output_root=spatial_root)
+    assert global_spaces["id"].to_list() == ["CCF_v3"]
+    assert global_spaces["project_id"].to_list() == [None]
+    assert global_spaces["default_2d_view"].to_list() == [
+        {"left_to_right": "PLUS_Z", "bottom_to_top": "MINUS_Y"}
+    ]
+    original = read_reference_spaces(reference_space_ids="first_original", output_root=spatial_root)
+    assert original["default_2d_view"].to_list() == [None]
+    assert read_reference_spaces(
+        project_id="missing", settings=Settings(output_root=spatial_root)
+    ).is_empty()
+    empty = read_reference_spaces(reference_space_ids=[], output_root=spatial_root)
+    assert empty.is_empty()
+    assert empty.schema == visible.schema
+
+
+@pytest.mark.parametrize("filters,expected_projects", [
+    ({}, {None, "first", "second"}),
+    ({"project_id": None}, {None}),
+    ({"project_id": "first"}, {"first"}),
+    ({"project_id": "second"}, {"second"}),
+    ({"project_id": "missing"}, set()),
+])
+def test_reference_space_reader_disambiguates_shared_ids(
+    spatial_root, filters, expected_projects
+):
+    """Scope filters must distinguish reference spaces that share an ID without global fallback."""
+    result = read_reference_spaces(
+        reference_space_ids="CCF_v3", output_root=spatial_root, **filters
+    )
+    assert set(result["project_id"]) == expected_projects
+    assert result.height == len(expected_projects)
+
+
+@pytest.mark.parametrize("reader,args", [
+    (read_spatial_locations, ("first",)), (read_reference_spaces, ()),
+])
+def test_spatial_readers_missing_tables_and_root_conflict(reader, args, tmp_path):
+    """Both spatial readers must reject missing storage and conflicting root overrides."""
+    with pytest.raises(FileNotFoundError):
+        reader(*args, output_root=tmp_path)
+    with pytest.raises(TypeError, match="either settings=.*output_root"):
+        reader(*args, output_root=tmp_path, settings=Settings(output_root=tmp_path))
 
 
 def _write_table(root: Path, subdir: str, data: dict) -> None:

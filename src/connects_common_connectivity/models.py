@@ -68,6 +68,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'cc',
      'id': 'https://brain-connects.org/ic3-common-connectivity-schema',
      'imports': ['linkml:types',
                  'core_schema',
+                 'spatial_schema',
                  'clustering_schema',
                  'brain_region_schema',
                  'projection_schema',
@@ -181,9 +182,25 @@ class Unit(str, Enum):
     """
     Plain count unit.
     """
+    VOXELS = "VOXELS"
+    """
+    Voxel index coordinates; physical size is specified per axis.
+    """
+    NANOMETERS_LENGTH = "NANOMETERS_LENGTH"
+    """
+    Nanometers length measurement.
+    """
     MICRONS_LENGTH = "MICRONS_LENGTH"
     """
     Micrometers length measurement.
+    """
+    MILLIMETERS_LENGTH = "MILLIMETERS_LENGTH"
+    """
+    Millimeters length measurement.
+    """
+    CENTIMETERS_LENGTH = "CENTIMETERS_LENGTH"
+    """
+    Centimeters length measurement.
     """
     MICRONS_SQUARE = "MICRONS_SQUARE"
     """
@@ -257,34 +274,354 @@ class Laterality(str, Enum):
     """
 
 
-
-class SpatialLocation(ConfiguredBaseModel):
+class SignedAxis(str, Enum):
     """
-    3D spatial coordinates in a reference space.
+    A data axis and its increasing or decreasing screen direction.
+    """
+    PLUS_X = "PLUS_X"
+    """
+    Increasing X coordinates along the selected screen direction.
+    """
+    MINUS_X = "MINUS_X"
+    """
+    Decreasing X coordinates along the selected screen direction.
+    """
+    PLUS_Y = "PLUS_Y"
+    """
+    Increasing Y coordinates along the selected screen direction.
+    """
+    MINUS_Y = "MINUS_Y"
+    """
+    Decreasing Y coordinates along the selected screen direction.
+    """
+    PLUS_Z = "PLUS_Z"
+    """
+    Increasing Z coordinates along the selected screen direction.
+    """
+    MINUS_Z = "MINUS_Z"
+    """
+    Decreasing Z coordinates along the selected screen direction.
+    """
+
+
+class LocationType(str, Enum):
+    """
+    The anatomical point represented by a coordinate row.
+    """
+    SOMA = "SOMA"
+    """
+    Location of the cell soma.
+    """
+    CENTROID = "CENTROID"
+    """
+    Geometric centroid of the represented structure.
+    """
+    INJECTION_SITE = "INJECTION_SITE"
+    """
+    Location of the injection site.
+    """
+    OTHER = "OTHER"
+    """
+    Another anatomical point; specify its type in description.
+    """
+
+
+
+class ProjectScoped(ConfiguredBaseModel):
+    """
+    Mixin providing project scoping to entities that belong to a specific project.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-base-schema'})
+
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
+class DataSet(ProjectScoped):
+    """
+    A collection of DataItems (e.g., all neurons from a study, all barcoded detections in a volume).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
-         'slot_usage': {'reference_space': {'description': 'Reference space (e.g., '
-                                                           "'CCF_v3', 'CCF_v4').",
-                                            'name': 'reference_space',
-                                            'range': 'string',
-                                            'required': True},
-                        'x': {'description': 'X coordinate in the reference space.',
-                              'name': 'x',
-                              'range': 'float',
-                              'required': True},
-                        'y': {'description': 'Y coordinate in the reference space.',
-                              'name': 'y',
-                              'range': 'float',
-                              'required': True},
-                        'z': {'description': 'Z coordinate in the reference space.',
-                              'name': 'z',
-                              'range': 'float',
-                              'required': True}}})
+         'mixins': ['ProjectScoped']})
 
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierarchyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseConnectivityLong',
+                       'SynapseFeatureMatrix']} })
+    name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
+         'aliases': ['structure_name', 'region_name'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'BrainRegion',
+                       'MappingSet']} })
+    publication: Optional[str] = Field(default=None, description="""Reference to publication describing the dataset.""", json_schema_extra = { "linkml_meta": {'alias': 'publication', 'domain_of': ['DataSet']} })
+    modality: Optional[Modality] = Field(default=None, description="""Source modality for the data item (if relevant).""", json_schema_extra = { "linkml_meta": {'alias': 'modality',
+         'domain_of': ['DataSet',
+                       'ProjectionMeasurementMatrix',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
+class DataItem(ProjectScoped):
+    """
+    An individual datum (e.g., neuron reconstruction, barcoded detection, injection experiment).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
+         'mixins': ['ProjectScoped'],
+         'slot_usage': {'neuroglancer_link': {'description': 'A link that illustrates '
+                                                             'this data item '
+                                                             'visualized in a common '
+                                                             'coordinate framework in '
+                                                             'neuroglancer.',
+                                              'multivalued': False,
+                                              'name': 'neuroglancer_link',
+                                              'range': 'string',
+                                              'required': False}}})
+
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierarchyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseConnectivityLong',
+                       'SynapseFeatureMatrix']} })
+    name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
+         'aliases': ['structure_name', 'region_name'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'BrainRegion',
+                       'MappingSet']} })
+    neuroglancer_link: Optional[str] = Field(default=None, description="""A link that illustrates this data item visualized in a common coordinate framework in neuroglancer.""", json_schema_extra = { "linkml_meta": {'alias': 'neuroglancer_link', 'domain_of': ['DataItem']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
+class DataItemDataSetAssociation(ProjectScoped):
+    """
+    Many-to-many link between DataItem and DataSet.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
+         'mixins': ['ProjectScoped'],
+         'slot_usage': {'dataitem_id': {'description': 'Identifier of the DataItem you '
+                                                       'are linking',
+                                        'name': 'dataitem_id',
+                                        'range': 'DataItem',
+                                        'required': True},
+                        'dataset_id': {'description': 'Identifier of the DataSet you '
+                                                      'are linking',
+                                       'name': 'dataset_id',
+                                       'range': 'DataSet',
+                                       'required': True}}})
+
+    dataitem_id: str = Field(default=..., description="""Identifier of the DataItem you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
+         'domain_of': ['DataItemDataSetAssociation',
+                       'SpatialLocation',
+                       'BrainRegionAssociation',
+                       'CellFeatureMeasurement',
+                       'CellGeneData']} })
+    dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
+class ReferenceSpace(ProjectScoped):
+    """
+    A coordinate frame and version identified by (project_id, id). A null project_id denotes the global scope; otherwise the space belongs to that project. The same id may occur independently in different scopes. Unit applies to all coordinate axes; record axis meanings in description. For voxel coordinates, specify voxel_size and voxel_size_unit to describe physical scale. Omitted unit or voxel size means unspecified, not an implicit default. Different frames or versions within a scope need distinct ids. A missing view implies no display default.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
+         'mixins': ['ProjectScoped'],
+         'slot_usage': {'id': {'name': 'id', 'required': True},
+                        'name': {'name': 'name', 'required': False},
+                        'project_id': {'name': 'project_id', 'required': False},
+                        'unit': {'description': 'Unit shared by x, y, and z '
+                                                'coordinates in this reference space. '
+                                                'Use VOXELS for voxel indices, or '
+                                                'NANOMETERS_LENGTH, MICRONS_LENGTH, '
+                                                'MILLIMETERS_LENGTH, or '
+                                                'CENTIMETERS_LENGTH for physical '
+                                                'coordinates.',
+                                 'name': 'unit',
+                                 'required': False}},
+         'unique_keys': {'reference_space_identity': {'unique_key_name': 'reference_space_identity',
+                                                      'unique_key_slots': ['project_id',
+                                                                           'id']}}})
+
+    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
+         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'AlgorithmRun',
+                       'ClusterHierarchy',
+                       'Cluster',
+                       'HierarchyCategory',
+                       'BrainRegion',
+                       'ZarrArray',
+                       'ZarrDataset',
+                       'ParquetDataset',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'CellFeatureMatrix',
+                       'CellFeatureMeasurement',
+                       'CellGeneData',
+                       'SingleCellReconstruction',
+                       'MappingSet',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseConnectivityLong',
+                       'SynapseFeatureMatrix']} })
+    name: Optional[str] = Field(default=None, description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
+         'aliases': ['structure_name', 'region_name'],
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'BrainRegion',
+                       'MappingSet']} })
+    description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'MappingSet',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseFeatureMatrix']} })
+    unit: Optional[Unit] = Field(default=None, description="""Unit shared by x, y, and z coordinates in this reference space. Use VOXELS for voxel indices, or NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH for physical coordinates.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureDefinition',
+                       'CellFeatureMeasurement',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix']} })
+    voxel_size: Optional[list[float]] = Field(default=None, description="""Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit. Omit when physical scale is unspecified. At write time, a supplied value requires reference space unit VOXELS and a voxel_size_unit; each dimension must be finite and strictly positive. Unequal dimensions describe anisotropic voxels.""", min_length=3, max_length=3, json_schema_extra = { "linkml_meta": {'alias': 'voxel_size',
+         'domain_of': ['ReferenceSpace'],
+         'list_elements_ordered': True} })
+    voxel_size_unit: Optional[Unit] = Field(default=None, description="""Physical length unit shared by all three voxel_size dimensions. At write time, voxel_size and voxel_size_unit must either both be omitted or both be supplied. A supplied unit must be NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.""", json_schema_extra = { "linkml_meta": {'alias': 'voxel_size_unit', 'domain_of': ['ReferenceSpace']} })
+    default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace']} })
+    project_id: Optional[str] = Field(default=None, description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
+class Default2DView(ConfiguredBaseModel):
+    """
+    Embedded default screen layout. The two signed axes must use different underlying data axes; the unused axis is depth. Negate MINUS axes to display.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
+         'slot_usage': {'bottom_to_top': {'name': 'bottom_to_top', 'required': True},
+                        'left_to_right': {'name': 'left_to_right', 'required': True}}})
+
+    left_to_right: SignedAxis = Field(default=..., description="""Signed data axis that increases from left to right on screen.""", json_schema_extra = { "linkml_meta": {'alias': 'left_to_right', 'domain_of': ['Default2DView']} })
+    bottom_to_top: SignedAxis = Field(default=..., description="""Signed data axis that increases from bottom to top on screen.""", json_schema_extra = { "linkml_meta": {'alias': 'bottom_to_top', 'domain_of': ['Default2DView']} })
+
+
+class SpatialLocation(ProjectScoped):
+    """
+    One anatomical point for a DataItem in a reference space. Within a project, each DataItem has at most one row per reference space and location type. Coordinates use the reference space's unit and are stored without implicit unit conversion or transformation.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
+         'mixins': ['ProjectScoped'],
+         'slot_usage': {'dataitem_id': {'name': 'dataitem_id', 'required': True},
+                        'description': {'description': 'Details of the anatomical '
+                                                       'point, particularly when '
+                                                       'location_type is OTHER.',
+                                        'name': 'description'},
+                        'location_type': {'name': 'location_type', 'required': True},
+                        'reference_space': {'name': 'reference_space',
+                                            'required': True},
+                        'x': {'name': 'x', 'required': True},
+                        'y': {'name': 'y', 'required': True},
+                        'z': {'name': 'z', 'required': True}},
+         'unique_keys': {'location_identity': {'unique_key_name': 'location_identity',
+                                               'unique_key_slots': ['project_id',
+                                                                    'dataitem_id',
+                                                                    'reference_space',
+                                                                    'location_type']}}})
+
+    dataitem_id: str = Field(default=..., description="""The DataItem for which projection measurements are reported.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
+         'domain_of': ['DataItemDataSetAssociation',
+                       'SpatialLocation',
+                       'BrainRegionAssociation',
+                       'CellFeatureMeasurement',
+                       'CellGeneData']} })
+    reference_space: str = Field(default=..., description="""Identifier of the coordinate frame and version, unique within the selected project or global scope.""", json_schema_extra = { "linkml_meta": {'alias': 'reference_space', 'domain_of': ['SpatialLocation']} })
+    location_type: LocationType = Field(default=..., description="""Anatomical point represented by these coordinates.""", json_schema_extra = { "linkml_meta": {'alias': 'location_type', 'domain_of': ['SpatialLocation']} })
+    description: Optional[str] = Field(default=None, description="""Details of the anatomical point, particularly when location_type is OTHER.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
+                       'ProjectionMeasurementMatrix',
+                       'CellFeatureSet',
+                       'CellFeatureDefinition',
+                       'MappingSet',
+                       'CellCellConnectivityLong',
+                       'CellCellMeasurementMatrix',
+                       'SynapseFeatureMatrix']} })
     x: float = Field(default=..., description="""X coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'x', 'domain_of': ['SpatialLocation']} })
     y: float = Field(default=..., description="""Y coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'y', 'domain_of': ['SpatialLocation']} })
     z: float = Field(default=..., description="""Z coordinate in the reference space.""", json_schema_extra = { "linkml_meta": {'alias': 'z', 'domain_of': ['SpatialLocation']} })
-    reference_space: str = Field(default=..., description="""Reference space (e.g., 'CCF_v3', 'CCF_v4').""", json_schema_extra = { "linkml_meta": {'alias': 'reference_space', 'domain_of': ['SpatialLocation']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
 
 
 class AlgorithmRun(ConfiguredBaseModel):
@@ -334,6 +671,7 @@ class AlgorithmRun(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -396,6 +734,7 @@ class ClusterHierarchy(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -460,6 +799,7 @@ class Cluster(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -513,6 +853,47 @@ class Cluster(ConfiguredBaseModel):
         return v
 
 
+class ClusterMembership(ProjectScoped):
+    """
+    Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
+         'mixins': ['ProjectScoped'],
+         'slot_usage': {'cluster': {'inlined': False, 'name': 'cluster'},
+                        'distance': {'description': 'Distance between the item and the '
+                                                    'cluster centroid. (Smaller is '
+                                                    'better).',
+                                     'name': 'distance',
+                                     'range': 'float'},
+                        'membership_score': {'description': 'Algorithm-defined '
+                                                            'membership strength. '
+                                                            '(Optional, does not need '
+                                                            'to be normalized)',
+                                             'name': 'membership_score',
+                                             'range': 'float'},
+                        'probability': {'description': 'Normalized probability of '
+                                                       'membership (sums to 1 across '
+                                                       'clusters for a given item). '
+                                                       'Optional, assume 100% if '
+                                                       'misisng.',
+                                        'name': 'probability'}}})
+
+    item: Optional[str] = Field(default=None, description="""A DataItem that is a member of a Cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'item', 'domain_of': ['ClusterMembership']} })
+    cluster: Optional[str] = Field(default=None, description="""Cluster referenced in a membership association.""", json_schema_extra = { "linkml_meta": {'alias': 'cluster', 'domain_of': ['ClusterMembership']} })
+    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id',
+         'domain_of': ['Cluster', 'ClusterMembership', 'HierarchyCategory']} })
+    membership_score: Optional[float] = Field(default=None, description="""Algorithm-defined membership strength. (Optional, does not need to be normalized)""", json_schema_extra = { "linkml_meta": {'alias': 'membership_score', 'domain_of': ['ClusterMembership']} })
+    probability: Optional[float] = Field(default=None, description="""Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.""", ge=0.0, le=1.0, json_schema_extra = { "linkml_meta": {'alias': 'probability',
+         'domain_of': ['ClusterMembership',
+                       'CellToCellMapping',
+                       'CellToClusterMapping',
+                       'ClusterToClusterMapping']} })
+    distance: Optional[float] = Field(default=None, description="""Distance between the item and the cluster centroid. (Smaller is better).""", json_schema_extra = { "linkml_meta": {'alias': 'distance', 'domain_of': ['ClusterMembership']} })
+    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
+         'aliases': ['project', 'program_id'],
+         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
+
+
 class HierarchyCategory(ConfiguredBaseModel):
     """
     A set of names to give to different levels of resolution within a hierarchical clustering. Allowing scientists to annotate consistent levels of detail within a clustering result. (i.e. class, subclass, supertypes, type, subtype, etc)
@@ -535,6 +916,7 @@ class HierarchyCategory(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -561,7 +943,9 @@ class HierarchyCategory(ConfiguredBaseModel):
     hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id',
          'domain_of': ['Cluster', 'ClusterMembership', 'HierarchyCategory']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -634,6 +1018,7 @@ class BrainRegion(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -659,7 +1044,11 @@ class BrainRegion(ConfiguredBaseModel):
                        'SynapseFeatureMatrix']} })
     name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
          'aliases': ['structure_name', 'region_name'],
-         'domain_of': ['DataSet', 'DataItem', 'BrainRegion', 'MappingSet']} })
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'BrainRegion',
+                       'MappingSet']} })
     parent_identifier: Optional[str] = Field(default=None, description="""Reference to broader brain region.""", json_schema_extra = { "linkml_meta": {'alias': 'parent_identifier',
          'aliases': ['parent_id', 'parent_structure_id'],
          'domain_of': ['BrainRegion'],
@@ -693,186 +1082,6 @@ class BrainRegion(ConfiguredBaseModel):
         return v
 
 
-class ProjectScoped(ConfiguredBaseModel):
-    """
-    Mixin providing project scoping to entities that belong to a specific project.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-base-schema'})
-
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
-class DataSet(ProjectScoped):
-    """
-    A collection of DataItems (e.g., all neurons from a study, all barcoded detections in a volume).
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
-         'mixins': ['ProjectScoped']})
-
-    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
-         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
-         'domain_of': ['DataSet',
-                       'DataItem',
-                       'AlgorithmRun',
-                       'ClusterHierarchy',
-                       'Cluster',
-                       'HierarchyCategory',
-                       'BrainRegion',
-                       'ZarrArray',
-                       'ZarrDataset',
-                       'ParquetDataset',
-                       'ProjectionMeasurementMatrix',
-                       'CellFeatureSet',
-                       'CellFeatureDefinition',
-                       'CellFeatureMatrix',
-                       'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction',
-                       'MappingSet',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping',
-                       'CellCellConnectivityLong',
-                       'CellCellMeasurementMatrix',
-                       'SynapseConnectivityLong',
-                       'SynapseFeatureMatrix']} })
-    name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
-         'aliases': ['structure_name', 'region_name'],
-         'domain_of': ['DataSet', 'DataItem', 'BrainRegion', 'MappingSet']} })
-    publication: Optional[str] = Field(default=None, description="""Reference to publication describing the dataset.""", json_schema_extra = { "linkml_meta": {'alias': 'publication', 'domain_of': ['DataSet']} })
-    modality: Optional[Modality] = Field(default=None, description="""Source modality for the data item (if relevant).""", json_schema_extra = { "linkml_meta": {'alias': 'modality',
-         'domain_of': ['DataSet',
-                       'ProjectionMeasurementMatrix',
-                       'CellCellConnectivityLong',
-                       'CellCellMeasurementMatrix']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
-class DataItem(ProjectScoped):
-    """
-    An individual datum (e.g., neuron reconstruction, barcoded detection, injection experiment).
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
-         'mixins': ['ProjectScoped'],
-         'slot_usage': {'neuroglancer_link': {'description': 'A link that illustrates '
-                                                             'this data item '
-                                                             'visualized in a common '
-                                                             'coordinate framework in '
-                                                             'neuroglancer.',
-                                              'multivalued': False,
-                                              'name': 'neuroglancer_link',
-                                              'range': 'string',
-                                              'required': False}}})
-
-    id: str = Field(default=..., description="""Unique identifier within the class context.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
-         'aliases': ['identifier', 'structure_id', 'brain_region_id'],
-         'domain_of': ['DataSet',
-                       'DataItem',
-                       'AlgorithmRun',
-                       'ClusterHierarchy',
-                       'Cluster',
-                       'HierarchyCategory',
-                       'BrainRegion',
-                       'ZarrArray',
-                       'ZarrDataset',
-                       'ParquetDataset',
-                       'ProjectionMeasurementMatrix',
-                       'CellFeatureSet',
-                       'CellFeatureDefinition',
-                       'CellFeatureMatrix',
-                       'CellFeatureMeasurement',
-                       'CellGeneData',
-                       'SingleCellReconstruction',
-                       'MappingSet',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping',
-                       'CellCellConnectivityLong',
-                       'CellCellMeasurementMatrix',
-                       'SynapseConnectivityLong',
-                       'SynapseFeatureMatrix']} })
-    name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
-         'aliases': ['structure_name', 'region_name'],
-         'domain_of': ['DataSet', 'DataItem', 'BrainRegion', 'MappingSet']} })
-    neuroglancer_link: Optional[str] = Field(default=None, description="""A link that illustrates this data item visualized in a common coordinate framework in neuroglancer.""", json_schema_extra = { "linkml_meta": {'alias': 'neuroglancer_link', 'domain_of': ['DataItem']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
-class DataItemDataSetAssociation(ProjectScoped):
-    """
-    Many-to-many link between DataItem and DataSet.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-core-schema',
-         'mixins': ['ProjectScoped'],
-         'slot_usage': {'dataitem_id': {'description': 'Identifier of the DataItem you '
-                                                       'are linking',
-                                        'name': 'dataitem_id',
-                                        'range': 'DataItem',
-                                        'required': True},
-                        'dataset_id': {'description': 'Identifier of the DataSet you '
-                                                      'are linking',
-                                       'name': 'dataset_id',
-                                       'range': 'DataSet',
-                                       'required': True}}})
-
-    dataitem_id: str = Field(default=..., description="""Identifier of the DataItem you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
-         'domain_of': ['DataItemDataSetAssociation',
-                       'BrainRegionAssociation',
-                       'CellFeatureMeasurement',
-                       'CellGeneData']} })
-    dataset_id: str = Field(default=..., description="""Identifier of the DataSet you are linking""", json_schema_extra = { "linkml_meta": {'alias': 'dataset_id', 'domain_of': ['DataItemDataSetAssociation']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
-class ClusterMembership(ProjectScoped):
-    """
-    Association linking a DataItem to a Cluster, with optional soft membership or distance metrics.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-clustering-schema',
-         'mixins': ['ProjectScoped'],
-         'slot_usage': {'cluster': {'inlined': False, 'name': 'cluster'},
-                        'distance': {'description': 'Distance between the item and the '
-                                                    'cluster centroid. (Smaller is '
-                                                    'better).',
-                                     'name': 'distance',
-                                     'range': 'float'},
-                        'membership_score': {'description': 'Algorithm-defined '
-                                                            'membership strength. '
-                                                            '(Optional, does not need '
-                                                            'to be normalized)',
-                                             'name': 'membership_score',
-                                             'range': 'float'},
-                        'probability': {'description': 'Normalized probability of '
-                                                       'membership (sums to 1 across '
-                                                       'clusters for a given item). '
-                                                       'Optional, assume 100% if '
-                                                       'misisng.',
-                                        'name': 'probability'}}})
-
-    item: Optional[str] = Field(default=None, description="""A DataItem that is a member of a Cluster.""", json_schema_extra = { "linkml_meta": {'alias': 'item', 'domain_of': ['ClusterMembership']} })
-    cluster: Optional[str] = Field(default=None, description="""Cluster referenced in a membership association.""", json_schema_extra = { "linkml_meta": {'alias': 'cluster', 'domain_of': ['ClusterMembership']} })
-    hierarchy_id: Optional[str] = Field(default=None, description="""Identifier of the ClusterHierarchy this row belongs to. Stored as a string key referencing ClusterHierarchy.id (not inlined). Used on Cluster (to scope writes to a single taxonomy in the shared cluster/ table) and on ClusterMembership (to disambiguate when one project has memberships against multiple taxonomies). Optional, but required whenever multiple hierarchies coexist in the same table.""", json_schema_extra = { "linkml_meta": {'alias': 'hierarchy_id',
-         'domain_of': ['Cluster', 'ClusterMembership', 'HierarchyCategory']} })
-    membership_score: Optional[float] = Field(default=None, description="""Algorithm-defined membership strength. (Optional, does not need to be normalized)""", json_schema_extra = { "linkml_meta": {'alias': 'membership_score', 'domain_of': ['ClusterMembership']} })
-    probability: Optional[float] = Field(default=None, description="""Normalized probability of membership (sums to 1 across clusters for a given item). Optional, assume 100% if misisng.""", ge=0.0, le=1.0, json_schema_extra = { "linkml_meta": {'alias': 'probability',
-         'domain_of': ['ClusterMembership',
-                       'CellToCellMapping',
-                       'CellToClusterMapping',
-                       'ClusterToClusterMapping']} })
-    distance: Optional[float] = Field(default=None, description="""Distance between the item and the cluster centroid. (Smaller is better).""", json_schema_extra = { "linkml_meta": {'alias': 'distance', 'domain_of': ['ClusterMembership']} })
-    project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
-         'aliases': ['project', 'program_id'],
-         'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
 class BrainRegionAssociation(ProjectScoped):
     """
     An association between a DataItem and a BrainRegion
@@ -883,6 +1092,7 @@ class BrainRegionAssociation(ProjectScoped):
     brainregion_id: Optional[str] = Field(default=None, description="""what brain region an item is associated with""", json_schema_extra = { "linkml_meta": {'alias': 'brainregion_id', 'domain_of': ['BrainRegionAssociation']} })
     dataitem_id: Optional[str] = Field(default=None, description="""The DataItem for which projection measurements are reported.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'SpatialLocation',
                        'BrainRegionAssociation',
                        'CellFeatureMeasurement',
                        'CellGeneData']} })
@@ -918,6 +1128,7 @@ class ZarrArray(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -979,6 +1190,7 @@ class ZarrDataset(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1035,6 +1247,7 @@ class ParquetDataset(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1127,6 +1340,7 @@ class ProjectionMeasurementMatrix(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1151,7 +1365,9 @@ class ProjectionMeasurementMatrix(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -1175,7 +1391,8 @@ class ProjectionMeasurementMatrix(ProjectScoped):
     values: Optional[str] = Field(default=None, description="""Zarr array containing matrix values with shape (data_item_index x region_index).""", json_schema_extra = { "linkml_meta": {'alias': 'values',
          'domain_of': ['ProjectionMeasurementMatrix', 'CellCellMeasurementMatrix']} })
     unit: Optional[Unit] = Field(default=None, description="""Unit of measure for values.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureDefinition',
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
@@ -1220,6 +1437,7 @@ class CellFeatureSet(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1244,7 +1462,9 @@ class CellFeatureSet(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Longer human description of what this feature set measures and where it came from.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -1296,6 +1516,7 @@ class CellFeatureDefinition(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1320,7 +1541,9 @@ class CellFeatureDefinition(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Detailed description of what this feature measures.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -1329,7 +1552,8 @@ class CellFeatureDefinition(ProjectScoped):
                        'CellCellMeasurementMatrix',
                        'SynapseFeatureMatrix']} })
     unit: Optional[str] = Field(default=None, description="""Unit of measurement (e.g., 'micrometers', 'degrees', 'count').""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureDefinition',
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
@@ -1390,6 +1614,7 @@ class CellFeatureMatrix(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1481,6 +1706,7 @@ class CellFeatureMeasurement(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1506,6 +1732,7 @@ class CellFeatureMeasurement(ConfiguredBaseModel):
                        'SynapseFeatureMatrix']} })
     dataitem_id: str = Field(default=..., description="""The DataItem for which projection measurements are reported.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'SpatialLocation',
                        'BrainRegionAssociation',
                        'CellFeatureMeasurement',
                        'CellGeneData']} })
@@ -1522,7 +1749,8 @@ class CellFeatureMeasurement(ConfiguredBaseModel):
     value_bytes: Optional[str] = Field(default=None, description="""Base64-encoded bytes when binary values are needed.""", json_schema_extra = { "linkml_meta": {'alias': 'value_bytes', 'domain_of': ['CellFeatureMeasurement']} })
     value_datetime: Optional[datetime ] = Field(default=None, description="""ISO 8601 timestamp when dtype corresponds to datetime.""", json_schema_extra = { "linkml_meta": {'alias': 'value_datetime', 'domain_of': ['CellFeatureMeasurement']} })
     unit: Optional[Unit] = Field(default=None, description="""Unit of measurement for the values in this matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureDefinition',
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
@@ -1553,7 +1781,11 @@ class CellGeneData(ConfiguredBaseModel):
                                              'name': 'cell_gene_matrix',
                                              'range': 'ZarrArray',
                                              'required': True},
-                        'cell_index': {'description': 'index of cells.',
+                        'cell_index': {'description': 'Ordered DataItem identifiers '
+                                                      'for the cells indexing the '
+                                                      'matrix. Register each cell as a '
+                                                      'DataItem before linking its '
+                                                      'SpatialLocation rows.',
                                        'multivalued': True,
                                        'name': 'cell_index',
                                        'range': 'DataItem'},
@@ -1577,6 +1809,7 @@ class CellGeneData(ConfiguredBaseModel):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1602,10 +1835,11 @@ class CellGeneData(ConfiguredBaseModel):
                        'SynapseFeatureMatrix']} })
     dataitem_id: str = Field(default=..., description="""Reference to the core DataItem this expression data belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'dataitem_id',
          'domain_of': ['DataItemDataSetAssociation',
+                       'SpatialLocation',
                        'BrainRegionAssociation',
                        'CellFeatureMeasurement',
                        'CellGeneData']} })
-    cell_index: Optional[list[str]] = Field(default=None, description="""index of cells.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index', 'domain_of': ['CellGeneData']} })
+    cell_index: Optional[list[str]] = Field(default=None, description="""Ordered DataItem identifiers for the cells indexing the matrix. Register each cell as a DataItem before linking its SpatialLocation rows.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index', 'domain_of': ['CellGeneData']} })
     cell_gene_matrix: str = Field(default=..., description="""Zarr array containing the cell x gene expression matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_gene_matrix', 'domain_of': ['CellGeneData']} })
     gene_metadata: Optional[str] = Field(default=None, description="""Zarr array containing gene-level metadata (gene symbols, types, etc.).""", json_schema_extra = { "linkml_meta": {'alias': 'gene_metadata', 'domain_of': ['CellGeneData']} })
     experiment_metadata: Optional[BarcodingExperimentMetadata] = Field(default=None, description="""Metadata about the barcoding experiment.""", json_schema_extra = { "linkml_meta": {'alias': 'experiment_metadata', 'domain_of': ['CellGeneData']} })
@@ -1674,17 +1908,12 @@ class CellMetadata(ConfiguredBaseModel):
                                                          'the cell.',
                                           'name': 'quality_score',
                                           'range': 'float'},
-                        'spatial_location': {'description': '3D spatial coordinates of '
-                                                            'the cell.',
-                                             'name': 'spatial_location',
-                                             'range': 'SpatialLocation'},
                         'total_counts': {'description': 'Total number of counts (UMIs) '
                                                         'for this cell.',
                                          'name': 'total_counts',
                                          'range': 'integer'}}})
 
     cell_id: str = Field(default=..., description="""Unique cell identifier.""", json_schema_extra = { "linkml_meta": {'alias': 'cell_id', 'domain_of': ['CellMetadata']} })
-    spatial_location: Optional[SpatialLocation] = Field(default=None, description="""3D spatial coordinates of the cell.""", json_schema_extra = { "linkml_meta": {'alias': 'spatial_location', 'domain_of': ['CellMetadata']} })
     quality_score: Optional[float] = Field(default=None, description="""Overall quality score for the cell.""", json_schema_extra = { "linkml_meta": {'alias': 'quality_score', 'domain_of': ['CellMetadata']} })
     total_counts: Optional[int] = Field(default=None, description="""Total number of counts (UMIs) for this cell.""", json_schema_extra = { "linkml_meta": {'alias': 'total_counts', 'domain_of': ['CellMetadata']} })
     n_genes_detected: Optional[int] = Field(default=None, description="""Number of genes detected in this cell.""", json_schema_extra = { "linkml_meta": {'alias': 'n_genes_detected', 'domain_of': ['CellMetadata']} })
@@ -1700,16 +1929,13 @@ class SingleCellReconstruction(ProjectScoped):
                                               'reconstruction belongs to.',
                                'name': 'id',
                                'range': 'DataItem',
-                               'required': True},
-                        'soma_location': {'description': '3D coordinates of the soma '
-                                                         'in CCF space.',
-                                          'name': 'soma_location',
-                                          'range': 'SpatialLocation'}}})
+                               'required': True}}})
 
     id: str = Field(default=..., description="""Reference to the core DataItem this reconstruction belongs to.""", json_schema_extra = { "linkml_meta": {'alias': 'id',
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1736,7 +1962,6 @@ class SingleCellReconstruction(ProjectScoped):
     ccf_registered_file: Optional[str] = Field(default=None, description="""protocol/path string containing the CCF-registered reconstruction data. 
 for example: swc://s3://my_bucket/53434.swc
 or: precomputed://gs://my_bucket/precomputed/skeletons/53434""", json_schema_extra = { "linkml_meta": {'alias': 'ccf_registered_file', 'domain_of': ['SingleCellReconstruction']} })
-    soma_location: Optional[SpatialLocation] = Field(default=None, description="""3D coordinates of the soma in CCF space.""", json_schema_extra = { "linkml_meta": {'alias': 'soma_location', 'domain_of': ['SingleCellReconstruction']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
@@ -1801,6 +2026,7 @@ class MappingSet(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1826,9 +2052,15 @@ class MappingSet(ProjectScoped):
                        'SynapseFeatureMatrix']} })
     name: str = Field(default=..., description="""A human-readable name or title.""", json_schema_extra = { "linkml_meta": {'alias': 'name',
          'aliases': ['structure_name', 'region_name'],
-         'domain_of': ['DataSet', 'DataItem', 'BrainRegion', 'MappingSet']} })
+         'domain_of': ['DataSet',
+                       'DataItem',
+                       'ReferenceSpace',
+                       'BrainRegion',
+                       'MappingSet']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -1891,6 +2123,7 @@ class CellToCellMapping(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -1965,6 +2198,7 @@ class CellToClusterMapping(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2039,6 +2273,7 @@ class ClusterToClusterMapping(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2125,6 +2360,7 @@ class CellCellConnectivityLong(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2149,7 +2385,9 @@ class CellCellConnectivityLong(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -2178,7 +2416,8 @@ class CellCellConnectivityLong(ProjectScoped):
                        'CellCellMeasurementMatrix']} })
     value: float = Field(default=..., description="""Numeric value quantifying connectivity between the presynaptic and postsynaptic cell.""", json_schema_extra = { "linkml_meta": {'alias': 'value', 'domain_of': ['CellCellConnectivityLong']} })
     unit: Unit = Field(default=..., description="""Unit of measure for values.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureDefinition',
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
@@ -2238,6 +2477,7 @@ class CellCellMeasurementMatrix(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2262,7 +2502,9 @@ class CellCellMeasurementMatrix(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text description of what this measurement matrix represents.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -2287,7 +2529,8 @@ class CellCellMeasurementMatrix(ProjectScoped):
 NaN values reflect 'unmeasured' connectivity.""", json_schema_extra = { "linkml_meta": {'alias': 'values',
          'domain_of': ['ProjectionMeasurementMatrix', 'CellCellMeasurementMatrix']} })
     unit: Unit = Field(default=..., description="""Unit of measure for values.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
-         'domain_of': ['ProjectionMeasurementMatrix',
+         'domain_of': ['ReferenceSpace',
+                       'ProjectionMeasurementMatrix',
                        'CellFeatureDefinition',
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
@@ -2337,6 +2580,7 @@ class SynapseConnectivityLong(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2411,6 +2655,7 @@ class SynapseFeatureMatrix(ProjectScoped):
          'aliases': ['identifier', 'structure_id', 'brain_region_id'],
          'domain_of': ['DataSet',
                        'DataItem',
+                       'ReferenceSpace',
                        'AlgorithmRun',
                        'ClusterHierarchy',
                        'Cluster',
@@ -2435,7 +2680,9 @@ class SynapseFeatureMatrix(ProjectScoped):
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
     description: Optional[str] = Field(default=None, description="""Free-text human-readable description.""", json_schema_extra = { "linkml_meta": {'alias': 'description',
-         'domain_of': ['HierarchyCategory',
+         'domain_of': ['ReferenceSpace',
+                       'SpatialLocation',
+                       'HierarchyCategory',
                        'ProjectionMeasurementMatrix',
                        'CellFeatureSet',
                        'CellFeatureDefinition',
@@ -2470,17 +2717,19 @@ class SynapseFeatureMatrix(ProjectScoped):
 
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
-SpatialLocation.model_rebuild()
-AlgorithmRun.model_rebuild()
-ClusterHierarchy.model_rebuild()
-Cluster.model_rebuild()
-HierarchyCategory.model_rebuild()
-BrainRegion.model_rebuild()
 ProjectScoped.model_rebuild()
 DataSet.model_rebuild()
 DataItem.model_rebuild()
 DataItemDataSetAssociation.model_rebuild()
+ReferenceSpace.model_rebuild()
+Default2DView.model_rebuild()
+SpatialLocation.model_rebuild()
+AlgorithmRun.model_rebuild()
+ClusterHierarchy.model_rebuild()
+Cluster.model_rebuild()
 ClusterMembership.model_rebuild()
+HierarchyCategory.model_rebuild()
+BrainRegion.model_rebuild()
 BrainRegionAssociation.model_rebuild()
 ZarrArray.model_rebuild()
 ZarrDataset.model_rebuild()

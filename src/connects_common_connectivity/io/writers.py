@@ -206,12 +206,19 @@ def _build_predicate(scope_columns: Sequence[str], row_values: Sequence[Any]) ->
     return " AND ".join(parts)
 
 
-def _build_merge_predicate(merge_on: Sequence[str]) -> str:
-    """Build a Delta merge equality predicate with quoted column names."""
+def _build_merge_predicate(
+    merge_on: Sequence[str], nullable_merge_on: Sequence[str] = ()
+) -> str:
+    """Build equality predicates, using null-safe equality for opted-in keys."""
     if not merge_on:
         raise ValueError("merge_on must be non-empty for merge_scoped writes")
     return " AND ".join(
-        f"target.{_quote_identifier(column)} = source.{_quote_identifier(column)}"
+        (
+            f"(target.{_quote_identifier(column)} IS NOT DISTINCT FROM "
+            f"source.{_quote_identifier(column)})"
+            if column in nullable_merge_on
+            else f"target.{_quote_identifier(column)} = source.{_quote_identifier(column)}"
+        )
         for column in merge_on
     )
 
@@ -285,7 +292,11 @@ def _build_merge_update_predicate(
     )
 
 
-def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
+def _deduplicate_on_keys(
+    table: pa.Table,
+    merge_on: Sequence[str],
+    nullable_merge_on: Sequence[str] = (),
+) -> pa.Table:
     """Keep the final input row for each merge key in stable survivor order.
 
     Parameters
@@ -294,6 +305,8 @@ def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
         Arrow table containing every merge key column.
     merge_on:
         Non-empty ordered column names whose combined values identify a row.
+    nullable_merge_on:
+        Merge keys where null is a valid identity value shared by repeated rows.
 
     Returns
     -------
@@ -305,8 +318,8 @@ def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
     Raises
     ------
     ValueError
-        If no merge keys are provided, a key column is absent, or any key
-        value is null.
+        If no merge keys are provided, a key column is absent, or a key value
+        is null without being opted in through ``nullable_merge_on``.
     """
     if not merge_on:
         raise ValueError("merge_on must be non-empty for merge_scoped writes")
@@ -318,9 +331,10 @@ def _deduplicate_on_keys(table: pa.Table, merge_on: Sequence[str]) -> pa.Table:
     if table.num_rows == 0:
         return table
 
-    if any(table.column(column).null_count for column in merge_on):
-        null_mask = pc.is_null(table.column(merge_on[0]))
-        for column in merge_on[1:]:
+    non_null_keys = [column for column in merge_on if column not in nullable_merge_on]
+    if any(table.column(column).null_count for column in non_null_keys):
+        null_mask = pc.is_null(table.column(non_null_keys[0]))
+        for column in non_null_keys[1:]:
             null_mask = pc.or_(null_mask, pc.is_null(table.column(column)))
         null_indices = pc.indices_nonzero(null_mask)
         row_index = null_indices[0].as_py()
@@ -477,7 +491,7 @@ def _dispatch_merge_scoped(
     ------
     ValueError
         If the spec has no merge keys, a merge key column is absent, or a
-        merge key value is null.
+        non-nullable merge key value is null.
 
     Notes
     -----
@@ -488,8 +502,8 @@ def _dispatch_merge_scoped(
     If another writer creates the table during initial creation, this writer
     reopens the table and merges its batch instead.
     """
-    source = _deduplicate_on_keys(table, spec.merge_on)
-    predicate = _build_merge_predicate(spec.merge_on)
+    source = _deduplicate_on_keys(table, spec.merge_on, spec.nullable_merge_on)
+    predicate = _build_merge_predicate(spec.merge_on, spec.nullable_merge_on)
     prune = _build_partition_prune_predicate(source, spec.partition_by, spec.merge_on)
     if prune is not None:
         predicate = f"{predicate} AND {prune}"

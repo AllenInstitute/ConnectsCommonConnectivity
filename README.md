@@ -53,6 +53,7 @@ from connects_common_connectivity import generate_pydantic_models
 models = generate_pydantic_models()
 BrainRegion = models["BrainRegion"]
 br = BrainRegion(id="BR1", name="Region 1", species="mouse")
+```
 
 ## Generic Parquet Loading
 
@@ -132,6 +133,7 @@ The schema has been split into logical modules for clarity:
 schemas/
 	base_schema.yaml            # prefixes, types, enums, global slots
 	core_schema.yaml            # DataSet, DataItem
+    spatial_schema.yaml         # ReferenceSpace, Default2DView, SpatialLocation
 	clustering_schema.yaml      # AlgorithmRun, ClusterHierarchy, Cluster, ClusterMembership
 	brain_region_schema.yaml    # BrainRegion hierarchy
 	projection_schema.yaml     # ProjectionMeasurement* + ProjectionMeasurementTypeMetadata
@@ -143,8 +145,8 @@ Consumers should continue to reference only the aggregator (`connectivity_schema
 
 After editing, re-run any code using `generate_pydantic_models()`. Because results are cached, restart your Python process (or call with a different filename) to see changes.
 
-For production / performance you may eventually wish to use LinkML's code generation to create static
-Pydantic models; this repository currently favors agility for early design.
+Regenerate the checked-in Pydantic models from the repository root with
+`bash scripts/generate_models.sh`. Never edit the generated model file manually.
 
 ## ETL Notebooks
 
@@ -300,10 +302,23 @@ SingleCellReconstruction {
     string id  
 }
 SpatialLocation {
+    string project_id
+    string dataitem_id
+    LocationType location_type
     float x  
     float y  
     float z  
     string reference_space  
+}
+ReferenceSpace {
+    string id
+    string project_id
+    string name
+    string description
+}
+Default2DView {
+    SignedAxis left_to_right
+    SignedAxis bottom_to_top
 }
 ZarrArray {
     string id  
@@ -333,7 +348,9 @@ CellGeneData ||--|o ZarrArray : "gene_metadata"
 CellGeneData ||--|| DataItem : "data_item"
 CellGeneData ||--|| ZarrArray : "cell_gene_matrix"
 CellGeneData ||--}o DataItem : "cell_index"
-CellMetadata ||--|o SpatialLocation : "spatial_location"
+SpatialLocation }o--|| DataItem : "dataitem_id"
+SpatialLocation }o--|| ReferenceSpace : "reference_space"
+ReferenceSpace ||--o| Default2DView : "default_2d_view"
 CellToCellMapping ||--|| DataItem : "source_cell"
 CellToCellMapping ||--|| DataItem : "target_cell"
 CellToCellMapping ||--|| MappingSet : "mapping_set"
@@ -356,7 +373,6 @@ MappingSet ||--|| DataSet : "target_dataset"
 ProjectionMeasurementMatrix ||--|o ZarrArray : "values"
 ProjectionMeasurementMatrix ||--}o BrainRegion : "region_index"
 ProjectionMeasurementMatrix ||--}o DataItem : "data_item_index"
-SingleCellReconstruction ||--|o SpatialLocation : "soma_location"
 SingleCellReconstruction ||--|o ZarrArray : "ccf_registered_file"
 SingleCellReconstruction ||--|| DataItem : "data_item"
 

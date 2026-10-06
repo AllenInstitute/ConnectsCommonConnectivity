@@ -1,0 +1,126 @@
+id: https://brain-connects.org/ic3-embedding-schema
+name: embedding_schema
+description: Computed embedding spaces and DataItem coordinates, distinct from anatomical locations.
+imports:
+  - linkml:types
+  - base_schema
+  - core_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+default_range: string
+
+enums:
+  EmbeddingMethod:
+    description: Method used to generate the embedding.
+    permissible_values:
+      UMAP:
+        description: Uniform Manifold Approximation and Projection.
+      TSNE:
+        description: t-Distributed Stochastic Neighbor Embedding.
+      PCA:
+        description: Principal Component Analysis.
+      MDS:
+        description: Multidimensional Scaling.
+      OTHER:
+        description: Another embedding method; specify the method in EmbeddingSpace.description.
+
+classes:
+  EmbeddingSpace:
+    description: >-
+      A computed 2D or 3D coordinate space identified by (project_id, id).
+      Represents one embedding run for a collection of DataItems, which need
+      not be cells. Different runs or versions within a project need distinct
+      ids, even when they use the same method and input features. Coordinates
+      are meaningful within this space and are not anatomical positions or
+      directly comparable across independently computed spaces.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - name
+      - description
+      - embedding_method
+      - parameters_json
+      - input_feature_set_id
+      - input_features_description
+      - creation_date
+    slot_usage:
+      id:
+        required: true
+      name:
+        required: false
+      embedding_method:
+        required: true
+      parameters_json:
+        description: >-
+          Optional JSON-encoded algorithm parameters, including preprocessing
+          settings and random seed when available.
+    unique_keys:
+      embedding_space_identity:
+        unique_key_slots:
+          - project_id
+          - id
+
+  EmbeddingLocation:
+    description: >-
+      Coordinates for a DataItem in a computed embedding space. Within a
+      project, each DataItem has at most one row per embedding space. The
+      DataItem and embedding space belong to the same project. Use x and y
+      for a 2D embedding and supply z for a 3D embedding; dimensionality must
+      be consistent throughout a space. Omitted z means a 2D embedding, not
+      a third coordinate of zero. Axis meanings belong in the space's
+      description; coordinates do not imply physical length units.
+    mixins:
+      - ProjectScoped
+    slots:
+      - dataitem_id
+      - embedding_space
+    slot_usage:
+      dataitem_id:
+        required: true
+      embedding_space:
+        required: true
+    attributes:
+      x:
+        range: float
+        required: true
+        description: First coordinate in the embedding space.
+      y:
+        range: float
+        required: true
+        description: Second coordinate in the embedding space.
+      z:
+        range: float
+        required: false
+        description: Third coordinate in a 3D embedding; omitted for a 2D embedding.
+    unique_keys:
+      embedding_location_identity:
+        unique_key_slots:
+          - project_id
+          - dataitem_id
+          - embedding_space
+
+slots:
+  embedding_method:
+    range: EmbeddingMethod
+    description: Method used to compute coordinates in this embedding space.
+  embedding_space:
+    range: EmbeddingSpace
+    description: Identifier of the embedding space within the row's project.
+  input_feature_set_id:
+    range: string
+    description: >-
+      Optional identifier of the input feature set. May identify a
+      CellFeatureSet in the same project or an externally defined feature set;
+      it is not restricted to cell features. Describe the source and any
+      feature selection or preprocessing in input_features_description.
+  input_features_description:
+    range: string
+    description: >-
+      Optional description of the input features, their source, and any
+      selection or preprocessing. May be supplied without a feature-set id.
+  creation_date:
+    range: date
+    description: Optional date the embedding was computed, in ISO 8601 YYYY-MM-DD format.

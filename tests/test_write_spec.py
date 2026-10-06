@@ -14,12 +14,14 @@ from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.path_spec import MODEL_TABLE_PATHS
 from connects_common_connectivity.io.write_spec import (
     REGISTRY,
+    WriteSpec,
+    get_spec,
+)
+from connects_common_connectivity.io.write_validation import (
     ClusterMembershipWrite,
     ClusterWrite,
     HierarchyCategoryWrite,
     ReferenceSpaceWrite,
-    WriteSpec,
-    get_spec,
 )
 
 

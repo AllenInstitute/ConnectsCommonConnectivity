@@ -521,10 +521,10 @@ class ReferenceSpace(ProjectScoped):
                        'CellFeatureMeasurement',
                        'CellCellConnectivityLong',
                        'CellCellMeasurementMatrix']} })
-    voxel_size: Optional[list[float]] = Field(default=None, description="""Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit. Only applicable when the reference space unit is VOXELS. Each dimension must be positive; unequal dimensions describe anisotropic voxels.""", min_length=3, max_length=3, json_schema_extra = { "linkml_meta": {'alias': 'voxel_size',
+    voxel_size: Optional[list[float]] = Field(default=None, description="""Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit. Omit when physical scale is unspecified. At write time, a supplied value requires reference space unit VOXELS and a voxel_size_unit; each dimension must be finite and strictly positive. Unequal dimensions describe anisotropic voxels.""", min_length=3, max_length=3, json_schema_extra = { "linkml_meta": {'alias': 'voxel_size',
          'domain_of': ['ReferenceSpace'],
          'list_elements_ordered': True} })
-    voxel_size_unit: Optional[Unit] = Field(default=None, description="""Physical length unit shared by all three voxel_size dimensions. Supply alongside voxel_size; use NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.""", json_schema_extra = { "linkml_meta": {'alias': 'voxel_size_unit', 'domain_of': ['ReferenceSpace']} })
+    voxel_size_unit: Optional[Unit] = Field(default=None, description="""Physical length unit shared by all three voxel_size dimensions. At write time, voxel_size and voxel_size_unit must either both be omitted or both be supplied. A supplied unit must be NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.""", json_schema_extra = { "linkml_meta": {'alias': 'voxel_size_unit', 'domain_of': ['ReferenceSpace']} })
     default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace']} })
     project_id: Optional[str] = Field(default=None, description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],

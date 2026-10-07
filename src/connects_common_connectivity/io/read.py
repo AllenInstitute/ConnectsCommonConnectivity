@@ -26,6 +26,8 @@ from connects_common_connectivity.models import LocationType
 __all__ = [
     "DatasetReader",
     "read_cell_cell_connectivity",
+    "read_embedding_locations",
+    "read_embedding_spaces",
     "read_reference_spaces",
     "read_spatial_locations",
     "read_synapse_table",
@@ -775,6 +777,96 @@ def _filter_explicit_values(
                 pl.col(column).is_in(pl.Series(values, dtype=pl.String).implode())
             )
     return frame
+
+
+def read_embedding_locations(
+    project_id: str,
+    *,
+    embedding_space_ids: str | Iterable[str] | None = None,
+    dataitem_ids: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read 2D embedding coordinates for DataItems within one project.
+
+    Parameters
+    ----------
+    project_id:
+        Required project scope for DataItem and embedding-space identifiers.
+    embedding_space_ids, dataitem_ids:
+        Optional identifiers or iterables of identifiers to retain. Filters
+        compose; None imposes no restriction, and an empty iterable selects
+        no rows. Unknown identifiers are ignored, not rejected.
+    output_root, settings:
+        Mutually exclusive root overrides, matching write_models. With
+        neither supplied, use the discovered application settings.
+
+    Returns
+    -------
+    polars.DataFrame
+        Stored identity columns and numeric x/y, without joins or coordinate
+        transformations. Empty matches retain the stored table schema.
+        Referenced DataItems and embedding spaces are not checked for existence.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical embeddinglocation table is absent.
+    TypeError
+        If both output_root and settings are supplied.
+    """
+    root = _resolve_output_root(settings, output_root)
+    path = root / MODEL_TABLE_PATHS["EmbeddingLocation"]
+    if not path.exists():
+        raise FileNotFoundError(f"No embedding location table at {path}.")
+    locations = pl.read_delta(str(path)).filter(pl.col("project_id") == project_id)
+    return _filter_explicit_values(
+        locations,
+        (("embedding_space", embedding_space_ids), ("dataitem_id", dataitem_ids)),
+    )
+
+
+def read_embedding_spaces(
+    project_id: str,
+    *,
+    embedding_space_ids: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read embedding-space metadata within one project.
+
+    Parameters
+    ----------
+    project_id:
+        Required project scope; identically named spaces in other projects
+        are excluded.
+    embedding_space_ids:
+        Optional space identifier or iterable of identifiers to retain.
+        None imposes no restriction, and an empty iterable selects no rows.
+        Unknown identifiers are ignored, not rejected.
+    output_root, settings:
+        Mutually exclusive root overrides, matching write_models. With
+        neither supplied, use the discovered application settings.
+
+    Returns
+    -------
+    polars.DataFrame
+        Stored metadata, preserving dates, nulls, and feature-set IDs without
+        joining or validating references. Empty matches retain the table schema.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical embeddingspace table is absent.
+    TypeError
+        If both output_root and settings are supplied.
+    """
+    root = _resolve_output_root(settings, output_root)
+    path = root / MODEL_TABLE_PATHS["EmbeddingSpace"]
+    if not path.exists():
+        raise FileNotFoundError(f"No embedding space table at {path}.")
+    spaces = pl.read_delta(str(path)).filter(pl.col("project_id") == project_id)
+    return _filter_explicit_values(spaces, (("id", embedding_space_ids),))
 
 
 def read_spatial_locations(

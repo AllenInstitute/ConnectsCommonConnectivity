@@ -54,6 +54,32 @@ def test_spatial_registry_identity():
     assert "Default2DView" not in REGISTRY
 
 
+@pytest.mark.parametrize(
+    "model_name, subdir, scope_columns, merge_on",
+    [
+        (
+            "EmbeddingSpace", "embeddingspace",
+            ["project_id", "id"], ["project_id", "id"],
+        ),
+        (
+            "EmbeddingLocation", "embeddinglocation",
+            ["project_id", "embedding_space"],
+            ["project_id", "dataitem_id", "embedding_space"],
+        ),
+    ],
+)
+def test_embedding_registry_identity(model_name, subdir, scope_columns, merge_on):
+    """Embedding specs use canonical paths, project partitions, and complete non-null merge keys."""
+    spec = REGISTRY[model_name]
+    assert spec.subdir == subdir == MODEL_TABLE_PATHS[model_name]
+    assert spec.partition_by == ["project_id"]
+    assert spec.scope_columns == scope_columns
+    assert spec.merge_on == merge_on
+    assert spec.write_mode == "merge_scoped"
+    assert spec.nullable_merge_on == []
+    assert spec.validation_cls is getattr(models_module, model_name)
+
+
 def test_registry_uses_canonical_model_table_paths():
     """Every writer must use the neutral IO path specification."""
     for model_name, spec in REGISTRY.items():

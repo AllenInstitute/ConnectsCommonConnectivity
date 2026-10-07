@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+from datetime import date
+
 import numpy as np
 import polars as pl
 import pyarrow as pa
@@ -50,6 +52,8 @@ from connects_common_connectivity.models import (
     DataItemDataSetAssociation,
     DataSet,
     Default2DView,
+    EmbeddingLocation,
+    EmbeddingSpace,
     HierarchyCategory,
     Laterality,
     LocationType,
@@ -775,6 +779,12 @@ def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
 
 
 INSTANCE_FACTORIES = {
+    EmbeddingSpace: lambda: EmbeddingSpace(
+        project_id="p1", id="umap", embedding_method="UMAP",
+    ),
+    EmbeddingLocation: lambda: EmbeddingLocation(
+        project_id="p1", dataitem_id="di1", embedding_space="umap", x=1, y=2,
+    ),
     ReferenceSpace: lambda: ReferenceSpace(id="CCF_v3"),
     SpatialLocation: lambda: SpatialLocation(
         project_id="p1", dataitem_id="di1", reference_space="CCF_v3",
@@ -908,6 +918,76 @@ def test_spatial_location_merge_uses_complete_identity(settings, read_delta):
     assert result.filter(pl.col("x") == 9).select(
         "project_id", "dataitem_id", "reference_space", "location_type"
     ).rows() == [("first", "cell", "original", "SOMA")]
+
+
+def test_embedding_space_metadata_merge_round_trip(settings, read_delta):
+    """Metadata and date/null updates round-trip idempotently without altering other spaces."""
+    spaces = [
+        EmbeddingSpace(project_id=project, id=space_id, embedding_method="UMAP")
+        for project in ("first", "second")
+        for space_id in ("original", "other")
+    ]
+    for space in spaces:
+        assert write_models(space, settings=settings).rows_written == 1
+        assert write_models(space, settings=settings).rows_written == 0
+
+    path = settings.output_root / "embeddingspace"
+    before = {
+        (row["project_id"], row["id"]): row for row in read_delta(path).to_dicts()
+    }
+    populated = spaces[0].model_copy(update={
+        "name": "Projection embedding",
+        "description": "Embedding of injection experiments.",
+        "embedding_method": "PCA",
+        "parameters_json": '{"random_state": 42}',
+        "input_feature_set_id": "projection_features",
+        "input_features_description": "Normalized projection measurements.",
+        "creation_date": date(2026, 10, 7),
+    })
+    for updated in (populated, spaces[0]):
+        assert write_models(updated, settings=settings).rows_written == 1
+        assert write_models(updated, settings=settings).rows_written == 0
+        result = read_delta(path)
+        assert result.schema["creation_date"] == pl.Date
+        after = {
+            (row["project_id"], row["id"]): row for row in result.to_dicts()
+        }
+        assert after.keys() == before.keys()
+        assert EmbeddingSpace.model_validate(after[("first", "original")]) == updated
+        for identity in before.keys() - {("first", "original")}:
+            assert after[identity] == before[identity]
+
+
+def test_embedding_location_merge_uses_complete_identity(settings, read_delta):
+    """Upserts keep the final duplicate and preserve other projects, items, and embedding spaces."""
+    locations = [
+        EmbeddingLocation(
+            project_id=project, dataitem_id=item, embedding_space=space, x=-1.5, y=2.5,
+        )
+        for project in ("first", "second")
+        for space in ("original", "other")
+        for item in ("injection_a", "injection_b")
+    ]
+    for location in locations:
+        assert write_models(location, settings=settings).rows_written == 1
+    assert write_models(locations, settings=settings).rows_written == 0
+    changed = locations[0].model_copy(update={"x": 9.0, "y": -4.0})
+    assert write_models([locations[0], changed], settings=settings).rows_written == 1
+    assert write_models(changed, settings=settings).rows_written == 0
+    result = read_delta(settings.output_root / "embeddinglocation")
+    assert set(result.columns) == {
+        "project_id", "dataitem_id", "embedding_space", "x", "y",
+    }
+    restored = {
+        (row["project_id"], row["dataitem_id"], row["embedding_space"]):
+        EmbeddingLocation.model_validate(row)
+        for row in result.to_dicts()
+    }
+    expected = {
+        (location.project_id, location.dataitem_id, location.embedding_space): location
+        for location in [changed, *locations[1:]]
+    }
+    assert restored == expected
 
 
 def _make_instance(cls):

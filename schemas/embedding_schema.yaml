@@ -1,6 +1,6 @@
 id: https://brain-connects.org/ic3-embedding-schema
 name: embedding_schema
-description: Computed embedding spaces and DataItem coordinates, distinct from anatomical locations.
+description: Computed 2D embedding spaces and DataItem coordinates, distinct from anatomical locations.
 imports:
   - linkml:types
   - base_schema
@@ -30,7 +30,7 @@ enums:
 classes:
   EmbeddingSpace:
     description: >-
-      A computed 2D or 3D coordinate space identified by (project_id, id).
+      A computed 2D coordinate space identified by (project_id, id).
       Represents one embedding run for a collection of DataItems, which need
       not be cells. Different runs or versions within a project need distinct
       ids, even when they use the same method and input features. Coordinates
@@ -66,12 +66,10 @@ classes:
 
   EmbeddingLocation:
     description: >-
-      Coordinates for a DataItem in a computed embedding space. Within a
+      2D coordinates for a DataItem in a computed embedding space. Within a
       project, each DataItem has at most one row per embedding space. The
-      DataItem and embedding space belong to the same project. Use x and y
-      for a 2D embedding and supply z for a 3D embedding; dimensionality must
-      be consistent throughout a space. Omitted z means a 2D embedding, not
-      a third coordinate of zero. Axis meanings belong in the embedding space's
+      DataItem and embedding space belong to the same project. Coordinates
+      are stored as x and y. Axis meanings belong in the embedding space's
       description; coordinates do not imply physical length units.
     mixins:
       - ProjectScoped
@@ -92,10 +90,6 @@ classes:
         range: float
         required: true
         description: Second coordinate in the embedding space.
-      z:
-        range: float
-        required: false
-        description: Third coordinate in a 3D embedding; omitted for a 2D embedding.
     unique_keys:
       embedding_location_identity:
         unique_key_slots:

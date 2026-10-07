@@ -12,6 +12,7 @@ imports:
   - linkml:types
   - core_schema
   - spatial_schema
+  - embedding_schema
   - clustering_schema
   - brain_region_schema
   - projection_schema

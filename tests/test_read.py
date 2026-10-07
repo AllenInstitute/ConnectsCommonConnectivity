@@ -52,7 +52,7 @@ def embedding_root(tmp_path):
 def test_embedding_readers_filter_within_project(embedding_root):
     """Reader filters compose without mixing project-local IDs or changing coordinates."""
     locations = read_embedding_locations(
-        "first", embedding_spaces="original", dataitem_ids=["injection_a"],
+        "first", embedding_space_ids="original", dataitem_ids=["injection_a"],
         output_root=embedding_root,
     )
     assert locations.select(
@@ -73,8 +73,8 @@ def test_embedding_readers_filter_within_project(embedding_root):
 
 
 @pytest.mark.parametrize("reader, filters", [
-    (read_embedding_locations, {"embedding_spaces": []}),
-    (read_embedding_locations, {"embedding_spaces": "missing"}),
+    (read_embedding_locations, {"embedding_space_ids": []}),
+    (read_embedding_locations, {"embedding_space_ids": "missing"}),
     (read_embedding_locations, {"dataitem_ids": []}),
     (read_embedding_locations, {"dataitem_ids": "missing"}),
     (read_embedding_spaces, {"embedding_space_ids": []}),
@@ -89,7 +89,7 @@ def test_embedding_readers_empty_matches_keep_schema(embedding_root, reader, fil
 
 
 @pytest.mark.parametrize("reader, filter_name, known", [
-    (read_embedding_locations, "embedding_spaces", "original"),
+    (read_embedding_locations, "embedding_space_ids", "original"),
     (read_embedding_locations, "dataitem_ids", "injection_a"),
     (read_embedding_spaces, "embedding_space_ids", "original"),
 ])

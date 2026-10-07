@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added project-scoped `EmbeddingSpace`, `EmbeddingLocation`, and
+  `EmbeddingMethod` models for 2D DataItem embeddings, separate from anatomical
+  coordinates. `write_models` now persists embedding metadata and x/y coordinates
+  with identity-based upserts that preserve other projects, spaces, and items.
 - Added writable `ReferenceSpace` and `SpatialLocation` tables, explicit `LocationType` values, and optional `SignedAxis` enum `Default2DView` metadata for spatial coordinates.
 - Added optional `SpatialLocation.description` details for anatomical points,
   particularly those with location type `OTHER`, preserved through writes and reads.

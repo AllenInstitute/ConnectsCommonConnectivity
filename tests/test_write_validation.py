@@ -18,10 +18,35 @@ from connects_common_connectivity.models import (
     ClusterMembership,
     DataSet,
     Default2DView,
+    EmbeddingLocation,
+    EmbeddingSpace,
     ReferenceSpace,
     SignedAxis,
     Unit,
 )
+
+
+@pytest.mark.parametrize("model, values, invalid", [
+    (
+        EmbeddingSpace,
+        dict(project_id="p", id="embedding", embedding_method="UMAP"),
+        {"project_id": None, "id": None, "embedding_method": "UNKNOWN"},
+    ),
+    (
+        EmbeddingLocation,
+        dict(project_id="p", dataitem_id="injection", embedding_space="embedding", x=1, y=2),
+        {"project_id": None, "dataitem_id": None, "embedding_space": None,
+         "x": "not-a-number", "y": None},
+    ),
+])
+def test_embedding_constructed_rows_rejected_before_io(model, values, invalid, tmp_path):
+    """Malformed constructed embedding rows are rejected before the output directory is created."""
+    root = tmp_path / "must-not-exist"
+    for field, value in invalid.items():
+        row = model.model_construct(**{**values, field: value})
+        with pytest.raises(ValueError, match=field):
+            write_models(row, output_root=root)
+        assert not root.exists()
 
 
 @pytest.mark.parametrize("construct", [False, True])

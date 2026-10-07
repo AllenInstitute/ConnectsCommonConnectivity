@@ -51,6 +51,12 @@ anatomical positions. Change 1 gives them their own coordinate space and
 provenance, without restricting DataItems to cells. Change 2 makes repeated
 ETL contributions update only matching identities.
 
+**Class-local coordinates.** In change 1,
+`embedding_schema.yaml::EmbeddingLocation` defines x/y as `attributes` because
+embedding positions and anatomical positions have different meanings despite
+sharing field names. This keeps embedding descriptions and constraints local
+to the class instead of reusing the spatial schema's shared x/y slots.
+
 **Scope limit.** This implements schema, writes, and reads, not embedding
 computation. Feature-set references are ID strings with a
 same-project contract; existence and project consistency are not checked against

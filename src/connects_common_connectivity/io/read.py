@@ -782,7 +782,7 @@ def _filter_explicit_values(
 def read_embedding_locations(
     project_id: str,
     *,
-    embedding_spaces: str | Iterable[str] | None = None,
+    embedding_space_ids: str | Iterable[str] | None = None,
     dataitem_ids: str | Iterable[str] | None = None,
     output_root: str | Path | None = None,
     settings: Settings | None = None,
@@ -793,7 +793,7 @@ def read_embedding_locations(
     ----------
     project_id:
         Required project scope for DataItem and embedding-space identifiers.
-    embedding_spaces, dataitem_ids:
+    embedding_space_ids, dataitem_ids:
         Optional identifiers or iterables of identifiers to retain. Filters
         compose; None imposes no restriction, and an empty iterable selects
         no rows. Unknown identifiers are ignored, not rejected.
@@ -822,7 +822,7 @@ def read_embedding_locations(
     locations = pl.read_delta(str(path)).filter(pl.col("project_id") == project_id)
     return _filter_explicit_values(
         locations,
-        (("embedding_space", embedding_spaces), ("dataitem_id", dataitem_ids)),
+        (("embedding_space", embedding_space_ids), ("dataitem_id", dataitem_ids)),
     )
 
 

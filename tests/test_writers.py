@@ -41,6 +41,7 @@ from connects_common_connectivity.io.writers import (
 )
 from connects_common_connectivity.models import (
     AlgorithmRun,
+    AnatomicalOrientation,
     CellFeatureDefinition,
     CellFeatureMatrix,
     CellFeatureSet,
@@ -869,6 +870,28 @@ def test_reference_space_struct_merge_round_trip(settings, read_delta):
         )
         assert restored == space
         assert rows.filter(pl.col("id") == "other")["project_id"].to_list() == ["other-project"]
+
+
+def test_anatomical_orientation_struct_round_trip(settings, read_delta):
+    """Unset directions persist as nulls inside the struct rather than collapsing the column."""
+    space = ReferenceSpace(id="column", anatomical_orientation=AnatomicalOrientation(
+        pia_to_white_matter=SignedAxis.PLUS_Z,
+    ))
+    assert write_models(space, settings=settings).rows_written == 1
+    rows = read_delta(settings.output_root / "referencespace")
+    assert isinstance(rows.schema["anatomical_orientation"], pl.Struct)
+    stored = rows.to_dicts()[0]["anatomical_orientation"]
+    assert stored["pia_to_white_matter"] == "PLUS_Z"
+    assert stored["rostral_to_caudal"] is None
+    assert ReferenceSpace.model_validate(rows.to_dicts()[0]) == space
+
+    space = ReferenceSpace(id="column", anatomical_orientation=AnatomicalOrientation(
+        pia_to_white_matter=SignedAxis.PLUS_Z, dorsal_to_ventral=SignedAxis.PLUS_Z,
+    ))
+    assert write_models(space, settings=settings).rows_written == 1
+    rows = read_delta(settings.output_root / "referencespace")
+    assert rows.height == 1
+    assert ReferenceSpace.model_validate(rows.to_dicts()[0]) == space
 
 
 def test_reference_space_merge_preserves_global_and_project_scopes(settings, read_delta):

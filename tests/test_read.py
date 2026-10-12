@@ -20,6 +20,7 @@ from connects_common_connectivity.io import (
     write_models,
 )
 from connects_common_connectivity.models import (
+    AnatomicalOrientation,
     Default2DView,
     EmbeddingLocation,
     EmbeddingSpace,
@@ -159,7 +160,11 @@ def spatial_root(tmp_path):
     """Provide global and project-owned spaces with coordinates across cells and location types."""
     write_models([
         ReferenceSpace(id="CCF_v3", default_2d_view=Default2DView(
-            left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y)),
+            left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y),
+            anatomical_orientation=AnatomicalOrientation(
+                anterior_to_posterior=SignedAxis.PLUS_X,
+                superior_to_inferior=SignedAxis.PLUS_Y,
+                subject_left_to_right=SignedAxis.PLUS_Z)),
         ReferenceSpace(id="CCF_v3", project_id="first"),
         ReferenceSpace(id="CCF_v3", project_id="second"),
         ReferenceSpace(id="first_original", project_id="first"),
@@ -236,20 +241,28 @@ def test_spatial_reader_mixed_values_keep_matches(spatial_root, filters, expecte
 
 
 def test_reference_space_reader_selects_exact_scope(spatial_root):
-    """Exact scope reads preserve view structs, nulls, and empty schemas."""
+    """Exact scope reads preserve view and orientation structs, nulls, and empty schemas."""
     assert read_reference_spaces(output_root=spatial_root).height == 5
     visible = read_reference_spaces(project_id="first", output_root=spatial_root)
     assert set(visible["id"]) == {"CCF_v3", "first_original"}
     assert visible["project_id"].to_list() == ["first", "first"]
     assert isinstance(visible.schema["default_2d_view"], pl.Struct)
+    assert isinstance(visible.schema["anatomical_orientation"], pl.Struct)
     global_spaces = read_reference_spaces(project_id=None, output_root=spatial_root)
     assert global_spaces["id"].to_list() == ["CCF_v3"]
     assert global_spaces["project_id"].to_list() == [None]
     assert global_spaces["default_2d_view"].to_list() == [
         {"left_to_right": "PLUS_Z", "bottom_to_top": "MINUS_Y"}
     ]
+    assert global_spaces["anatomical_orientation"].to_list() == [{
+        "anterior_to_posterior": "PLUS_X", "rostral_to_caudal": None,
+        "superior_to_inferior": "PLUS_Y", "dorsal_to_ventral": None,
+        "subject_left_to_right": "PLUS_Z", "medial_to_lateral": None,
+        "pia_to_white_matter": None,
+    }]
     original = read_reference_spaces(reference_space_ids="first_original", output_root=spatial_root)
     assert original["default_2d_view"].to_list() == [None]
+    assert original["anatomical_orientation"].to_list() == [None]
     assert read_reference_spaces(
         project_id="missing", settings=Settings(output_root=spatial_root)
     ).is_empty()

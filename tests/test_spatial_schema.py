@@ -5,6 +5,7 @@ import yaml
 from pydantic import ValidationError
 
 from connects_common_connectivity.models import (
+    AnatomicalOrientation,
     CellGeneData,
     CellMetadata,
     DataItem,
@@ -101,6 +102,20 @@ def test_view_requires_two_valid_signed_axes():
     assert {value.value for value in LocationType} == {
         "SOMA", "CENTROID", "INJECTION_SITE", "OTHER"
     }
+
+
+def test_anatomical_orientation_directions_are_optional_and_may_share_an_axis():
+    """Synonymous and cortical directions may name one data axis, and no direction is required."""
+    assert ReferenceSpace(id="frame").anatomical_orientation is None
+    orientation = AnatomicalOrientation(
+        dorsal_to_ventral=SignedAxis.PLUS_Z,
+        superior_to_inferior=SignedAxis.PLUS_Z,
+        pia_to_white_matter=SignedAxis.PLUS_Z,
+    )
+    assert orientation.pia_to_white_matter == SignedAxis.PLUS_Z
+    assert AnatomicalOrientation().model_dump(exclude_none=True) == {}
+    with pytest.raises(ValidationError):
+        AnatomicalOrientation(medial_to_lateral="outwards")
 
 
 def test_spatial_schema_identity_and_removed_slots():

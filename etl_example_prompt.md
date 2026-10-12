@@ -255,7 +255,8 @@ Before writing coordinates:
     ID for different units, transforms, or frame versions. Record known coordinate
     units in `unit`. For voxel coordinates, use `unit=Unit.VOXELS` and specify
     physical scale with `voxel_size` (ordered x, y, z) and `voxel_size_unit`.
-    Record provenance and axis meanings in `description`.
+    Record provenance in `description` and axis meanings in
+    `anatomical_orientation`.
 3. Give each space a single owning ETL. Global spaces use `project_id=None`;
      dataset-local spaces use that dataset's project. Consumers read existing
      space definitions rather than repeatedly overwriting shared metadata.
@@ -263,6 +264,12 @@ Before writing coordinates:
      means no recommendation, not an implicit x/y or y-up fallback. Both axes are
      required when a view is supplied, and they must refer to different underlying
      axes: `PLUS_X` / `MINUS_X` is invalid.
+5. Set `anatomical_orientation` only for directions the frame actually defines.
+     Each slot takes the signed axis *pointing toward* the second-named pole, so
+     CCF PIR is `anterior_to_posterior=PLUS_X`, `superior_to_inferior=PLUS_Y`,
+     `subject_left_to_right=PLUS_Z`. Directions may share an axis when terms
+     coincide, but an orientation naming no direction at all is rejected; omit it
+     instead.
 
 Write `ReferenceSpace` and `SpatialLocation` through `write_models`, never a
 hand-built Delta predicate. Storage is `referencespace/` (unpartitioned) and
@@ -277,7 +284,8 @@ from connects_common_connectivity.io import (
         read_reference_spaces, read_spatial_locations, write_models,
 )
 from connects_common_connectivity.models import (
-    Default2DView, LocationType, ReferenceSpace, SignedAxis, SpatialLocation, Unit,
+    AnatomicalOrientation, Default2DView, LocationType, ReferenceSpace, SignedAxis,
+    SpatialLocation, Unit,
 )
 
 SPACE_ID = "v1dd_streamline"
@@ -289,6 +297,9 @@ space = ReferenceSpace(
         default_2d_view=Default2DView(
                 left_to_right=SignedAxis.PLUS_X.value,
                 bottom_to_top=SignedAxis.MINUS_Y.value,
+        ),
+        anatomical_orientation=AnatomicalOrientation(
+                pia_to_white_matter=SignedAxis.PLUS_Y.value,
         ),
 )
 write_models(space, output_root=OUTPUT_ROOT)

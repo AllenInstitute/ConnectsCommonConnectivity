@@ -938,7 +938,7 @@ def read_reference_spaces(
     output_root: str | Path | None = None,
     settings: Settings | None = None,
 ) -> pl.DataFrame:
-    """Read coordinate-frame metadata, retaining optional default-view structs.
+    """Read coordinate-frame metadata, retaining optional embedded structs.
 
     Parameters
     ----------
@@ -957,8 +957,9 @@ def read_reference_spaces(
     Returns
     -------
     polars.DataFrame
-        ReferenceSpace rows, with default_2d_view as a struct or null. A null
-        view has no implicit fallback. Empty matches retain the table schema.
+        ReferenceSpace rows, with default_2d_view and anatomical_orientation as
+        structs or null. A null view or orientation has no implicit fallback.
+        Empty matches retain the table schema.
 
     Raises
     ------

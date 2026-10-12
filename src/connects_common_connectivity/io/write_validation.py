@@ -194,6 +194,36 @@ class ReferenceSpaceWrite(ReferenceSpace):
             )
         return self
 
+    @model_validator(mode="after")
+    def validate_anatomical_orientation(self) -> ReferenceSpaceWrite:
+        """Reject an orientation that names no anatomical direction at all.
+
+        Several directions may share a data axis, so no distinctness rule
+        applies; a present but empty orientation is the only incoherent state.
+
+        Returns
+        -------
+        ReferenceSpaceWrite
+            The validated instance, unchanged.
+
+        Raises
+        ------
+        ValueError
+            If anatomical_orientation is supplied with every direction null.
+        """
+        orientation = self.anatomical_orientation
+        if orientation is None:
+            return self
+        if all(
+            getattr(orientation, name) is None
+            for name in type(orientation).model_fields
+        ):
+            raise ValueError(
+                "anatomical_orientation must name at least one direction; "
+                "omit it entirely when the frame states none"
+            )
+        return self
+
 
 
 def validate_for_write(

@@ -1,0 +1,178 @@
+id: https://brain-connects.org/ic3-spatial-schema
+name: spatial_schema
+description: Spatial reference spaces, default views, and DataItem coordinates.
+imports:
+  - base_schema
+  - core_schema
+prefixes:
+  linkml: https://w3id.org/linkml/
+  cc: https://brain-connects.org/cc/
+default_prefix: cc
+
+enums:
+  SignedAxis:
+    description: A data axis and its increasing or decreasing screen direction.
+    permissible_values:
+      PLUS_X:
+        description: Increasing X coordinates along the selected screen direction.
+      MINUS_X:
+        description: Decreasing X coordinates along the selected screen direction.
+      PLUS_Y:
+        description: Increasing Y coordinates along the selected screen direction.
+      MINUS_Y:
+        description: Decreasing Y coordinates along the selected screen direction.
+      PLUS_Z:
+        description: Increasing Z coordinates along the selected screen direction.
+      MINUS_Z:
+        description: Decreasing Z coordinates along the selected screen direction.
+  LocationType:
+    description: The anatomical point represented by a coordinate row.
+    permissible_values:
+      SOMA:
+        description: Location of the cell soma.
+      CENTROID:
+        description: Geometric centroid of the represented structure.
+      INJECTION_SITE:
+        description: Location of the injection site.
+      OTHER:
+        description: Another anatomical point; specify its type in SpatialLocation.description.
+
+classes:
+  ReferenceSpace:
+    description: >-
+      A coordinate frame and version identified by (project_id, id). A null project_id
+      denotes the global scope; otherwise the space belongs to that project. The same
+      id may occur independently in different scopes. Unit applies
+      to all coordinate axes; record axis meanings in description. For voxel
+      coordinates, specify voxel_size and voxel_size_unit to describe physical
+      scale. Omitted unit or voxel size means unspecified, not an implicit default.
+      Different frames or versions within a scope need distinct ids.
+      A missing view implies no display default.
+    mixins:
+      - ProjectScoped
+    slots:
+      - id
+      - name
+      - description
+      - unit
+      - voxel_size
+      - voxel_size_unit
+      - default_2d_view
+    slot_usage:
+      id:
+        required: true
+      name:
+        required: false
+      project_id:
+        required: false
+      unit:
+        required: false
+        description: >-
+          Unit shared by x, y, and z coordinates in this reference space. Use
+          VOXELS for voxel indices, or NANOMETERS_LENGTH, MICRONS_LENGTH,
+          MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH for physical coordinates.
+    unique_keys:
+      reference_space_identity:
+        unique_key_slots:
+          - project_id
+          - id
+
+  Default2DView:
+    description: >-
+      Embedded default screen layout. The two signed axes must use different
+      underlying data axes; the unused axis is depth. Negate MINUS axes to display.
+    slots:
+      - left_to_right
+      - bottom_to_top
+    slot_usage:
+      left_to_right:
+        required: true
+      bottom_to_top:
+        required: true
+
+  SpatialLocation:
+    description: >-
+      One anatomical point for a DataItem in a reference space. Within a project,
+      each DataItem has at most one row per reference space and location type.
+      Coordinates use the reference space's unit and are stored without implicit
+      unit conversion or transformation.
+    mixins:
+      - ProjectScoped
+    slots:
+      - dataitem_id
+      - reference_space
+      - location_type
+      - description
+      - x
+      - y
+      - z
+    slot_usage:
+      dataitem_id:
+        required: true
+      reference_space:
+        required: true
+      location_type:
+        required: true
+      description:
+        description: Details of the anatomical point, particularly when location_type is OTHER.
+      x:
+        required: true
+      y:
+        required: true
+      z:
+        required: true
+    unique_keys:
+      location_identity:
+        unique_key_slots:
+          - project_id
+          - dataitem_id
+          - reference_space
+          - location_type
+
+slots:
+  voxel_size:
+    range: float
+    multivalued: true
+    list_elements_ordered: true
+    minimum_cardinality: 3
+    maximum_cardinality: 3
+    description: >-
+      Physical voxel dimensions as an ordered (x, y, z) triple in voxel_size_unit.
+      Omit when physical scale is unspecified. At write time, a supplied value
+      requires reference space unit VOXELS and a voxel_size_unit; each dimension
+      must be finite and strictly positive. Unequal dimensions describe
+      anisotropic voxels.
+  voxel_size_unit:
+    range: Unit
+    description: >-
+      Physical length unit shared by all three voxel_size dimensions.
+      At write time, voxel_size and voxel_size_unit must either both be omitted
+      or both be supplied. A supplied unit must be NANOMETERS_LENGTH,
+      MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.
+  x:
+    range: float
+    description: X coordinate in the reference space.
+  y:
+    range: float
+    description: Y coordinate in the reference space.
+  z:
+    range: float
+    description: Z coordinate in the reference space.
+  reference_space:
+    range: ReferenceSpace
+    description: >-
+      Identifier of the coordinate frame and version, unique within the selected
+      project or global scope.
+  location_type:
+    range: LocationType
+    description: Anatomical point represented by these coordinates.
+  default_2d_view:
+    range: Default2DView
+    inlined: true
+    description: Optional screen layout; null means the consumer chooses the view.
+  left_to_right:
+    range: SignedAxis
+    description: Signed data axis that increases from left to right on screen.
+  bottom_to_top:
+    range: SignedAxis
+    description: Signed data axis that increases from bottom to top on screen.

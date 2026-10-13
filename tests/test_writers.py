@@ -49,12 +49,17 @@ from connects_common_connectivity.models import (
     DataItem,
     DataItemDataSetAssociation,
     DataSet,
+    Default2DView,
     HierarchyCategory,
     Laterality,
+    LocationType,
     MappingSet,
     Modality,
     ProjectionMeasurementMatrix,
     ProjectionMeasurementType,
+    ReferenceSpace,
+    SignedAxis,
+    SpatialLocation,
     SynapseFeatureMatrix,
     Unit,
 )
@@ -94,6 +99,14 @@ def test_build_merge_predicate_uses_all_declared_keys():
     """Merge predicates must compare every identity column through aliases."""
     assert _build_merge_predicate(["project_id", "id"]) == (
         'target."project_id" = source."project_id" '
+        'AND target."id" = source."id"'
+    )
+
+
+def test_build_merge_predicate_uses_null_safe_equality_only_when_opted_in():
+    """Only opted-in nullable keys may match null values during a merge."""
+    assert _build_merge_predicate(["project_id", "id"], ["project_id"]) == (
+        '(target."project_id" IS NOT DISTINCT FROM source."project_id") '
         'AND target."id" = source."id"'
     )
 
@@ -217,6 +230,26 @@ def test_deduplicate_on_keys_keeps_last_row_in_stable_order():
         {"project_id": "p", "id": "b", "value": 2},
         {"project_id": "p", "id": "a", "value": 3},
     ]
+
+
+def test_deduplicate_on_keys_preserves_null_and_project_scopes():
+    """Deduplication keeps the last row per scope while rejecting nulls in non-nullable keys."""
+    table = pa.table({
+        "project_id": [None, "a", None, "b", "a"],
+        "id": ["CCF_v3"] * 5,
+        "value": [1, 2, 3, 4, 5],
+    })
+    result = _deduplicate_on_keys(table, ["project_id", "id"], ["project_id"])
+    assert result.to_pylist() == [
+        {"project_id": None, "id": "CCF_v3", "value": 3},
+        {"project_id": "b", "id": "CCF_v3", "value": 4},
+        {"project_id": "a", "id": "CCF_v3", "value": 5},
+    ]
+    with pytest.raises(ValueError, match="non-null"):
+        _deduplicate_on_keys(table, ["project_id", "id"])
+    invalid = pa.table({"project_id": [None, "a"], "id": ["CCF_v3", None]})
+    with pytest.raises(ValueError, match="row 1"):
+        _deduplicate_on_keys(invalid, ["project_id", "id"], ["project_id"])
 
 
 def test_deduplicate_on_keys_supports_chunked_keys_and_empty_tables():
@@ -742,6 +775,11 @@ def test_merge_scoped_deduplicates_incoming_batch(settings, read_delta):
 
 
 INSTANCE_FACTORIES = {
+    ReferenceSpace: lambda: ReferenceSpace(id="CCF_v3"),
+    SpatialLocation: lambda: SpatialLocation(
+        project_id="p1", dataitem_id="di1", reference_space="CCF_v3",
+        location_type=LocationType.SOMA, x=1, y=2, z=3,
+    ),
     DataSet: lambda: DataSet(id="ds1", name="ds", project_id="p1"),
     DataItem: lambda: DataItem(id="di1", name="di1", project_id="p1"),
     DataItemDataSetAssociation: lambda: DataItemDataSetAssociation(
@@ -798,6 +836,78 @@ INSTANCE_FACTORIES = {
         synapse_index_column="id",
     ),
 }
+
+
+def test_reference_space_struct_merge_round_trip(settings, read_delta):
+    """View updates and nulls round-trip without rewriting unchanged or unrelated rows."""
+    space = ReferenceSpace(id="CCF_v3")
+    other = ReferenceSpace(id="other", project_id="other-project")
+    assert write_models([space, other], settings=settings).rows_written == 2
+    assert write_models(space, settings=settings).rows_written == 0
+    for horizontal in [SignedAxis.PLUS_Z, SignedAxis.PLUS_X, None]:
+        view = None if horizontal is None else Default2DView(
+            left_to_right=horizontal, bottom_to_top=SignedAxis.MINUS_Y
+        )
+        space = ReferenceSpace(id="CCF_v3", default_2d_view=view)
+        assert write_models(space, settings=settings).rows_written == 1
+        assert write_models(space, settings=settings).rows_written == 0
+        rows = read_delta(settings.output_root / "referencespace")
+        assert rows.height == 2
+        assert isinstance(rows.schema["default_2d_view"], pl.Struct)
+        restored = ReferenceSpace.model_validate(
+            rows.filter(pl.col("id") == space.id).to_dicts()[0]
+        )
+        assert restored == space
+        assert rows.filter(pl.col("id") == "other")["project_id"].to_list() == ["other-project"]
+
+
+def test_reference_space_merge_preserves_global_and_project_scopes(settings, read_delta):
+    """Separate notebook-style writes must update only the matching global or project scope."""
+    for project_id in (None, "a", "b"):
+        space = ReferenceSpace(id="CCF_v3", project_id=project_id)
+        assert write_models(space, settings=settings).rows_written == 1
+        assert write_models(space, settings=settings).rows_written == 0
+
+    path = settings.output_root / "referencespace"
+    assert read_delta(path).height == 3
+    for project_id in (None, "a", "b"):
+        before = {
+            row["project_id"]: row for row in read_delta(path).to_dicts()
+        }
+        space = ReferenceSpace(
+            id="CCF_v3",
+            project_id=project_id,
+            default_2d_view=Default2DView(
+                left_to_right=SignedAxis.PLUS_Z, bottom_to_top=SignedAxis.MINUS_Y
+            ),
+        )
+        assert write_models(space, settings=settings).rows_written == 1
+        assert write_models(space, settings=settings).rows_written == 0
+        after = {row["project_id"]: row for row in read_delta(path).to_dicts()}
+        assert set(after) == {None, "a", "b"}
+        assert ReferenceSpace.model_validate(after[project_id]) == space
+        for other_project in set(before) - {project_id}:
+            assert after[other_project] == before[other_project]
+
+
+def test_spatial_location_merge_uses_complete_identity(settings, read_delta):
+    """Coordinate upserts change only the matching project, cell, space, and location type."""
+    rows = [
+        SpatialLocation(project_id=project, dataitem_id="cell", reference_space=space,
+                        location_type=kind, x=1, y=2, z=3)
+        for project in ("first", "second")
+        for space in ("original", "corrected")
+        for kind in (LocationType.SOMA, LocationType.CENTROID)
+    ]
+    assert write_models(rows, settings=settings).rows_written == 8
+    assert write_models(rows, settings=settings).rows_written == 0
+    changed = rows[0].model_copy(update={"x": 9.0})
+    assert write_models([rows[0], changed], settings=settings).rows_written == 1
+    result = read_delta(settings.output_root / "spatiallocation")
+    assert result.height == 8
+    assert result.filter(pl.col("x") == 9).select(
+        "project_id", "dataitem_id", "reference_space", "location_type"
+    ).rows() == [("first", "cell", "original", "SOMA")]
 
 
 def _make_instance(cls):

@@ -37,7 +37,9 @@ classes:
       cell_index:
         range: DataItem
         multivalued: true
-        description: index of cells.
+        description: >-
+          Ordered DataItem identifiers for the cells indexing the matrix.
+          Register each cell as a DataItem before linking its SpatialLocation rows.
       experiment_metadata:
         range: BarcodingExperimentMetadata
         description: Metadata about the barcoding experiment.
@@ -80,7 +82,6 @@ classes:
     description: Metadata about individual cells in the expression matrix.
     slots:
       - cell_id
-      - spatial_location
       - quality_score
       - total_counts
       - n_genes_detected
@@ -89,9 +90,6 @@ classes:
         range: string
         required: true
         description: Unique cell identifier.
-      spatial_location:
-        range: SpatialLocation
-        description: 3D spatial coordinates of the cell.
       quality_score:
         range: float
         description: Overall quality score for the cell.
@@ -118,9 +116,6 @@ slots:
   cell_id:
     description: Unique cell identifier.
     range: string
-  spatial_location:
-    description: 3D spatial coordinates of the cell.
-    range: SpatialLocation
   quality_score:
     description: Overall quality score for the cell.
     range: float

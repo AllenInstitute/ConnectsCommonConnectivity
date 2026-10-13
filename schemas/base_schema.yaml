@@ -64,8 +64,16 @@ enums:
     permissible_values:
       COUNT:
         description: Plain count unit.
+      VOXELS:
+        description: Voxel index coordinates; physical size is specified per axis.
+      NANOMETERS_LENGTH:
+        description: Nanometers length measurement.
       MICRONS_LENGTH:
         description: Micrometers length measurement.
+      MILLIMETERS_LENGTH:
+        description: Millimeters length measurement.
+      CENTIMETERS_LENGTH:
+        description: Centimeters length measurement.
       MICRONS_SQUARE:
         description: Micrometers squared area measurement.
       MICRONS_CUBED:

@@ -12,13 +12,46 @@ from pydantic import BaseModel, ValidationError
 
 from connects_common_connectivity import models as models_module
 from connects_common_connectivity.io.path_spec import MODEL_TABLE_PATHS
-from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec, get_spec
+from connects_common_connectivity.io.write_spec import (
+    REGISTRY,
+    WriteSpec,
+    get_spec,
+)
+from connects_common_connectivity.io.write_validation import (
+    ClusterMembershipWrite,
+    ClusterWrite,
+    HierarchyCategoryWrite,
+    ReferenceSpaceWrite,
+)
+
+
+class ReferenceSpaceRequiringProject(ReferenceSpaceWrite):
+    """Write class that contradicts a nullable merge key, for policy tests."""
+
+    project_id: str
 
 
 def test_registry_contains_seed_entries():
     """The writer registry must contain its foundational model entries."""
     seed = {"DataSet", "DataItem", "DataItemDataSetAssociation"}
     assert seed.issubset(set(REGISTRY))
+
+
+def test_spatial_registry_identity():
+    """Spaces and coordinates use scoped identities; only space projects may be null."""
+    assert REGISTRY["ReferenceSpace"].merge_on == ["project_id", "id"]
+    assert REGISTRY["ReferenceSpace"].scope_columns == ["project_id", "id"]
+    assert REGISTRY["ReferenceSpace"].nullable_merge_on == ["project_id"]
+    assert all(
+        not spec.nullable_merge_on
+        for name, spec in REGISTRY.items() if name != "ReferenceSpace"
+    )
+    assert REGISTRY["ReferenceSpace"].partition_by == []
+    assert REGISTRY["SpatialLocation"].merge_on == [
+        "project_id", "dataitem_id", "reference_space", "location_type"
+    ]
+    assert REGISTRY["SpatialLocation"].partition_by == ["project_id"]
+    assert "Default2DView" not in REGISTRY
 
 
 def test_registry_uses_canonical_model_table_paths():
@@ -57,7 +90,7 @@ def test_milestone_scopes_use_taxonomy_and_project_identity():
     hierarchy = REGISTRY["HierarchyCategory"]
     assert hierarchy.partition_by == ["hierarchy_id"]
     assert hierarchy.scope_columns == ["hierarchy_id", "id"]
-    assert hierarchy.required_for_write == ["hierarchy_id"]
+    assert hierarchy.write_cls is HierarchyCategoryWrite
 
     projection = REGISTRY["ProjectionMeasurementMatrix"]
     assert projection.partition_by == ["project_id"]
@@ -70,7 +103,10 @@ def test_cluster_membership_merge_keys_are_required_only_for_write():
     """Nullable schema keys must be tightened at the IO boundary."""
     spec = REGISTRY["ClusterMembership"]
     assert spec.merge_on == ["project_id", "hierarchy_id", "item", "cluster"]
-    assert spec.required_for_write == ["hierarchy_id", "item", "cluster"]
+    assert spec.write_cls is ClusterMembershipWrite
+    for key in ("hierarchy_id", "item", "cluster"):
+        assert not models_module.ClusterMembership.model_fields[key].is_required()
+        assert ClusterMembershipWrite.model_fields[key].is_required()
 
 
 def test_set_scoped_rows_include_parent_set_in_merge_identity():
@@ -104,15 +140,21 @@ def test_spec_columns_exist_on_model(key):
     """Every configured writer column must exist on its model."""
     spec: WriteSpec = REGISTRY[key]
     fields = set(spec.model_cls.model_fields)
-    for col in (
-        spec.scope_columns
-        + spec.partition_by
-        + spec.required_for_write
-    ):
+    for col in spec.scope_columns + spec.partition_by:
         assert col in fields, (
             f"{spec.model_cls.__name__}: column {col!r} is not a field "
             f"(have: {sorted(fields)})"
         )
+
+
+@pytest.mark.parametrize("key", list(REGISTRY))
+def test_write_class_declares_no_fields_absent_from_model(key):
+    """A renamed generated slot must not leave a write class inventing a field."""
+    spec: WriteSpec = REGISTRY[key]
+    if spec.write_cls is None:
+        pytest.skip(f"{key} has no write class")
+    assert issubclass(spec.write_cls, spec.model_cls)
+    assert set(spec.write_cls.model_fields) == set(spec.model_cls.model_fields)
 
 
 def test_get_spec_accepts_class_and_instance():
@@ -170,7 +212,7 @@ def test_merge_scoped_requires_merge_keys():
 
 def test_merge_keys_must_be_non_null_at_write_time():
     """Nullable merge keys must be tightened before a spec can be registered."""
-    with pytest.raises(ValidationError, match="required_for_write.*hierarchy_id"):
+    with pytest.raises(ValidationError, match="write_cls.*hierarchy_id"):
         WriteSpec(
             model_cls=models_module.Cluster,
             subdir="cluster",
@@ -179,6 +221,60 @@ def test_merge_keys_must_be_non_null_at_write_time():
             write_mode="merge_scoped",
             merge_on=["hierarchy_id", "id"],
         )
+
+
+def test_write_cls_must_subclass_model_cls():
+    """A spec must not validate rows against an unrelated class."""
+    with pytest.raises(ValidationError, match="must subclass"):
+        WriteSpec(
+            model_cls=models_module.Cluster,
+            write_cls=models_module.DataSet,
+            subdir="cluster",
+            partition_by=["hierarchy_id"],
+            scope_columns=["hierarchy_id"],
+            write_mode="merge_scoped",
+            merge_on=["hierarchy_id", "id"],
+        )
+
+
+def test_write_cls_cannot_invent_fields():
+    """A write class out of sync with a renamed generated slot must be rejected."""
+    class ClusterTypo(ClusterWrite):
+        heirarchy_id: str
+
+    with pytest.raises(ValidationError, match="heirarchy_id"):
+        WriteSpec(
+            model_cls=models_module.Cluster,
+            write_cls=ClusterTypo,
+            subdir="cluster",
+            partition_by=["hierarchy_id"],
+            scope_columns=["hierarchy_id"],
+            write_mode="merge_scoped",
+            merge_on=["hierarchy_id", "id"],
+        )
+
+
+@pytest.mark.parametrize("overrides,match", [
+    ({"nullable_merge_on": ["name"]}, "subset of merge_on"),
+    (
+        {"write_cls": ReferenceSpaceRequiringProject},
+        "requires to be non-null",
+    ),
+    ({"merge_on": [], "write_mode": "overwrite_scoped"}, "subset of merge_on"),
+])
+def test_nullable_merge_keys_reject_invalid_policies(overrides, match):
+    """Nullable identity policies must reject non-key fields and write-class conflicts."""
+    policy = {
+        "model_cls": models_module.ReferenceSpace,
+        "subdir": "referencespace",
+        "partition_by": [],
+        "scope_columns": ["project_id", "id"],
+        "write_mode": "merge_scoped",
+        "merge_on": ["project_id", "id"],
+        "nullable_merge_on": ["project_id"],
+    }
+    with pytest.raises(ValidationError, match=match):
+        WriteSpec(**(policy | overrides))
 
 
 def test_non_merge_mode_rejects_merge_keys():

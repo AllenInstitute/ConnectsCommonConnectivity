@@ -20,6 +20,8 @@ from connects_common_connectivity.config import Settings, get_settings
 from connects_common_connectivity.io.read import (
     DatasetReader,
     read_cell_cell_connectivity,
+    read_reference_spaces,
+    read_spatial_locations,
     read_synapse_table,
 )
 from connects_common_connectivity.io.write_utils import (
@@ -44,5 +46,7 @@ __all__ = [
     "cell_cell_connectivity_to_arrow",
     "derive_cell_cell_connectivity",
     "read_cell_cell_connectivity",
+    "read_reference_spaces",
+    "read_spatial_locations",
     "read_synapse_table",
 ]

@@ -133,7 +133,7 @@ The schema has been split into logical modules for clarity:
 schemas/
 	base_schema.yaml            # prefixes, types, enums, global slots
 	core_schema.yaml            # DataSet, DataItem
-    spatial_schema.yaml         # ReferenceSpace, Default2DView, SpatialLocation
+    spatial_schema.yaml         # ReferenceSpace, Default2DView, AnatomicalOrientation, SpatialLocation
 	clustering_schema.yaml      # AlgorithmRun, ClusterHierarchy, Cluster, ClusterMembership
 	brain_region_schema.yaml    # BrainRegion hierarchy
 	projection_schema.yaml     # ProjectionMeasurement* + ProjectionMeasurementTypeMetadata
@@ -320,6 +320,15 @@ Default2DView {
     SignedAxis left_to_right
     SignedAxis bottom_to_top
 }
+AnatomicalOrientation {
+    SignedAxis anterior_to_posterior
+    SignedAxis rostral_to_caudal
+    SignedAxis superior_to_inferior
+    SignedAxis dorsal_to_ventral
+    SignedAxis subject_left_to_right
+    SignedAxis medial_to_lateral
+    SignedAxis pia_to_white_matter
+}
 ZarrArray {
     string id  
     string path  
@@ -351,6 +360,7 @@ CellGeneData ||--}o DataItem : "cell_index"
 SpatialLocation }o--|| DataItem : "dataitem_id"
 SpatialLocation }o--|| ReferenceSpace : "reference_space"
 ReferenceSpace ||--o| Default2DView : "default_2d_view"
+ReferenceSpace ||--o| AnatomicalOrientation : "anatomical_orientation"
 CellToCellMapping ||--|| DataItem : "source_cell"
 CellToCellMapping ||--|| DataItem : "target_cell"
 CellToCellMapping ||--|| MappingSet : "mapping_set"

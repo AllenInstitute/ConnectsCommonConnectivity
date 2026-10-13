@@ -11,20 +11,21 @@ default_prefix: cc
 
 enums:
   SignedAxis:
-    description: A data axis and its increasing or decreasing screen direction.
+    description: A data axis together with the sense in which it is traversed.
     permissible_values:
       PLUS_X:
-        description: Increasing X coordinates along the selected screen direction.
+        description: Direction of increasing X coordinates.
       MINUS_X:
-        description: Decreasing X coordinates along the selected screen direction.
+        description: Direction of decreasing X coordinates.
       PLUS_Y:
-        description: Increasing Y coordinates along the selected screen direction.
+        description: Direction of increasing Y coordinates.
       MINUS_Y:
-        description: Decreasing Y coordinates along the selected screen direction.
+        description: Direction of decreasing Y coordinates.
       PLUS_Z:
-        description: Increasing Z coordinates along the selected screen direction.
+        description: Direction of increasing Z coordinates.
       MINUS_Z:
-        description: Decreasing Z coordinates along the selected screen direction.
+        description: Direction of decreasing Z coordinates.
+  
   LocationType:
     description: The anatomical point represented by a coordinate row.
     permissible_values:
@@ -43,11 +44,10 @@ classes:
       A coordinate frame and version identified by (project_id, id). A null project_id
       denotes the global scope; otherwise the space belongs to that project. The same
       id may occur independently in different scopes. Unit applies
-      to all coordinate axes; record axis meanings in description. For voxel
+      to all coordinate axes; record axis meanings in anatomical_orientation. For voxel
       coordinates, specify voxel_size and voxel_size_unit to describe physical
-      scale. Omitted unit or voxel size means unspecified, not an implicit default.
-      Different frames or versions within a scope need distinct ids.
-      A missing view implies no display default.
+      scale. Omitted unit, voxel size, or orientation means unspecified, not an
+      implicit default. Different frames or versions within a project scope need distinct ids.
     mixins:
       - ProjectScoped
     slots:
@@ -58,6 +58,7 @@ classes:
       - voxel_size
       - voxel_size_unit
       - default_2d_view
+      - anatomical_orientation
     slot_usage:
       id:
         required: true
@@ -89,6 +90,24 @@ classes:
         required: true
       bottom_to_top:
         required: true
+
+  AnatomicalOrientation:
+    description: >-
+      Embedded anatomical meaning of the coordinate axes. Each slot names the
+      signed data axis pointing toward the second-named pole, so a MINUS axis
+      points along decreasing coordinates. Every slot is optional and at least
+      one must be supplied at write time; leave anatomical_orientation null when
+      the frame defines none. Several directions may name the same data axis,
+      because terms such as dorsal/ventral, superior/inferior, and cortical depth
+      coincide in some frames and not in others. 
+    slots:
+      - anterior_to_posterior
+      - rostral_to_caudal
+      - superior_to_inferior
+      - dorsal_to_ventral
+      - subject_left_to_right
+      - medial_to_lateral
+      - pia_to_white_matter
 
   SpatialLocation:
     description: >-
@@ -172,7 +191,40 @@ slots:
     description: Optional screen layout; null means the consumer chooses the view.
   left_to_right:
     range: SignedAxis
-    description: Signed data axis that increases from left to right on screen.
+    description: Signed data axis pointing from screen left to screen right.
   bottom_to_top:
     range: SignedAxis
-    description: Signed data axis that increases from bottom to top on screen.
+    description: Signed data axis pointing from screen bottom to screen top.
+  anatomical_orientation:
+    range: AnatomicalOrientation
+    inlined: true
+    description: >-
+      Optional anatomical meaning of the data axes.
+  anterior_to_posterior:
+    range: SignedAxis
+    description: Signed data axis pointing toward the posterior pole.
+  rostral_to_caudal:
+    range: SignedAxis
+    description: Signed data axis pointing toward the caudal pole.
+  superior_to_inferior:
+    range: SignedAxis
+    description: Signed data axis pointing toward the inferior side.
+  dorsal_to_ventral:
+    range: SignedAxis
+    description: Signed data axis pointing toward the ventral side.
+  subject_left_to_right:
+    range: SignedAxis
+    description: >-
+      Signed data axis pointing toward the subject's right, which is unrelated to
+      the screen left_to_right direction of Default2DView.
+  medial_to_lateral:
+    range: SignedAxis
+    description: >-
+      Signed data axis pointing away from the midline. Well defined only for
+      single-hemisphere or flattened frames, because the lateral direction
+      otherwise differs between hemispheres.
+  pia_to_white_matter:
+    range: SignedAxis
+    description: >-
+      Signed data axis pointing from the pia toward white matter, for uprighted
+      or flattened cortical frames.

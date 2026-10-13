@@ -38,7 +38,7 @@ def test_registry_contains_seed_entries():
 
 
 def test_spatial_registry_identity():
-    """Spaces and coordinates use scoped identities; only space projects may be null."""
+    """Spaces and coordinates merge on complete scoped identities, only spaces may have a null project, and embedded structs are not registered as tables."""
     assert REGISTRY["ReferenceSpace"].merge_on == ["project_id", "id"]
     assert REGISTRY["ReferenceSpace"].scope_columns == ["project_id", "id"]
     assert REGISTRY["ReferenceSpace"].nullable_merge_on == ["project_id"]
@@ -52,6 +52,7 @@ def test_spatial_registry_identity():
     ]
     assert REGISTRY["SpatialLocation"].partition_by == ["project_id"]
     assert "Default2DView" not in REGISTRY
+    assert "AnatomicalOrientation" not in REGISTRY
 
 
 @pytest.mark.parametrize(

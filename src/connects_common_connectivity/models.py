@@ -277,31 +277,31 @@ class Laterality(str, Enum):
 
 class SignedAxis(str, Enum):
     """
-    A data axis and its increasing or decreasing screen direction.
+    A data axis together with the sense in which it is traversed.
     """
     PLUS_X = "PLUS_X"
     """
-    Increasing X coordinates along the selected screen direction.
+    Direction of increasing X coordinates.
     """
     MINUS_X = "MINUS_X"
     """
-    Decreasing X coordinates along the selected screen direction.
+    Direction of decreasing X coordinates.
     """
     PLUS_Y = "PLUS_Y"
     """
-    Increasing Y coordinates along the selected screen direction.
+    Direction of increasing Y coordinates.
     """
     MINUS_Y = "MINUS_Y"
     """
-    Decreasing Y coordinates along the selected screen direction.
+    Direction of decreasing Y coordinates.
     """
     PLUS_Z = "PLUS_Z"
     """
-    Increasing Z coordinates along the selected screen direction.
+    Direction of increasing Z coordinates.
     """
     MINUS_Z = "MINUS_Z"
     """
-    Decreasing Z coordinates along the selected screen direction.
+    Direction of decreasing Z coordinates.
     """
 
 
@@ -511,7 +511,7 @@ class DataItemDataSetAssociation(ProjectScoped):
 
 class ReferenceSpace(ProjectScoped):
     """
-    A coordinate frame and version identified by (project_id, id). A null project_id denotes the global scope; otherwise the space belongs to that project. The same id may occur independently in different scopes. Unit applies to all coordinate axes; record axis meanings in description. For voxel coordinates, specify voxel_size and voxel_size_unit to describe physical scale. Omitted unit or voxel size means unspecified, not an implicit default. Different frames or versions within a scope need distinct ids. A missing view implies no display default.
+    A coordinate frame and version identified by (project_id, id). A null project_id denotes the global scope; otherwise the space belongs to that project. The same id may occur independently in different scopes. Unit applies to all coordinate axes; record axis meanings in anatomical_orientation. For voxel coordinates, specify voxel_size and voxel_size_unit to describe physical scale. Omitted unit, voxel size, or orientation means unspecified, not an implicit default. Different frames or versions within a project scope need distinct ids.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
          'mixins': ['ProjectScoped'],
@@ -592,6 +592,7 @@ class ReferenceSpace(ProjectScoped):
          'list_elements_ordered': True} })
     voxel_size_unit: Optional[Unit] = Field(default=None, description="""Physical length unit shared by all three voxel_size dimensions. At write time, voxel_size and voxel_size_unit must either both be omitted or both be supplied. A supplied unit must be NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.""", json_schema_extra = { "linkml_meta": {'alias': 'voxel_size_unit', 'domain_of': ['ReferenceSpace']} })
     default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace']} })
+    anatomical_orientation: Optional[AnatomicalOrientation] = Field(default=None, description="""Optional anatomical meaning of the data axes.""", json_schema_extra = { "linkml_meta": {'alias': 'anatomical_orientation', 'domain_of': ['ReferenceSpace']} })
     project_id: Optional[str] = Field(default=None, description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
@@ -605,8 +606,23 @@ class Default2DView(ConfiguredBaseModel):
          'slot_usage': {'bottom_to_top': {'name': 'bottom_to_top', 'required': True},
                         'left_to_right': {'name': 'left_to_right', 'required': True}}})
 
-    left_to_right: SignedAxis = Field(default=..., description="""Signed data axis that increases from left to right on screen.""", json_schema_extra = { "linkml_meta": {'alias': 'left_to_right', 'domain_of': ['Default2DView']} })
-    bottom_to_top: SignedAxis = Field(default=..., description="""Signed data axis that increases from bottom to top on screen.""", json_schema_extra = { "linkml_meta": {'alias': 'bottom_to_top', 'domain_of': ['Default2DView']} })
+    left_to_right: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen left to screen right.""", json_schema_extra = { "linkml_meta": {'alias': 'left_to_right', 'domain_of': ['Default2DView']} })
+    bottom_to_top: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen bottom to screen top.""", json_schema_extra = { "linkml_meta": {'alias': 'bottom_to_top', 'domain_of': ['Default2DView']} })
+
+
+class AnatomicalOrientation(ConfiguredBaseModel):
+    """
+    Embedded anatomical meaning of the coordinate axes. Each slot names the signed data axis pointing toward the second-named pole, so a MINUS axis points along decreasing coordinates. Every slot is optional and at least one must be supplied at write time; leave anatomical_orientation null when the frame defines none. Several directions may name the same data axis, because terms such as dorsal/ventral, superior/inferior, and cortical depth coincide in some frames and not in others. 
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema'})
+
+    anterior_to_posterior: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing toward the posterior pole.""", json_schema_extra = { "linkml_meta": {'alias': 'anterior_to_posterior', 'domain_of': ['AnatomicalOrientation']} })
+    rostral_to_caudal: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing toward the caudal pole.""", json_schema_extra = { "linkml_meta": {'alias': 'rostral_to_caudal', 'domain_of': ['AnatomicalOrientation']} })
+    superior_to_inferior: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing toward the inferior side.""", json_schema_extra = { "linkml_meta": {'alias': 'superior_to_inferior', 'domain_of': ['AnatomicalOrientation']} })
+    dorsal_to_ventral: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing toward the ventral side.""", json_schema_extra = { "linkml_meta": {'alias': 'dorsal_to_ventral', 'domain_of': ['AnatomicalOrientation']} })
+    subject_left_to_right: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing toward the subject's right, which is unrelated to the screen left_to_right direction of Default2DView.""", json_schema_extra = { "linkml_meta": {'alias': 'subject_left_to_right', 'domain_of': ['AnatomicalOrientation']} })
+    medial_to_lateral: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing away from the midline. Well defined only for single-hemisphere or flattened frames, because the lateral direction otherwise differs between hemispheres.""", json_schema_extra = { "linkml_meta": {'alias': 'medial_to_lateral', 'domain_of': ['AnatomicalOrientation']} })
+    pia_to_white_matter: Optional[SignedAxis] = Field(default=None, description="""Signed data axis pointing from the pia toward white matter, for uprighted or flattened cortical frames.""", json_schema_extra = { "linkml_meta": {'alias': 'pia_to_white_matter', 'domain_of': ['AnatomicalOrientation']} })
 
 
 class SpatialLocation(ProjectScoped):
@@ -2904,6 +2920,7 @@ DataItem.model_rebuild()
 DataItemDataSetAssociation.model_rebuild()
 ReferenceSpace.model_rebuild()
 Default2DView.model_rebuild()
+AnatomicalOrientation.model_rebuild()
 SpatialLocation.model_rebuild()
 CellFeatureSet.model_rebuild()
 CellFeatureDefinition.model_rebuild()

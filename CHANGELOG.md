@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added optional `ReferenceSpace.anatomical_orientation`, an embedded
+  `AnatomicalOrientation` naming the signed data axis that points toward each
+  anatomical pole: `anterior_to_posterior`, `rostral_to_caudal`,
+  `superior_to_inferior`, `dorsal_to_ventral`, `subject_left_to_right`,
+  `medial_to_lateral`, and `pia_to_white_matter`. Pole order makes the Allen CCF
+  PIR frame all-positive. Every direction is optional and several may name the
+  same axis, but a supplied orientation must name at least one; omit it when the
+  frame states no anatomical directions. `read_reference_spaces` returns it as a
+  struct or null.
 - Added project-scoped `EmbeddingSpace`, `EmbeddingLocation`, and
   `EmbeddingMethod` models for 2D DataItem embeddings, separate from anatomical
   coordinates. `write_models` now persists embedding metadata and x/y coordinates

@@ -13,6 +13,7 @@ from connects_common_connectivity.io.write_validation import (
 )
 from connects_common_connectivity.io.writers import write_models
 from connects_common_connectivity.models import (
+    AnatomicalOrientation,
     CellFeatureDefinition,
     Cluster,
     ClusterMembership,
@@ -149,6 +150,37 @@ def test_reference_space_axes_checked_before_io(horizontal, vertical, tmp_path):
 def test_every_signed_axis_maps_to_a_data_axis():
     """A new enum member must be mapped, not silently parsed from its name."""
     assert set(DATA_AXIS_BY_SIGNED_AXIS) == set(SignedAxis)
+
+
+def test_empty_anatomical_orientation_rejected_before_io(tmp_path):
+    """A supplied orientation naming no direction fails before the output directory is created."""
+    space = ReferenceSpace(id="frame", anatomical_orientation=AnatomicalOrientation())
+    root = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match="at least one direction") as ei:
+        write_models(space, output_root=root)
+    assert "id=frame" in str(ei.value)
+    assert not root.exists()
+
+
+def test_anatomical_orientation_directions_may_share_a_data_axis():
+    """Unlike the 2D view, synonymous anatomical directions may name the same data axis."""
+    space = ReferenceSpace(id="frame", anatomical_orientation=AnatomicalOrientation(
+        dorsal_to_ventral=SignedAxis.PLUS_Z,
+        superior_to_inferior=SignedAxis.PLUS_Z,
+        pia_to_white_matter=SignedAxis.MINUS_Z,
+    ))
+    assert validate_for_write([space], REGISTRY["ReferenceSpace"])[0] is space
+
+
+def test_reference_space_revalidates_constructed_orientation(tmp_path):
+    """An orientation built without Pydantic validation must still fail on an unknown axis."""
+    space = ReferenceSpace.model_construct(
+        id="invalid", anatomical_orientation={"rostral_to_caudal": "PLUS_W"}
+    )
+    root = tmp_path / "must-not-exist"
+    with pytest.raises(ValueError, match="rostral_to_caudal"):
+        write_models(space, output_root=root)
+    assert not root.exists()
 
 
 def test_reference_space_revalidates_constructed_view(tmp_path):

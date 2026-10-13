@@ -21,6 +21,8 @@ _MODEL_TABLE_PATHS = {
     "DataItem": "dataitem",
     "DataItemDataSetAssociation": "dataitem_dataset_association",
     "DataSet": "dataset",
+    "EmbeddingLocation": "embeddinglocation",
+    "EmbeddingSpace": "embeddingspace",
     "HierarchyCategory": "hierarchycategory",
     "MappingSet": "mappingset",
     "ProjectionMeasurementMatrix": "projectionmeasurementmatrix",

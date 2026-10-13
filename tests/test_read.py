@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -11,6 +12,8 @@ from connects_common_connectivity.config import Settings
 from connects_common_connectivity.io import (
     DatasetReader,
     read_cell_cell_connectivity,
+    read_embedding_locations,
+    read_embedding_spaces,
     read_reference_spaces,
     read_spatial_locations,
     read_synapse_table,
@@ -18,11 +21,137 @@ from connects_common_connectivity.io import (
 )
 from connects_common_connectivity.models import (
     Default2DView,
+    EmbeddingLocation,
+    EmbeddingSpace,
     LocationType,
     ReferenceSpace,
     SignedAxis,
     SpatialLocation,
 )
+
+
+@pytest.fixture
+def embedding_root(tmp_path):
+    """Provide identically named embedding spaces and DataItems in two projects."""
+    write_models([
+        EmbeddingSpace(project_id=project, id=space, embedding_method="UMAP")
+        for project in ("first", "second")
+        for space in ("original", "other")
+    ], output_root=tmp_path)
+    write_models([
+        EmbeddingLocation(
+            project_id=project, dataitem_id=item, embedding_space=space, x=-1.5, y=2.5,
+        )
+        for project in ("first", "second")
+        for item in ("injection_a", "injection_b")
+        for space in ("original", "other")
+    ], output_root=tmp_path)
+    return tmp_path
+
+
+def test_embedding_readers_filter_within_project(embedding_root):
+    """Reader filters compose without mixing project-local IDs or changing coordinates."""
+    locations = read_embedding_locations(
+        "first", embedding_space_ids="original", dataitem_ids=["injection_a"],
+        output_root=embedding_root,
+    )
+    assert locations.select(
+        "project_id", "dataitem_id", "embedding_space", "x", "y",
+    ).rows() == [("first", "injection_a", "original", -1.5, 2.5)]
+    assert "z" not in locations.columns
+    assert read_embedding_locations("first", output_root=embedding_root).height == 4
+    assert read_embedding_locations(
+        "second", settings=Settings(output_root=embedding_root),
+    )["project_id"].to_list() == ["second"] * 4
+    spaces = read_embedding_spaces(
+        "first", embedding_space_ids="original", output_root=embedding_root,
+    )
+    assert spaces.select("project_id", "id").rows() == [("first", "original")]
+    assert read_embedding_spaces(
+        "second", settings=Settings(output_root=embedding_root),
+    )["project_id"].to_list() == ["second"] * 2
+
+
+@pytest.mark.parametrize("reader, filters", [
+    (read_embedding_locations, {"embedding_space_ids": []}),
+    (read_embedding_locations, {"embedding_space_ids": "missing"}),
+    (read_embedding_locations, {"dataitem_ids": []}),
+    (read_embedding_locations, {"dataitem_ids": "missing"}),
+    (read_embedding_spaces, {"embedding_space_ids": []}),
+    (read_embedding_spaces, {"embedding_space_ids": "missing"}),
+])
+def test_embedding_readers_empty_matches_keep_schema(embedding_root, reader, filters):
+    """Empty selections and unknown IDs return zero rows with the stored column types."""
+    expected = reader("first", output_root=embedding_root)
+    empty = reader("first", output_root=embedding_root, **filters)
+    assert empty.is_empty()
+    assert empty.schema == expected.schema
+
+
+@pytest.mark.parametrize("reader, filter_name, known", [
+    (read_embedding_locations, "embedding_space_ids", "original"),
+    (read_embedding_locations, "dataitem_ids", "injection_a"),
+    (read_embedding_spaces, "embedding_space_ids", "original"),
+])
+def test_embedding_readers_mixed_values_keep_matches(
+    embedding_root, reader, filter_name, known,
+):
+    """Iterable filters retain known IDs even when they also contain unknown IDs."""
+    expected = reader("first", output_root=embedding_root, **{filter_name: known})
+    result = reader(
+        "first", output_root=embedding_root,
+        **{filter_name: iter([known, "missing"])},
+    )
+    assert not result.is_empty()
+    assert result.equals(expected)
+
+
+@pytest.mark.parametrize("reader", [read_embedding_locations, read_embedding_spaces])
+def test_embedding_readers_unknown_project_keeps_schema(embedding_root, reader):
+    """An unknown project returns an empty typed frame instead of another project's rows."""
+    expected = reader("first", output_root=embedding_root)
+    result = reader("missing", output_root=embedding_root)
+    assert result.is_empty()
+    assert result.schema == expected.schema
+
+
+@pytest.mark.parametrize("feature_set_id", [None, "projection_features"])
+def test_embedding_space_reader_preserves_metadata(tmp_path, feature_set_id):
+    """Dates, nulls, parameters, and feature descriptions survive reads with or without an ID."""
+    populated = EmbeddingSpace(
+        project_id="first", id="populated", embedding_method="PCA",
+        name="Projection embedding", description="Embedding of injection experiments.",
+        parameters_json='{"random_state": 42}',
+        input_feature_set_id=feature_set_id,
+        input_features_description="Normalized projection measurements.",
+        creation_date=date(2026, 10, 7),
+    )
+    minimal = EmbeddingSpace(project_id="first", id="minimal", embedding_method="UMAP")
+    write_models([populated, minimal], output_root=tmp_path)
+    result = read_embedding_spaces("first", output_root=tmp_path)
+    assert result.schema["creation_date"] == pl.Date
+    assert {
+        row["id"]: EmbeddingSpace.model_validate(row) for row in result.to_dicts()
+    } == {"populated": populated, "minimal": minimal}
+
+
+@pytest.mark.parametrize("reader", [read_embedding_locations, read_embedding_spaces])
+def test_embedding_readers_missing_tables_and_root_conflict(reader, tmp_path):
+    """Embedding readers reject missing storage and mutually exclusive root overrides."""
+    with pytest.raises(FileNotFoundError):
+        reader("first", output_root=tmp_path)
+    with pytest.raises(TypeError, match="either settings=.*output_root"):
+        reader("first", output_root=tmp_path, settings=Settings(output_root=tmp_path))
+
+
+@pytest.mark.parametrize("reader", [read_embedding_locations, read_embedding_spaces])
+def test_embedding_readers_use_discovered_settings(embedding_root, reader, monkeypatch):
+    """Readers use application settings when neither root override is supplied."""
+    monkeypatch.setattr(
+        "connects_common_connectivity.io.read.get_settings",
+        lambda: Settings(output_root=embedding_root),
+    )
+    assert reader("first").equals(reader("first", output_root=embedding_root))
 
 
 @pytest.fixture

@@ -4,7 +4,8 @@ Where :mod:`connects_common_connectivity.io.writers` owns the write path, this
 module owns the read path. It exposes :class:`DatasetReader` for assembling
 wide, dataset-centric tables from the Delta tables under a Common Connectivity
 root, and :func:`read_synapse_table` for reading the long single-synapse table
-with optional feature columns.
+with optional feature columns. :func:`read_cell_cell_connectivity` reads a
+single project and connectome scope from the canonical cell-cell table.
 """
 
 from __future__ import annotations
@@ -15,23 +16,15 @@ from typing import Any, Iterable, Sequence
 import polars as pl
 
 from connects_common_connectivity.config import Settings, get_settings
-
-DATASET_SUBDIR = "dataset"
-DATAITEM_DATASET_ASSOCIATION_SUBDIR = "dataitem_dataset_association"
-CELL_FEATURE_SET_SUBDIR = "cellfeatureset"
-CELL_FEATURE_MATRIX_SUBDIR = "cellfeaturematrix"
-CELL_FEATURES_SUBDIR = "cellfeatures"
-CLUSTER_HIERARCHY_SUBDIR = "clusterhierarchy"
-CLUSTER_SUBDIR = "cluster"
-CLUSTER_MEMBERSHIP_SUBDIR = "clustermembership"
-SYNAPSE_SUBDIR = "synapse"
-SYNAPSE_FEATURES_SUBDIR = "synapsefeatures"
+from connects_common_connectivity.io.path_spec import (
+    MODEL_TABLE_PATHS,
+    WIDE_PAYLOAD_PATHS,
+)
 
 __all__ = [
     "DatasetReader",
+    "read_cell_cell_connectivity",
     "read_synapse_table",
-    "SYNAPSE_SUBDIR",
-    "SYNAPSE_FEATURES_SUBDIR",
 ]
 
 _FEATURESET_DISPLAY_SCHEMA = {
@@ -83,9 +76,11 @@ class DatasetReader:
                 f"{self.dataset_root}"
             )
 
-        self._datasets = self._read_table(DATASET_SUBDIR, required=True)
+        self._datasets = self._read_table(
+            MODEL_TABLE_PATHS["DataSet"], required=True
+        )
         self._associations = self._read_table(
-            DATAITEM_DATASET_ASSOCIATION_SUBDIR,
+            MODEL_TABLE_PATHS["DataItemDataSetAssociation"],
             required=True,
         )
 
@@ -174,7 +169,7 @@ class DatasetReader:
         """
         dataset = self._dataset_record(dataset_name)
         items = self.dataset_dataitem_ids(dataset_name)
-        matrices = self._read_table(CELL_FEATURE_MATRIX_SUBDIR)
+        matrices = self._read_table(MODEL_TABLE_PATHS["CellFeatureMatrix"])
         if matrices is None:
             return pl.DataFrame(schema=_FEATURESET_DISPLAY_SCHEMA)
 
@@ -182,7 +177,9 @@ class DatasetReader:
         if matrices.is_empty():
             return pl.DataFrame(schema=_FEATURESET_DISPLAY_SCHEMA)
 
-        feature_sets = self._read_table(CELL_FEATURE_SET_SUBDIR, required=True)
+        feature_sets = self._read_table(
+            MODEL_TABLE_PATHS["CellFeatureSet"], required=True
+        )
         feature_sets = feature_sets.filter(
             pl.col("project_id") == dataset["project_id"]
         )
@@ -284,7 +281,7 @@ class DatasetReader:
         items = self.dataset_dataitem_ids(dataset_name).rename(
             {"dataitem_id": "item"}
         )
-        memberships = self._read_table(CLUSTER_MEMBERSHIP_SUBDIR)
+        memberships = self._read_table(MODEL_TABLE_PATHS["ClusterMembership"])
         if memberships is None:
             return pl.DataFrame(schema=_CLUSTERSET_DISPLAY_SCHEMA)
 
@@ -297,7 +294,9 @@ class DatasetReader:
         if related_ids.is_empty():
             return pl.DataFrame(schema=_CLUSTERSET_DISPLAY_SCHEMA)
 
-        hierarchies = self._read_table(CLUSTER_HIERARCHY_SUBDIR, required=True)
+        hierarchies = self._read_table(
+            MODEL_TABLE_PATHS["ClusterHierarchy"], required=True
+        )
         related = related_ids.join(
             hierarchies,
             left_on="hierarchy_id",
@@ -508,7 +507,11 @@ class DatasetReader:
         ValueError
             If ``index_column`` is not present in the matrix.
         """
-        path = self.dataset_root / CELL_FEATURES_SUBDIR / feature_set_id
+        path = (
+            self.dataset_root
+            / WIDE_PAYLOAD_PATHS["cell_features"]
+            / feature_set_id
+        )
         if not path.exists():
             raise FileNotFoundError(
                 f"Feature matrix for {feature_set_id!r} is missing: {path}"
@@ -625,8 +628,10 @@ class DatasetReader:
         FileNotFoundError
             If the ``clustermembership`` or ``cluster`` table is missing.
         """
-        memberships = self._read_table(CLUSTER_MEMBERSHIP_SUBDIR, required=True)
-        clusters = self._read_table(CLUSTER_SUBDIR, required=True)
+        memberships = self._read_table(
+            MODEL_TABLE_PATHS["ClusterMembership"], required=True
+        )
+        clusters = self._read_table(MODEL_TABLE_PATHS["Cluster"], required=True)
         item_keys = items.rename({"dataitem_id": "item"})
         assignments = (
             memberships.filter(
@@ -754,10 +759,103 @@ def _resolve_output_root(
     return Path((settings or get_settings()).output_root)
 
 
+def _filter_explicit_values(
+    frame: pl.DataFrame,
+    filters: Iterable[tuple[str, str | Iterable[str] | None]],
+) -> pl.DataFrame:
+    """Apply optional string-or-iterable filters with shared semantics."""
+    for column, requested in filters:
+        if requested is not None:
+            values = [requested] if isinstance(requested, str) else list(requested)
+            frame = frame.filter(pl.col(column).is_in(values))
+    return frame
+
+
+def read_cell_cell_connectivity(
+    project_id: str,
+    connectome_id: str,
+    *,
+    synapse_table_id: str | None = None,
+    presynaptic_cells: str | Iterable[str] | None = None,
+    postsynaptic_cells: str | Iterable[str] | None = None,
+    measurement_types: str | Iterable[str] | None = None,
+    output_root: str | Path | None = None,
+    settings: Settings | None = None,
+) -> pl.DataFrame:
+    """Read one cell-cell measurement context from the canonical Delta table.
+
+    The required project and connectome scopes identify one measurement
+    context. Optional filters select source-table provenance, explicit endpoint
+    IDs, or measurement types; DataSet and cluster cohort resolution is
+    intentionally outside this helper's contract.
+
+    Parameters
+    ----------
+    project_id:
+        Project scope to read.
+    connectome_id:
+        Measurement context to read within the project.
+    synapse_table_id:
+        Optional logical single-synapse table provenance to retain.
+    presynaptic_cells, postsynaptic_cells:
+        Optional explicit cell ID or iterable of cell IDs to retain.
+    measurement_types:
+        Optional measurement type or iterable of measurement types to retain.
+    output_root, settings:
+        On-disk root resolution with the same precedence and mutual exclusion
+        as :func:`connects_common_connectivity.io.write_models`.
+
+    Returns
+    -------
+    polars.DataFrame
+        Matching long-form connectivity rows. Valid filters with no matches
+        return an empty frame retaining the stored table schema.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the canonical ``cellcellconnectivitylong/`` table is absent.
+    ValueError
+        If ``synapse_table_id`` is requested but the stored table does not
+        contain source-synapse provenance.
+    """
+    root = _resolve_output_root(settings, output_root)
+    table_path = root / MODEL_TABLE_PATHS["CellCellConnectivityLong"]
+    if not table_path.exists():
+        raise FileNotFoundError(
+            f"No cell-cell connectivity table at {table_path}. Run a cell-cell "
+            "ETL that writes the canonical table first."
+        )
+
+    connectivity = pl.read_delta(str(table_path)).filter(
+        (pl.col("project_id") == project_id)
+        & (pl.col("connectome_id") == connectome_id)
+    )
+    if synapse_table_id is not None:
+        if "synapse_table_id" not in connectivity.columns:
+            raise ValueError(
+                "Cannot filter cell-cell connectivity by synapse_table_id: "
+                "the stored table does not contain source-synapse provenance."
+            )
+        connectivity = connectivity.filter(
+            pl.col("synapse_table_id") == synapse_table_id
+        )
+    return _filter_explicit_values(
+        connectivity,
+        (
+            ("presynaptic_cell", presynaptic_cells),
+            ("postsynaptic_cell", postsynaptic_cells),
+            ("measurement_type", measurement_types),
+        ),
+    )
+
+
 def read_synapse_table(
     project_id: str,
     *,
-    dataset_id: str | None = None,
+    synapse_table_id: str,
+    presynaptic_cells: str | Iterable[str] | None = None,
+    postsynaptic_cells: str | Iterable[str] | None = None,
     features: bool | Iterable[str] = False,
     feature_matrix_id: str | None = None,
     synapse_index_column: str = "id",
@@ -771,10 +869,10 @@ def read_synapse_table(
     project_id:
         Project scope to read. Always required — the long table is
         ``ProjectScoped``.
-    dataset_id:
-        Optional additional filter. When given, only synapses whose
-        ``dataset_id`` matches are returned. Pass it whenever a project owns
-        more than one dataset of synapses.
+    synapse_table_id:
+        Logical single-synapse table to read within the project.
+    presynaptic_cells, postsynaptic_cells:
+        Optional explicit cell ID or iterable of cell IDs to retain.
     features:
         Controls the feature LEFT-join.
 
@@ -800,16 +898,24 @@ def read_synapse_table(
     """
     root = _resolve_output_root(settings, output_root)
 
-    long_path = root / SYNAPSE_SUBDIR
+    long_path = root / MODEL_TABLE_PATHS["SynapseConnectivityLong"]
     if not long_path.exists():
         raise FileNotFoundError(
             f"No synapse table at {long_path}. Write SynapseConnectivityLong "
             f"rows first (see code/etl_v1dd_03_synapses.ipynb)."
         )
 
-    synapses = pl.read_delta(str(long_path)).filter(pl.col("project_id") == project_id)
-    if dataset_id is not None:
-        synapses = synapses.filter(pl.col("dataset_id") == dataset_id)
+    synapses = pl.read_delta(str(long_path)).filter(
+        (pl.col("project_id") == project_id)
+        & (pl.col("synapse_table_id") == synapse_table_id)
+    )
+    synapses = _filter_explicit_values(
+        synapses,
+        (
+            ("presynaptic_cell", presynaptic_cells),
+            ("postsynaptic_cell", postsynaptic_cells),
+        ),
+    )
 
     if not features:
         return synapses
@@ -817,18 +923,24 @@ def read_synapse_table(
     if feature_matrix_id is None:
         raise ValueError(
             "features=... requires feature_matrix_id to identify which "
-            f"'{SYNAPSE_FEATURES_SUBDIR}/<id>/' wide table to join."
+            f"'{WIDE_PAYLOAD_PATHS['synapse_features']}/<id>/' wide table to join."
         )
 
-    feature_path = root / SYNAPSE_FEATURES_SUBDIR / feature_matrix_id
+    feature_path = (
+        root
+        / WIDE_PAYLOAD_PATHS["synapse_features"]
+        / feature_matrix_id
+    )
     if not feature_path.exists():
         raise FileNotFoundError(f"No synapse feature table at {feature_path}.")
 
     feature_df = pl.read_delta(str(feature_path)).filter(
         pl.col("project_id") == project_id
     )
-    if dataset_id is not None and "dataset_id" in feature_df.columns:
-        feature_df = feature_df.filter(pl.col("dataset_id") == dataset_id)
+    if "synapse_table_id" in feature_df.columns:
+        feature_df = feature_df.filter(
+            pl.col("synapse_table_id") == synapse_table_id
+        )
 
     # Normalize the feature join key to the long table's synapse id column.
     if synapse_index_column != "id":
@@ -846,11 +958,11 @@ def _select_feature_columns(
     """Return the feature frame reduced to the id key plus requested columns.
 
     ``features is True`` keeps every column except scope columns that already
-    live on the long table (``project_id``/``dataset_id``), which would
+    live on the long table (``project_id``/``synapse_table_id``), which would
     otherwise collide on the join. An explicit iterable keeps only the named
     columns (plus the ``id`` key).
     """
-    drop_on_join = {"project_id", "dataset_id"}
+    drop_on_join = {"project_id", "synapse_table_id"}
     if features is True:
         keep = [c for c in feature_df.columns if c == "id" or c not in drop_on_join]
         return feature_df.select(keep)

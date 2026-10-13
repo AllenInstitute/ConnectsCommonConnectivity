@@ -4,14 +4,196 @@ from __future__ import annotations
 from typing import Iterator, Mapping, Optional, Tuple
 
 import numpy as np
+import polars as pl
+import pyarrow as pa
 from numpy.typing import ArrayLike
 
-from connects_common_connectivity.models import ProjectionMeasurementMatrix
+from connects_common_connectivity.io.arrow_utils import build_arrow_schema
+from connects_common_connectivity.models import (
+    CellCellConnectivityLong,
+    Modality,
+    ProjectionMeasurementMatrix,
+    SynapticMeasurementType,
+    Unit,
+)
 
 __all__ = [
+    "cell_cell_connectivity_to_arrow",
+    "derive_cell_cell_connectivity",
     "populate_region_coverage",
     "walk_ancestors",
 ]
+
+_CELL_CELL_IDENTITY_COLUMNS = [
+    "presynaptic_cell",
+    "postsynaptic_cell",
+]
+_CELL_CELL_ARROW_SCHEMA = build_arrow_schema(CellCellConnectivityLong)
+_CELL_CELL_OUTPUT_SCHEMA = pl.from_arrow(
+    pa.Table.from_batches([], schema=_CELL_CELL_ARROW_SCHEMA)
+).schema
+
+
+def cell_cell_connectivity_to_arrow(connectivity: pl.DataFrame) -> pa.Table:
+    """Convert derived cell-cell measurements to their canonical Arrow schema."""
+    return connectivity.to_arrow().cast(_CELL_CELL_ARROW_SCHEMA)
+
+
+def derive_cell_cell_connectivity(
+    synapses: pl.DataFrame,
+    *,
+    project_id: str,
+    connectome_id: str,
+    modality: Modality | str,
+    size_column: str | None = None,
+    size_unit: Unit | str | None = None,
+) -> pl.DataFrame:
+    """Aggregate single-synapse rows into cell-cell connectivity measurements.
+
+    One ``SYNAPSE_COUNT`` row is emitted for every endpoint pair in the given
+    project. Every input row must belong to ``project_id`` and have a unique,
+    non-null synapse ``id``.
+    Supplying both ``size_column`` and ``size_unit`` additionally emits a
+    ``SUM_ANATOMICAL_SIZE`` row. Null sizes are rejected because ignoring them
+    would report a partial sum as a total anatomical size.
+
+    Output IDs are readable strings containing the project, connectome,
+    endpoints, and measurement type.
+    If every input row has the same non-null ``synapse_table_id``, that value
+    is preserved as optional provenance; it does not affect grouping or output
+    identity.
+    """
+    required_columns = ["id", "project_id", *_CELL_CELL_IDENTITY_COLUMNS]
+    missing = [column for column in required_columns if column not in synapses]
+    if missing:
+        raise ValueError(f"Missing required synapse columns: {missing}")
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise ValueError("project_id must be a non-empty string")
+    if not isinstance(connectome_id, str) or not connectome_id.strip():
+        raise ValueError("connectome_id must be a non-empty string")
+    if (size_column is None) != (size_unit is None):
+        raise ValueError("size_column and size_unit must be supplied together")
+
+    try:
+        modality_value = Modality(modality).value
+    except ValueError as error:
+        raise ValueError(f"Unsupported modality: {modality!r}") from error
+
+    size_unit_value: str | None = None
+    if size_column is not None:
+        if size_column not in synapses:
+            raise ValueError(f"Size column not found: {size_column!r}")
+        if not synapses.schema[size_column].is_numeric():
+            raise TypeError(f"Size column {size_column!r} must be numeric")
+        if synapses[size_column].null_count():
+            raise ValueError(f"Size column {size_column!r} contains null values")
+        try:
+            size_unit_value = Unit(size_unit).value
+        except ValueError as error:
+            raise ValueError(f"Unsupported size unit: {size_unit!r}") from error
+
+    null_columns = [column for column in required_columns if synapses[column].null_count()]
+    if null_columns:
+        raise ValueError(f"Identity columns contain null values: {null_columns}")
+    duplicate_ids = (
+        synapses.filter(pl.col("id").is_duplicated())["id"]
+        .unique(maintain_order=True)
+        .head(5)
+        .to_list()
+    )
+    if duplicate_ids:
+        raise ValueError(f"Duplicate synapse ids found: {duplicate_ids!r}")
+    input_projects = synapses["project_id"].cast(pl.String).unique().to_list()
+    if input_projects and input_projects != [project_id]:
+        raise ValueError(
+            f"Input project_id values must all match {project_id!r}; "
+            f"found {sorted(input_projects)!r}"
+        )
+    if synapses.is_empty():
+        return pl.DataFrame(schema=_CELL_CELL_OUTPUT_SCHEMA)
+
+    synapse_table_id = _single_synapse_table_id(synapses)
+    normalized = synapses.with_columns(
+        pl.col(_CELL_CELL_IDENTITY_COLUMNS).cast(pl.String)
+    )
+    count_rows = normalized.group_by(
+        _CELL_CELL_IDENTITY_COLUMNS,
+        maintain_order=True,
+    ).len(name="value")
+    count_rows = _shape_cell_cell_measurements(
+        count_rows,
+        project_id=project_id,
+        connectome_id=connectome_id,
+        synapse_table_id=synapse_table_id,
+        modality=modality_value,
+        measurement_type=SynapticMeasurementType.SYNAPSE_COUNT.value,
+        unit=Unit.COUNT.value,
+    )
+
+    measurements = [count_rows]
+    if size_column is not None and size_unit_value is not None:
+        size_rows = normalized.group_by(
+            _CELL_CELL_IDENTITY_COLUMNS,
+            maintain_order=True,
+        ).agg(pl.col(size_column).sum().cast(pl.Float64).alias("value"))
+        measurements.append(
+            _shape_cell_cell_measurements(
+                size_rows,
+                project_id=project_id,
+                connectome_id=connectome_id,
+                synapse_table_id=synapse_table_id,
+                modality=modality_value,
+                measurement_type=SynapticMeasurementType.SUM_ANATOMICAL_SIZE.value,
+                unit=size_unit_value,
+            )
+        )
+
+    return pl.concat(measurements)
+
+
+def _shape_cell_cell_measurements(
+    measurements: pl.DataFrame,
+    *,
+    project_id: str,
+    connectome_id: str,
+    synapse_table_id: str | None,
+    modality: str,
+    measurement_type: str,
+    unit: str,
+) -> pl.DataFrame:
+    measurements = measurements.with_columns(
+        pl.lit(None, dtype=pl.String).alias("description"),
+        pl.lit(project_id).alias("project_id"),
+        pl.lit(connectome_id).alias("connectome_id"),
+        pl.lit(synapse_table_id, dtype=pl.String).alias("synapse_table_id"),
+        pl.lit(measurement_type).alias("measurement_type"),
+        pl.lit(modality).alias("modality"),
+        pl.col("value").cast(pl.Float64),
+        pl.lit(unit).alias("unit"),
+    )
+    return measurements.with_columns(
+        pl.concat_str(
+            [
+                "project_id",
+                "connectome_id",
+                "presynaptic_cell",
+                "postsynaptic_cell",
+                "measurement_type",
+            ],
+            separator="_",
+        ).alias("id")
+    ).select(_CELL_CELL_OUTPUT_SCHEMA.keys())
+
+
+def _single_synapse_table_id(synapses: pl.DataFrame) -> str | None:
+    """Return one complete source-table value, otherwise no provenance."""
+    if "synapse_table_id" not in synapses.columns:
+        return None
+    values = synapses["synapse_table_id"]
+    if values.null_count():
+        return None
+    unique = values.unique().to_list()
+    return str(unique[0]) if len(unique) == 1 else None
 
 
 def walk_ancestors(

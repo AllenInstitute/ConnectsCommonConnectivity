@@ -793,7 +793,7 @@ INSTANCE_FACTORIES = {
     SynapseFeatureMatrix: lambda: SynapseFeatureMatrix(
         id="sfm1",
         project_id="p1",
-        dataset_id="ds1",
+        synapse_table_id="synapses1",
         parquet_path="file:///tmp/syn_wide.parquet",
         synapse_index_column="id",
     ),

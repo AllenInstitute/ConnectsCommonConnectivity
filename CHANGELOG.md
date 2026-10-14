@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `write_models` and `write_projection_matrix` losing package and LinkML
+  provenance on Delta writes; new commits retain `linkml_schema_version`,
+  `linkml_class`, and `schema_fingerprint` in `DeltaTable.history()`.
 - Fixed `read_spatial_locations` filters mixing `LocationType` members and
   strings; matching rows are retained even when other requested values are unknown.
 - Fixed `ReferenceSpace` writes accepting inconsistent voxel-scale metadata;

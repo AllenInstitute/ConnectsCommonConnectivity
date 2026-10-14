@@ -127,6 +127,18 @@ print(result.mode, result.rows_written, result.predicates)
 - `write_models` infers class from `rows`, then applies the registered `subdir`, `partition_by`, scope predicate, and write mode from `io/write_spec.py`.
 - For registry tables, notebook code should **not** call `write_deltalake` directly and should not build `predicate=` strings by hand.
 - Re-running is idempotent when you pass the full intended scope slice (the standard pattern in current notebooks).
+- `write_models` (including calls through `write_projection_matrix`) records `linkml_class`, `linkml_schema_version` (the package version), and `schema_fingerprint` in each Delta commit it creates. Inspect provenance with `DeltaTable.history()` in addition to verifying rows with `pl.read_delta`:
+
+```python
+from deltalake import DeltaTable
+
+for commit in DeltaTable(str(result.path)).history(5):
+    print({key: commit.get(key) for key in (
+        "version", "linkml_class", "linkml_schema_version", "schema_fingerprint"
+    )})
+```
+
+This describes each commit's input, not the provenance of every row currently in the table. Older or external commits may lack these keys, unchanged merges need not create a commit, and history is subject to Delta log retention. The fingerprint describes Arrow field names and types, not the full LinkML schema. These values are not restored as Arrow schema metadata on reads.
 
 ### 5b. `DataItem` writes are id-deduped append via `write_models`
 
@@ -154,6 +166,8 @@ write_deltalake(
 ```
 
 **Exception:** if two notebooks write to the same `cellfeatures/<fsi>/` directory with different `project_id`s (e.g. `exc_visp_morph_features` shared between patchseq and WNM), the `project_id` predicate correctly scopes each notebook's write without touching the other's rows.
+
+For permitted direct Delta writes here and below, provenance is **not automatic**: Arrow schema metadata alone is insufficient. When the table has LinkML metadata, decode only its existing `linkml_class`, `linkml_schema_version`, and `schema_fingerprint` byte keys/values to strings and pass `commit_properties=CommitProperties(custom_metadata=...)` to `write_deltalake` (or `DeltaTable.merge`). Import `CommitProperties` from `deltalake.transaction`; do not import private writer helpers or invent a LinkML class for wide payloads that do not represent one.
 
 ### 5d. New-cell registration in `_02` notebooks
 

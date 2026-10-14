@@ -22,6 +22,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import DeltaTable, write_deltalake
 from deltalake.exceptions import DeltaError
+from deltalake.transaction import CommitProperties
 from numpy.typing import ArrayLike
 from pydantic import BaseModel
 
@@ -401,6 +402,16 @@ def _group_by_scope(
 # Dispatch branches
 # ---------------------------------------------------------------------------
 
+def _linkml_commit_properties(table: pa.Table) -> CommitProperties | None:
+    metadata = table.schema.metadata or {}
+    custom_metadata = {
+        key.decode(): metadata[key].decode()
+        for key in (b"linkml_class", b"linkml_schema_version", b"schema_fingerprint")
+        if key in metadata
+    }
+    return CommitProperties(custom_metadata=custom_metadata) if custom_metadata else None
+
+
 # No live registry entry currently uses this branch. It is retained for the
 # deferred bulk SynapseConnectivityLong registration, which must avoid MERGE.
 
@@ -441,6 +452,7 @@ def _dispatch_overwrite_scoped(
     tuple. Rows matching each predicate are replaced; other scopes remain
     untouched.
     """
+    commit_properties = _linkml_commit_properties(table)
     groups = _group_by_scope(table, spec.scope_columns)
     predicates: list[str] = []
     rows_written = 0
@@ -453,6 +465,7 @@ def _dispatch_overwrite_scoped(
             mode="overwrite",
             predicate=predicate,
             partition_by=partition_by,
+            commit_properties=commit_properties,
         )
         predicates.append(predicate)
         rows_written += sub.num_rows
@@ -502,6 +515,7 @@ def _dispatch_merge_scoped(
     If another writer creates the table during initial creation, this writer
     reopens the table and merges its batch instead.
     """
+    commit_properties = _linkml_commit_properties(table)
     source = _deduplicate_on_keys(table, spec.merge_on, spec.nullable_merge_on)
     predicate = _build_merge_predicate(spec.merge_on, spec.nullable_merge_on)
     prune = _build_partition_prune_predicate(source, spec.partition_by, spec.merge_on)
@@ -516,6 +530,7 @@ def _dispatch_merge_scoped(
                 source,
                 mode="error",
                 partition_by=spec.partition_by or None,
+                commit_properties=commit_properties,
             )
         except DeltaError:
             if not DeltaTable.is_deltatable(str(path)):
@@ -530,6 +545,7 @@ def _dispatch_merge_scoped(
                 predicate=predicate,
                 source_alias="source",
                 target_alias="target",
+                commit_properties=commit_properties,
             )
         )
         update_predicate = _build_merge_update_predicate(

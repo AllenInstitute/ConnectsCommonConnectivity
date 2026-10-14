@@ -18,7 +18,8 @@ classifiers = [
 ]
 keywords = ["connectivity", "neuroscience", "linkml", "pydantic"]
 dependencies = [
-  "caveclient>=7.11.1",
+  # >=8.1 returns native dtypes instead of CSV-mangled strings from materialization queries
+  "caveclient>=8.1.0",
   "deltalake>=1.2.0",
   "jupyter>=1.1.1",
   "linkml>=1.7.0",

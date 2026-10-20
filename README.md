@@ -152,6 +152,38 @@ Regenerate the checked-in Pydantic models from the repository root with
 
 A set of ETL Jupyter notebooks in `code/` registers real datasets into a shared Delta Lake store via the `connects_common_connectivity.io` layer (`write_models`, `write_projection_matrix`). The output location is resolved from `ccc_config.yaml` at the repo root (or the `CCC_OUTPUT_ROOT` environment variable), so notebooks do not hard-code a destination path. These serve as concrete working examples for every schema class.
 
+- **Excitatory morphology:** run [the excitatory Patch-seq notebook](code/EXC_WNM_patchseq/etl_patchseq_exc_01.ipynb), then [the WNM notebook](code/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb), after the shared T-type and MET-type taxonomy ETLs. Both datasets use project `visp_exc_morphology`. Patch-seq owns the canonical 50-feature `exc_visp_morph_features` set; WNM reuses its definitions for 44 available features without replacing the shared vocabulary. Their payloads live in separate Delta tables at `cellfeatures/<dataset_id>/<feature_set_id>`, with dataset-specific matrix IDs.
+  The shared definitions promote `apical_dendrite_max_branch_order`, `apical_dendrite_num_branches`, `basal_dendrite_calculate_number_of_stems`, `basal_dendrite_max_branch_order`, and `basal_dendrite_num_branches` to float64 because WNM supplies fractional values. Other CSV datatypes are retained; the source CSV is not modified.
+- `DatasetReader` follows each `CellFeatureMatrix.parquet_path` to discover and read its payload, so matrices sharing a feature set need not share a table or contain every defined feature. Discovery includes the matrix's `parquet_path`. Records without a pointer retain the legacy `cellfeatures/<feature_set_id>` lookup; a broken explicit pointer is reported rather than silently replaced with legacy data. Absolute file URIs must be updated if payloads are relocated.
+
+### Run all active ETLs
+
+[scripts/run_etl.py](scripts/run_etl.py) runs the nine active `etl_*.ipynb`
+notebooks in dependency order: shared taxonomies, inhibitory Patch-seq,
+excitatory Patch-seq, WNM, Minnie base/features, and V1DD base/UMAP.
+It excludes `code/old/`, backup notebooks, CAVE downloads, and BARseq raw-data
+extraction. Prepare the local input files before running.
+
+```bash
+# Preview the order without executing notebooks or writing files.
+uv run python scripts/run_etl.py --dry-run
+
+# Execute all nine notebooks, stopping on the first error.
+uv run python scripts/run_etl.py
+```
+
+Each notebook gets a fresh Python kernel using the runner's interpreter and the
+repository root as its working directory. Cells have no execution timeout, and
+errors stop the run even if a cell is tagged to allow errors. The notebooks retain
+their normal CCC configuration (`ccc_config.yaml` or `CCC_OUTPUT_ROOT`); completed
+writes are not rolled back if a later notebook fails.
+
+Source notebooks are not modified. Executed copies, including partial output
+from a failed notebook, are saved under `scratch/etl_runs/<UTC timestamp>/code/`.
+Use `--output-dir /path/to/new-directory` to choose a different execution-record
+directory, not a different CCC data destination. The directory must not already
+exist. Open the saved copies to inspect cell output, errors, and plots.
+
 - **`code/etl_examples_readme.ipynb`** — markdown-only overview of all registered datasets and feature sets: what each dataset contains, why cell counts differ between sources, and how shared feature sets work across projects. Start here if you're new to the data.
 
 - **`etl_example_prompt.md`** (repo root) — prompt guide for AI assistants creating new ETL notebooks. Covers which files to read first, hard rules (never edit `models.py`, schemas are truth, no id casting), the canonical notebook structure, the idempotent write pattern for each table type, and a common-mistakes reference table.

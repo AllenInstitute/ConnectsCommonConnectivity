@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `scripts/run_etl.py` to execute the nine active ETL notebooks in
+  dependency order, with a dry-run preview, separate execution records, and
+  stop-on-error behavior. Legacy, backup, and source-extraction notebooks are excluded.
 - Added optional `ReferenceSpace.anatomical_orientation`, an embedded
   `AnatomicalOrientation` naming the signed data axis that points toward each
   anatomical pole: `anterior_to_posterior`, `rostral_to_caudal`,
@@ -47,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved the excitatory Patch-seq and WNM ETLs to `code/EXC_WNM_patchseq/`, using
+  project `visp_exc_morphology`, one canonical morphology feature set, and
+  separate dataset-specific feature tables. Run Patch-seq before WNM.
+  Five count-like shared features now use float64 to preserve fractional WNM
+  measurements; other source datatypes are unchanged.
 - Changed `read_reference_spaces` to select all scopes when `project_id` is omitted, only global spaces for explicit `None`, and only the named project's spaces for a string, without including global spaces automatically.
 - Changed the Minnie and V1DD cell-cell ETLs to share canonical `cellcellconnectivitylong/` storage with connectome-scoped overwrites.
 - Changed identity-bearing metadata and association writes through `write_models` from scoped replacement to pure upserts; rerunning with fewer `Cluster`, `CellFeatureDefinition`, or `ClusterMembership` rows no longer deletes omitted rows. Explicit deletion support is tracked in #21.
@@ -61,6 +69,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `DatasetReader` ignoring `CellFeatureMatrix.parquet_path`; separate
+  matrices can now share a feature vocabulary without sharing storage.
+  Feature-set discovery includes `parquet_path`, and records without a pointer
+  retain the legacy feature-set-based lookup.
 - Fixed `write_models` and `write_projection_matrix` losing package and LinkML
   provenance on Delta writes; new commits retain `linkml_schema_version`,
   `linkml_class`, and `schema_fingerprint` in `DeltaTable.history()`.

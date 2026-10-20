@@ -158,8 +158,8 @@ A set of ETL Jupyter notebooks in `code/` registers real datasets into a shared 
 
 ### Run all active ETLs
 
-[scripts/run_etl.py](scripts/run_etl.py) runs the nine active `etl_*.ipynb`
-notebooks in dependency order: shared taxonomies, inhibitory Patch-seq,
+[scripts/run_etl.py](scripts/run_etl.py) runs the eleven active `etl_*.ipynb`
+notebooks in dependency order: shared Tasic, MET-type and ABC taxonomies, BARseq, inhibitory Patch-seq,
 excitatory Patch-seq, WNM, Minnie base/features, and V1DD base/UMAP.
 It excludes `code/old/`, backup notebooks, CAVE downloads, and BARseq raw-data
 extraction. Prepare the local input files before running.
@@ -168,7 +168,7 @@ extraction. Prepare the local input files before running.
 # Preview the order without executing notebooks or writing files.
 uv run python scripts/run_etl.py --dry-run
 
-# Execute all nine notebooks, stopping on the first error.
+# Execute all eleven notebooks, stopping on the first error.
 uv run python scripts/run_etl.py
 ```
 

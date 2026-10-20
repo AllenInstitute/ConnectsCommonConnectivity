@@ -36,14 +36,14 @@ def _write_notebook(path: Path) -> bytes:
 
 
 def test_runner_covers_active_etls_in_dependency_order(runner):
-    """The plan includes exactly nine active ETLs and places all prerequisites first."""
+    """The plan includes all eleven active ETLs and places shared taxonomies before cohorts."""
     active = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "code").rglob("etl_*.ipynb")
         if "old" not in path.parts and ".ipynb_checkpoints" not in path.parts
     }
     assert set(runner.NOTEBOOKS) == active
-    assert len(runner.NOTEBOOKS) == len(active) == 9
+    assert len(runner.NOTEBOOKS) == len(active) == 11
     order = {Path(name).name: index for index, name in enumerate(runner.NOTEBOOKS)}
     for cohort in (
         "etl_patchseq_inh_01.ipynb", "etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb",
@@ -51,6 +51,8 @@ def test_runner_covers_active_etls_in_dependency_order(runner):
         assert order["etl_ttype_01.ipynb"] < order[cohort]
         assert order["etl_met_type_01.ipynb"] < order[cohort]
     for before, after in (
+        ("etl_ttype_01.ipynb", "etl_barseq_01.ipynb"),
+        ("etl_abc_01.ipynb", "etl_barseq_01.ipynb"),
         ("etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb"),
         ("etl_minnie1822_01.ipynb", "etl_minnie1822_02_umap_features.ipynb"),
         ("etl_v1dd1196_01.ipynb", "etl_v1dd1196_02_umap.ipynb"),

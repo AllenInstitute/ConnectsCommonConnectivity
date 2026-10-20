@@ -882,10 +882,12 @@ class CellFeatureMatrix(ProjectScoped):
                                            'range': 'CellFeatureSet',
                                            'required': True},
                         'parquet_path': {'description': 'Path to parquet dataset '
-                                                        'containing wide-form data. '
-                                                        'Columns should be named the '
-                                                        'id of a CellFeatureDefinition '
-                                                        'in the CellFeatureSet.',
+                                                        'containing wide-form data, '
+                                                        'relative to the release root '
+                                                        'or an absolute URI. Columns '
+                                                        'should be named the id of a '
+                                                        'CellFeatureDefinition in the '
+                                                        'CellFeatureSet.',
                                          'name': 'parquet_path',
                                          'range': 'ParquetDataset'}}})
 
@@ -922,7 +924,7 @@ class CellFeatureMatrix(ProjectScoped):
          'domain_of': ['CellFeatureDefinition',
                        'CellFeatureMatrix',
                        'CellFeatureMeasurement']} })
-    parquet_path: Optional[str] = Field(default=None, description="""Path to parquet dataset containing wide-form data. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path',
+    parquet_path: Optional[str] = Field(default=None, description="""Path to parquet dataset containing wide-form data, relative to the release root or an absolute URI. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path',
          'domain_of': ['CellFeatureMatrix', 'SynapseFeatureMatrix']} })
     cell_index_column: Optional[str] = Field(default=None, description="""Column of the parquet which corresponds to the DataItem""", json_schema_extra = { "linkml_meta": {'alias': 'cell_index_column', 'domain_of': ['CellFeatureMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
@@ -931,7 +933,7 @@ class CellFeatureMatrix(ProjectScoped):
 
     @field_validator('parquet_path')
     def pattern_parquet_path(cls, v):
-        pattern=re.compile(r"^(s3://|gs://|https?://|file://).+")
+        pattern=re.compile(r"^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1781,11 +1783,14 @@ class ParquetDataset(ConfiguredBaseModel):
     A dataset of parquet files (possibly partitioned) accessible via a URL or directory.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-zarr-schema',
-         'slot_usage': {'path': {'description': 'Path or URL to the parquet dataset '
-                                                'root (directory or file). Supports '
-                                                'partitioned layouts.',
+         'slot_usage': {'path': {'description': 'Path to the parquet dataset root '
+                                                '(directory or file), relative to the '
+                                                'release root\n'
+                                                'or a URI with an s3://, gs://, '
+                                                'https://, http://, or file:// prefix. '
+                                                'Supports partitioned layouts.',
                                  'name': 'path',
-                                 'pattern': '^(s3://|gs://|https?://|file://).+',
+                                 'pattern': '^(?:(?:s3://|gs://|https?://|file://).+|[^/\\\\:\\s][^\\\\:\\r\\n]*)$',
                                  'range': 'string',
                                  'required': True}}})
 
@@ -1818,11 +1823,12 @@ class ParquetDataset(ConfiguredBaseModel):
                        'CellCellMeasurementMatrix',
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
-    path: str = Field(default=..., description="""Path or URL to the parquet dataset root (directory or file). Supports partitioned layouts.""", json_schema_extra = { "linkml_meta": {'alias': 'path', 'domain_of': ['ZarrArray', 'ZarrDataset', 'ParquetDataset']} })
+    path: str = Field(default=..., description="""Path to the parquet dataset root (directory or file), relative to the release root
+or a URI with an s3://, gs://, https://, http://, or file:// prefix. Supports partitioned layouts.""", json_schema_extra = { "linkml_meta": {'alias': 'path', 'domain_of': ['ZarrArray', 'ZarrDataset', 'ParquetDataset']} })
 
     @field_validator('path')
     def pattern_path(cls, v):
-        pattern=re.compile(r"^(s3://|gs://|https?://|file://).+")
+        pattern=re.compile(r"^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1877,9 +1883,11 @@ class ProjectionMeasurementMatrix(ProjectScoped):
                                          'name': 'region_index',
                                          'range': 'BrainRegion'},
                         'unit': {'name': 'unit', 'range': 'Unit'},
-                        'values': {'description': 'Zarr array containing matrix values '
-                                                  'with shape (data_item_index x '
-                                                  'region_index).',
+                        'values': {'description': 'Reference to matrix values with '
+                                                  'shape (data_item_index x '
+                                                  'region_index). ETL payload paths '
+                                                  'are relative to the release root or '
+                                                  'absolute URIs.',
                                    'name': 'values',
                                    'range': 'ZarrArray'}}})
 
@@ -1937,7 +1945,7 @@ class ProjectionMeasurementMatrix(ProjectScoped):
     region_index: Optional[list[str]] = Field(default=None, description="""Ordered regions defining columns (or rows) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'region_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
     region_coverage: Optional[list[str]] = Field(default=None, description="""Precomputed subset of region_index where at least one data item has a non-zero value. Enables fast lookup of which regions have projection data without loading the full matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'region_coverage', 'domain_of': ['ProjectionMeasurementMatrix']} })
     data_item_index: Optional[list[str]] = Field(default=None, description="""Ordered data items defining rows (or columns) of the matrix.""", json_schema_extra = { "linkml_meta": {'alias': 'data_item_index', 'domain_of': ['ProjectionMeasurementMatrix']} })
-    values: Optional[str] = Field(default=None, description="""Zarr array containing matrix values with shape (data_item_index x region_index).""", json_schema_extra = { "linkml_meta": {'alias': 'values',
+    values: Optional[str] = Field(default=None, description="""Reference to matrix values with shape (data_item_index x region_index). ETL payload paths are relative to the release root or absolute URIs.""", json_schema_extra = { "linkml_meta": {'alias': 'values',
          'domain_of': ['ProjectionMeasurementMatrix', 'CellCellMeasurementMatrix']} })
     unit: Optional[Unit] = Field(default=None, description="""Unit of measure for values.""", json_schema_extra = { "linkml_meta": {'alias': 'unit',
          'domain_of': ['ReferenceSpace',
@@ -2830,7 +2838,9 @@ class SynapseFeatureMatrix(ProjectScoped):
                                'required': True},
                         'parquet_path': {'description': 'Path to the wide-form '
                                                         'per-synapse feature Parquet '
-                                                        'dataset.',
+                                                        'dataset, relative to the '
+                                                        'release root or an absolute '
+                                                        'URI.',
                                          'name': 'parquet_path',
                                          'range': 'ParquetDataset',
                                          'required': True},
@@ -2891,7 +2901,7 @@ class SynapseFeatureMatrix(ProjectScoped):
          'domain_of': ['CellCellConnectivityLong',
                        'SynapseConnectivityLong',
                        'SynapseFeatureMatrix']} })
-    parquet_path: str = Field(default=..., description="""Path to the wide-form per-synapse feature Parquet dataset.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path',
+    parquet_path: str = Field(default=..., description="""Path to the wide-form per-synapse feature Parquet dataset, relative to the release root or an absolute URI.""", json_schema_extra = { "linkml_meta": {'alias': 'parquet_path',
          'domain_of': ['CellFeatureMatrix', 'SynapseFeatureMatrix']} })
     synapse_index_column: Optional[str] = Field(default=None, description="""Column of the Parquet holding the SynapseConnectivityLong id.""", json_schema_extra = { "linkml_meta": {'alias': 'synapse_index_column', 'domain_of': ['SynapseFeatureMatrix']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
@@ -2900,7 +2910,7 @@ class SynapseFeatureMatrix(ProjectScoped):
 
     @field_validator('parquet_path')
     def pattern_parquet_path(cls, v):
-        pattern=re.compile(r"^(s3://|gs://|https?://|file://).+")
+        pattern=re.compile(r"^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):

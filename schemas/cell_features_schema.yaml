@@ -92,7 +92,7 @@ classes:
         description: Reference to the CellFeatureSet that defines the features in this matrix.
       parquet_path:
         range: ParquetDataset
-        description: Path to parquet dataset containing wide-form data. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.
+        description: Path to parquet dataset containing wide-form data, relative to the release root or an absolute URI. Columns should be named the id of a CellFeatureDefinition in the CellFeatureSet.
       cell_index_column:
         range: string
         description: Column of the parquet which corresponds to the DataItem
@@ -192,8 +192,8 @@ slots:
     description: Datetime value (ISO 8601) for a (cell, feature) measurement.
     range: datetime
   parquet_path:
-    description: "path to a parquet file where the features are stored. i.e. s3://my_bucket/my_path. file:// for files, gs:// for google cloud storage, https:// for http"
-    pattern: ^(s3://|gs://|https?://|file://).+ 
+    description: "Path to feature data, relative to the release root or a URI with an s3://, gs://, https://, http://, or file:// prefix."
+    pattern: '^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$'
     range: string
   cell_index_column:
     description: "name of column in parquet file that contains the DataItem identifier"

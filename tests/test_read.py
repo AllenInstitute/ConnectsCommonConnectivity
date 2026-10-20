@@ -21,6 +21,7 @@ from connects_common_connectivity.io import (
 )
 from connects_common_connectivity.models import (
     AnatomicalOrientation,
+    CellFeatureMatrix,
     Default2DView,
     EmbeddingLocation,
     EmbeddingSpace,
@@ -853,9 +854,11 @@ def test_read_dataset_accepts_subset_and_empty_selections(reader_root: Path):
     assert ids_only.height == 3
 
 
-@pytest.mark.parametrize("path_kind", ["uri", "absolute", "relative"])
+@pytest.mark.parametrize("path_kind", ["uri", "absolute", "relative", "relocated"])
 def test_shared_feature_set_reads_separate_dataset_matrices(tmp_path: Path, path_kind: str):
-    """Datasets sharing a project and vocabulary read only their own matrix's feature subset."""
+    """Shared-vocabulary matrices read their own subsets even after relative-path relocation."""
+    tmp_path = tmp_path / "release"
+    tmp_path.mkdir()
     _write_table(tmp_path, "dataset", {
         "id": ["patchseq", "wnm"], "project_id": ["morphology", "morphology"],
     })
@@ -885,11 +888,22 @@ def test_shared_feature_set_reads_separate_dataset_matrices(tmp_path: Path, path
         else str(path.relative_to(tmp_path))
         for path in paths
     ]
-    _write_table(tmp_path, "cellfeaturematrix", {
-        "id": ["patchseq_shared", "wnm_shared"], "feature_set_id": ["shared", "shared"],
-        "project_id": ["morphology", "morphology"], "cell_index_column": ["id", "id"],
-        "parquet_path": pointers,
-    })
+    if path_kind == "absolute":
+        _write_table(tmp_path, "cellfeaturematrix", {
+            "id": ["patchseq_shared", "wnm_shared"], "feature_set_id": ["shared", "shared"],
+            "project_id": ["morphology", "morphology"], "cell_index_column": ["id", "id"],
+            "parquet_path": pointers,
+        })
+    else:
+        write_models([
+            CellFeatureMatrix(
+                id=matrix, feature_set_id="shared", project_id="morphology",
+                cell_index_column="id", parquet_path=pointer,
+            )
+            for matrix, pointer in zip(("patchseq_shared", "wnm_shared"), pointers)
+        ], output_root=tmp_path)
+    if path_kind == "relocated":
+        tmp_path = tmp_path.rename(tmp_path.parent / "relocated")
     reader = DatasetReader(tmp_path)
     for dataset, matrix, pointer in zip(
         ("patchseq", "wnm"), ("patchseq_shared", "wnm_shared"), pointers

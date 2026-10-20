@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Changed active ETL payload pointers to release-root-relative paths so complete
+  release folders can be relocated. Feature-matrix and Parquet dataset models
+  now accept relative paths while retaining supported absolute URIs.
 - Moved the excitatory Patch-seq and WNM ETLs to `code/EXC_WNM_patchseq/`, using
   project `visp_exc_morphology`, one canonical morphology feature set, and
   separate dataset-specific feature tables. Run Patch-seq before WNM.

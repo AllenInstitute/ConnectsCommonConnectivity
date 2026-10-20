@@ -79,7 +79,7 @@ classes:
       parquet_path:
         range: ParquetDataset
         required: true
-        description: Path to the wide-form per-synapse feature Parquet dataset.
+        description: Path to the wide-form per-synapse feature Parquet dataset, relative to the release root or an absolute URI.
       synapse_index_column:
         range: string
         description: Column of the Parquet holding the SynapseConnectivityLong id.
@@ -97,6 +97,6 @@ slots:
     description: Name of the column in the feature Parquet that holds the synapse id.
     range: string
   parquet_path:
-    description: "Path to a parquet dataset; must include a protocol prefix (s3://, gs://, https://, file://)."
-    pattern: ^(s3://|gs://|https?://|file://).+
+    description: "Path to a parquet dataset, relative to the release root or a URI with an s3://, gs://, https://, http://, or file:// prefix."
+    pattern: '^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$'
     range: string

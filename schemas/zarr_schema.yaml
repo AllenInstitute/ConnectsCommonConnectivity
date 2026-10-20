@@ -51,9 +51,10 @@ classes:
       path:
         range: string
         required: true
-        pattern: ^(s3://|gs://|https?://|file://).+
+        pattern: '^(?:(?:s3://|gs://|https?://|file://).+|[^/\\:\s][^\\:\r\n]*)$'
         description: |-
-          Path or URL to the parquet dataset root (directory or file). Supports partitioned layouts.
+          Path to the parquet dataset root (directory or file), relative to the release root
+          or a URI with an s3://, gs://, https://, http://, or file:// prefix. Supports partitioned layouts.
 
 slots:
   path:

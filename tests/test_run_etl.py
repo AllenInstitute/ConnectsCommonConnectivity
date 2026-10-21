@@ -36,14 +36,14 @@ def _write_notebook(path: Path) -> bytes:
 
 
 def test_runner_covers_active_etls_in_dependency_order(runner):
-    """The plan includes all eleven active ETLs and places shared taxonomies before cohorts."""
+    """The plan includes all ten active ETLs and places shared taxonomies before cohorts."""
     active = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "code").rglob("etl_*.ipynb")
         if "old" not in path.parts and ".ipynb_checkpoints" not in path.parts
     }
     assert set(runner.NOTEBOOKS) == active
-    assert len(runner.NOTEBOOKS) == len(active) == 11
+    assert len(runner.NOTEBOOKS) == len(active) == 10
     order = {Path(name).name: index for index, name in enumerate(runner.NOTEBOOKS)}
     for cohort in (
         "etl_patchseq_inh_01.ipynb", "etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb",
@@ -55,7 +55,6 @@ def test_runner_covers_active_etls_in_dependency_order(runner):
         ("etl_abc_01.ipynb", "etl_barseq_01.ipynb"),
         ("etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb"),
         ("etl_minnie1822_01.ipynb", "etl_minnie1822_02_umap_features.ipynb"),
-        ("etl_v1dd1196_01.ipynb", "etl_v1dd1196_02_umap.ipynb"),
     ):
         assert order[before] < order[after]
 
@@ -132,3 +131,55 @@ def test_runner_rejects_existing_output_directory(runner, tmp_path, monkeypatch)
     with pytest.raises(FileExistsError):
         runner.run_notebooks(tmp_path, tmp_path, ("first.ipynb",))
     client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "start",
+    ["etl_wnm_exc_01.ipynb", "code/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb"],
+)
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_from_selects_inclusive_suffix(runner, tmp_path, monkeypatch, capsys, start, dry_run):
+    """A filename or relative path selects an inclusive suffix for preview or execution."""
+    execute = Mock()
+    monkeypatch.setattr(runner, "run_notebooks", execute)
+    output = tmp_path / "executed"
+    args = ["--from", start, "--output-dir", str(output)]
+    if dry_run:
+        args.append("--dry-run")
+
+    assert runner.main(args) == 0
+
+    selected = runner.NOTEBOOKS[6:]
+    printed = capsys.readouterr().out
+    assert all(name in printed for name in selected)
+    assert all(name not in printed for name in runner.NOTEBOOKS[:6])
+    if dry_run:
+        execute.assert_not_called()
+    else:
+        execute.assert_called_once_with(runner.REPO_ROOT, output, selected)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "start",
+    ["missing.ipynb", "code/old/etl_wnm_exc_01.ipynb"],
+)
+def test_from_rejects_unknown_notebooks(runner, tmp_path, monkeypatch, start):
+    """An unknown start notebook fails before execution or output creation."""
+    execute = Mock()
+    monkeypatch.setattr(runner, "run_notebooks", execute)
+    output = tmp_path / "executed"
+    with pytest.raises(SystemExit) as error:
+        runner.main(["--from", start, "--output-dir", str(output)])
+    assert error.value.code == 2
+    execute.assert_not_called()
+    assert not output.exists()
+
+
+def test_without_from_runs_complete_plan(runner, tmp_path, monkeypatch):
+    """Omitting --from preserves execution of every active notebook."""
+    execute = Mock()
+    monkeypatch.setattr(runner, "run_notebooks", execute)
+    output = tmp_path / "executed"
+    assert runner.main(["--output-dir", str(output)]) == 0
+    execute.assert_called_once_with(runner.REPO_ROOT, output, runner.NOTEBOOKS)

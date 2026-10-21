@@ -159,9 +159,9 @@ A set of ETL Jupyter notebooks in `code/` registers real datasets into a shared 
 
 ### Run all active ETLs
 
-[scripts/run_etl.py](scripts/run_etl.py) runs the eleven active `etl_*.ipynb`
+[scripts/run_etl.py](scripts/run_etl.py) runs the ten active `etl_*.ipynb`
 notebooks in dependency order: shared Tasic, MET-type and ABC taxonomies, BARseq, inhibitory Patch-seq,
-excitatory Patch-seq, WNM, Minnie base/features, and V1DD base/UMAP.
+excitatory Patch-seq, WNM, Minnie base/features, and V1DD.
 It excludes `code/old/`, backup notebooks, CAVE downloads, and BARseq raw-data
 extraction. Prepare the local input files before running.
 
@@ -169,9 +169,17 @@ extraction. Prepare the local input files before running.
 # Preview the order without executing notebooks or writing files.
 uv run python scripts/run_etl.py --dry-run
 
-# Execute all eleven notebooks, stopping on the first error.
+# Execute all ten notebooks, stopping on the first error.
 uv run python scripts/run_etl.py
+
+# Restart at V1DD without repeating previously completed notebooks.
+uv run python scripts/run_etl.py --from etl_v1dd1196_01.ipynb
 ```
+
+`--from` accepts an active notebook's filename or repository-relative path and
+runs it and all later notebooks. It restarts that notebook from its first cell;
+earlier dependencies must already exist in the configured CCC output.
+Combine it with `--dry-run` to preview the selected notebooks.
 
 Each notebook gets a fresh Python kernel using the runner's interpreter and the
 repository root as its working directory. Cells have no execution timeout, and
@@ -184,6 +192,13 @@ from a failed notebook, are saved under `scratch/etl_runs/<UTC timestamp>/code/`
 Use `--output-dir /path/to/new-directory` to choose a different execution-record
 directory, not a different CCC data destination. The directory must not already
 exist. Open the saved copies to inspect cell output, errors, and plots.
+
+V1DD connectivity reads only the needed Feather columns one record batch at a
+time, retaining selected synapses with numeric IDs. The
+`iter_cell_cell_connectivity` helper aggregates counts and sizes together and
+expands the compact pair aggregates into bounded measurement batches. These
+batches feed one atomic Delta overwrite, avoiding a full in-memory copy of the
+long-form connectivity table.
 
 - **`code/etl_examples_readme.ipynb`** — markdown-only overview of all registered datasets and feature sets: what each dataset contains, why cell counts differ between sources, and how shared feature sets work across projects. Start here if you're new to the data.
 

@@ -20,6 +20,7 @@ from connects_common_connectivity.models import (
 __all__ = [
     "cell_cell_connectivity_to_arrow",
     "derive_cell_cell_connectivity",
+    "iter_cell_cell_connectivity",
     "populate_region_coverage",
     "walk_ancestors",
 ]
@@ -29,9 +30,7 @@ _CELL_CELL_IDENTITY_COLUMNS = [
     "postsynaptic_cell",
 ]
 _CELL_CELL_ARROW_SCHEMA = build_arrow_schema(CellCellConnectivityLong)
-_CELL_CELL_OUTPUT_SCHEMA = pl.from_arrow(
-    pa.Table.from_batches([], schema=_CELL_CELL_ARROW_SCHEMA)
-).schema
+_CELL_CELL_OUTPUT_SCHEMA = pl.Schema(_CELL_CELL_ARROW_SCHEMA)
 
 
 def cell_cell_connectivity_to_arrow(connectivity: pl.DataFrame) -> pa.Table:
@@ -63,6 +62,37 @@ def derive_cell_cell_connectivity(
     is preserved as optional provenance; it does not affect grouping or output
     identity.
     """
+    return pl.concat(iter_cell_cell_connectivity(
+        synapses,
+        project_id=project_id,
+        connectome_id=connectome_id,
+        modality=modality,
+        size_column=size_column,
+        size_unit=size_unit,
+    ))
+
+
+def iter_cell_cell_connectivity(
+    synapses: pl.DataFrame,
+    *,
+    project_id: str,
+    connectome_id: str,
+    modality: Modality | str,
+    size_column: str | None = None,
+    size_unit: Unit | str | None = None,
+    batch_size: int = 65_536,
+) -> Iterator[pl.DataFrame]:
+    """Yield derived measurements in batches of at most ``batch_size`` rows.
+
+    Validation, values, IDs, provenance and row order match
+    ``derive_cell_cell_connectivity``. Validation runs on first iteration.
+    Counts and optional sizes are aggregated together before endpoint IDs are
+    cast to strings. Input and compact pair aggregates remain in memory; only
+    the expanded measurement rows are batched. Empty input yields one empty
+    frame with the canonical schema.
+    """
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
     required_columns = ["id", "project_id", *_CELL_CELL_IDENTITY_COLUMNS]
     missing = [column for column in required_columns if column not in synapses]
     if missing:
@@ -110,45 +140,39 @@ def derive_cell_cell_connectivity(
             f"found {sorted(input_projects)!r}"
         )
     if synapses.is_empty():
-        return pl.DataFrame(schema=_CELL_CELL_OUTPUT_SCHEMA)
+        yield pl.DataFrame(schema=_CELL_CELL_OUTPUT_SCHEMA)
+        return
 
     synapse_table_id = _single_synapse_table_id(synapses)
-    normalized = synapses.with_columns(
-        pl.col(_CELL_CELL_IDENTITY_COLUMNS).cast(pl.String)
-    )
-    count_rows = normalized.group_by(
+    aggregations = [pl.len().alias("count")]
+    if size_column is not None:
+        aggregations.append(pl.col(size_column).sum().cast(pl.Float64).alias("size_sum"))
+    pairs = synapses.group_by(
         _CELL_CELL_IDENTITY_COLUMNS,
         maintain_order=True,
-    ).len(name="value")
-    count_rows = _shape_cell_cell_measurements(
-        count_rows,
-        project_id=project_id,
-        connectome_id=connectome_id,
-        synapse_table_id=synapse_table_id,
-        modality=modality_value,
-        measurement_type=SynapticMeasurementType.SYNAPSE_COUNT.value,
-        unit=Unit.COUNT.value,
-    )
+    ).agg(aggregations)
 
-    measurements = [count_rows]
+    measurements = [
+        ("count", SynapticMeasurementType.SYNAPSE_COUNT.value, Unit.COUNT.value),
+    ]
     if size_column is not None and size_unit_value is not None:
-        size_rows = normalized.group_by(
-            _CELL_CELL_IDENTITY_COLUMNS,
-            maintain_order=True,
-        ).agg(pl.col(size_column).sum().cast(pl.Float64).alias("value"))
-        measurements.append(
-            _shape_cell_cell_measurements(
-                size_rows,
+        measurements.append((
+            "size_sum", SynapticMeasurementType.SUM_ANATOMICAL_SIZE.value, size_unit_value,
+        ))
+    for column, measurement_type, unit in measurements:
+        for batch in pairs.iter_slices(batch_size):
+            yield _shape_cell_cell_measurements(
+                batch.select(
+                    pl.col(_CELL_CELL_IDENTITY_COLUMNS).cast(pl.String),
+                    pl.col(column).alias("value"),
+                ),
                 project_id=project_id,
                 connectome_id=connectome_id,
                 synapse_table_id=synapse_table_id,
                 modality=modality_value,
-                measurement_type=SynapticMeasurementType.SUM_ANATOMICAL_SIZE.value,
-                unit=size_unit_value,
+                measurement_type=measurement_type,
+                unit=unit,
             )
-        )
-
-    return pl.concat(measurements)
 
 
 def _shape_cell_cell_measurements(

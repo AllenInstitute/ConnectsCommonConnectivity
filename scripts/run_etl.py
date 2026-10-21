@@ -23,7 +23,6 @@ NOTEBOOKS = (
     "code/EM/etl_minnie1822_01.ipynb",
     "code/EM/etl_minnie1822_02_umap_features.ipynb",
     "code/EM/etl_v1dd1196_01.ipynb",
-    "code/EM/etl_v1dd1196_02_umap.ipynb",
 )
 
 
@@ -81,9 +80,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="New directory for executed copies (default: scratch/etl_runs/<UTC timestamp>). "
              "Does not change the configured CCC data destination.",
     )
+    parser.add_argument(
+        "--from", dest="from_notebook", metavar="NOTEBOOK",
+        help="Start at this notebook filename or repository-relative path, inclusive. "
+             "Earlier dependencies must already exist in the configured CCC output.",
+    )
     args = parser.parse_args(argv)
+    notebooks: tuple[str, ...] = NOTEBOOKS
+    if args.from_notebook is not None:
+        matches = [
+            index for index, notebook in enumerate(NOTEBOOKS)
+            if args.from_notebook in (notebook, Path(notebook).name)
+        ]
+        if len(matches) != 1:
+            parser.error("--from must identify exactly one active ETL notebook")
+        notebooks = NOTEBOOKS[matches[0]:]
     print("ETL order:")
-    for index, notebook in enumerate(NOTEBOOKS, start=1):
+    for index, notebook in enumerate(notebooks, start=1):
         print(f"  {index}. {notebook}")
     if args.dry_run:
         return 0
@@ -93,7 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_dir = REPO_ROOT / "scratch" / "etl_runs" / timestamp
     output_dir = output_dir.expanduser().resolve()
     print(f"Executed notebooks: {output_dir}", flush=True)
-    run_notebooks(REPO_ROOT, output_dir, NOTEBOOKS)
+    run_notebooks(REPO_ROOT, output_dir, notebooks)
     return 0
 
 

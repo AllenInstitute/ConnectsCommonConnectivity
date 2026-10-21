@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 from pydantic import ValidationError
 
 from connects_common_connectivity.io import (
     cell_cell_connectivity_to_arrow,
     derive_cell_cell_connectivity,
+    iter_cell_cell_connectivity,
 )
 from connects_common_connectivity.io.arrow_utils import build_arrow_schema
 from connects_common_connectivity.models import (
@@ -425,3 +427,66 @@ def _synapse_frame() -> pl.DataFrame:
             "postsynaptic_cell": ["post-1"],
         }
     )
+
+
+@pytest.mark.parametrize("batch_size", [1, 2, 10])
+@pytest.mark.parametrize("with_sizes", [False, True])
+def test_batched_connectivity_preserves_numeric_ids_and_aggregates(batch_size, with_sizes):
+    """Bounded batches preserve large numeric endpoints, pair totals, schema, and row order."""
+    root = 864691132737039043
+    synapses = pl.DataFrame({
+        "id": [1, 2, 3, 4],
+        "project_id": ["project-1"] * 4,
+        "synapse_table_id": ["synapses-1"] * 4,
+        "presynaptic_cell": [root, root + 1, root, root + 2],
+        "postsynaptic_cell": [root + 10, root + 11, root + 10, root + 12],
+        "size": [2, 7, 3, 11],
+    })
+    batches = list(iter_cell_cell_connectivity(
+        synapses,
+        project_id="project-1",
+        connectome_id="connectome-1",
+        modality=Modality.ELECTRON_MICROSCOPY,
+        size_column="size" if with_sizes else None,
+        size_unit=Unit.ARBITRARY_UNIT if with_sizes else None,
+        batch_size=batch_size,
+    ))
+    assert all(0 < batch.height <= batch_size for batch in batches)
+    result = pl.concat(batches)
+    counts = result.filter(pl.col("measurement_type") == "SYNAPSE_COUNT")
+    assert counts.select("presynaptic_cell", "postsynaptic_cell", "value").rows() == [
+        (str(root), str(root + 10), 2.0),
+        (str(root + 1), str(root + 11), 1.0),
+        (str(root + 2), str(root + 12), 1.0),
+    ]
+    if with_sizes:
+        sizes = result.filter(pl.col("measurement_type") == "SUM_ANATOMICAL_SIZE")
+        assert sizes["value"].to_list() == [5.0, 7.0, 11.0]
+        assert sizes["unit"].to_list() == ["ARBITRARY_UNIT"] * 3
+    assert result.height == (6 if with_sizes else 3)
+    assert result["synapse_table_id"].unique().to_list() == ["synapses-1"]
+    assert result["id"].n_unique() == result.height
+    assert cell_cell_connectivity_to_arrow(result).schema == build_arrow_schema(
+        CellCellConnectivityLong
+    )
+    assert_frame_equal(result, derive_cell_cell_connectivity(
+        synapses,
+        project_id="project-1",
+        connectome_id="connectome-1",
+        modality=Modality.ELECTRON_MICROSCOPY,
+        size_column="size" if with_sizes else None,
+        size_unit=Unit.ARBITRARY_UNIT if with_sizes else None,
+    ))
+
+
+@pytest.mark.parametrize("batch_size", [0, -1])
+def test_batched_connectivity_rejects_nonpositive_batch_size(batch_size):
+    """Nonpositive batch sizes fail explicitly instead of yielding an incomplete result."""
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        list(iter_cell_cell_connectivity(
+            _synapse_frame(),
+            project_id="project-1",
+            connectome_id="connectome-1",
+            modality=Modality.ELECTRON_MICROSCOPY,
+            batch_size=batch_size,
+        ))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,34 +39,43 @@ def run_notebooks(repo_root: Path, output_dir: Path, notebooks: Sequence[str]) -
         source = repo_root / relative_path
         destination = output_dir / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        notebook = nbformat.read(source, as_version=4)
-        for cell in notebook.cells:
-            if cell.cell_type == "code":
-                cell.outputs = []
-                cell.execution_count = None
-        client = NotebookClient(
-            notebook,
-            kernel_name="python3",
-            timeout=None,
-            allow_errors=False,
-            force_raise_errors=True,
-        )
-        manager = client.create_kernel_manager()
-        spec = manager.kernel_spec
-        if spec is None:
-            raise RuntimeError("The python3 kernel specification is unavailable.")
-        # Use this process's environment, not an unrelated installed Python kernel.
-        spec.argv = [
-            sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}",
-        ]
         print(f"[{index}/{len(notebooks)}] Running {relative_path}", flush=True)
         try:
-            client.execute(cwd=str(repo_root))
+            _execute_notebook(source, destination, repo_root)
         finally:
-            nbformat.write(notebook, destination)
-            print(f"Saved execution record: {destination}", flush=True)
+            gc.collect()
+            print(f"[{index}/{len(notebooks)}] Notebook cleanup complete.", flush=True)
         print(f"[{index}/{len(notebooks)}] Passed {relative_path}", flush=True)
     print(f"All {len(notebooks)} ETL notebooks completed.", flush=True)
+
+
+def _execute_notebook(source: Path, destination: Path, repo_root: Path) -> None:
+    """Scope notebook references locally, save output, and shut down the kernel."""
+    notebook = nbformat.read(source, as_version=4)
+    for cell in notebook.cells:
+        if cell.cell_type == "code":
+            cell.outputs = []
+            cell.execution_count = None
+    client = NotebookClient(
+        notebook,
+        kernel_name="python3",
+        timeout=None,
+        allow_errors=False,
+        force_raise_errors=True,
+    )
+    manager = client.create_kernel_manager()
+    spec = manager.kernel_spec
+    if spec is None:
+        raise RuntimeError("The python3 kernel specification is unavailable.")
+    # Use this process's environment, not an unrelated installed Python kernel.
+    spec.argv = [
+        sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}",
+    ]
+    try:
+        client.execute(cwd=str(repo_root), cleanup_kc=True)
+    finally:
+        nbformat.write(notebook, destination)
+        print(f"Saved execution record: {destination}", flush=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

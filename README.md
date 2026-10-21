@@ -187,6 +187,11 @@ errors stop the run even if a cell is tagged to allow errors. The notebooks reta
 their normal CCC configuration (`ccc_config.yaml` or `CCC_OUTPUT_ROOT`); completed
 writes are not rolled back if a later notebook fails.
 
+After each notebook, its kernel is shut down and execution output is saved.
+The runner then collects its Python garbage before starting the next notebook.
+Cleanup also runs on failure. This releases between-notebook resources, but does
+not reduce peak memory inside an individual notebook.
+
 Source notebooks are not modified. Executed copies, including partial output
 from a failed notebook, are saved under `scratch/etl_runs/<UTC timestamp>/code/`.
 Use `--output-dir /path/to/new-directory` to choose a different execution-record

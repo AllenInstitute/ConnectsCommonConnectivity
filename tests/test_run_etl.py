@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -63,13 +64,16 @@ def test_runner_covers_active_etls_in_dependency_order(runner):
 def test_runner_saves_outputs_without_modifying_sources(
     runner, tmp_path, monkeypatch, fail_first,
 ):
-    """Execution saves clean copies, uses the current interpreter, and stops on the first error."""
+    """Success and failure save output and collect runner memory before any next notebook."""
     notebooks = ("code/first.ipynb", "code/second.ipynb")
     originals = {name: _write_notebook(tmp_path / name) for name in notebooks}
     output = tmp_path / "executed"
     clients = []
+    collect = Mock()
+    monkeypatch.setattr(runner.gc, "collect", collect)
 
     def fake_client(notebook, **options):
+        assert collect.call_count == len(clients)
         assert options == {
             "kernel_name": "python3", "timeout": None,
             "allow_errors": False, "force_raise_errors": True,
@@ -79,7 +83,7 @@ def test_runner_saves_outputs_without_modifying_sources(
         spec = SimpleNamespace(argv=["another-python"])
 
         def execute(**kwargs):
-            assert kwargs == {"cwd": str(tmp_path)}
+            assert kwargs == {"cwd": str(tmp_path), "cleanup_kc": True}
             assert spec.argv == [
                 sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}",
             ]
@@ -103,11 +107,67 @@ def test_runner_saves_outputs_without_modifying_sources(
     else:
         runner.run_notebooks(tmp_path, output, notebooks)
     assert len(clients) == (1 if fail_first else 2)
+    assert collect.call_count == len(clients)
     for name, original in originals.items():
         assert (tmp_path / name).read_bytes() == original
     saved = nbformat.read(output / notebooks[0], as_version=4)
     assert saved.cells[0].outputs[0].text == "fresh output"
     assert (output / notebooks[1]).exists() is not fail_first
+
+
+def test_runner_releases_client_cycles_between_notebooks(runner, tmp_path, monkeypatch):
+    """Client cycles and notebook references are collected before the next client is created."""
+    notebooks = ("first.ipynb", "second.ipynb")
+    for name in notebooks:
+        _write_notebook(tmp_path / name)
+    references = []
+
+    class TrackingClient:
+        def __init__(self, notebook, **options):
+            assert all(reference() is None for reference in references)
+            self.notebook = notebook
+            self.cycle = self
+            references.append(weakref.ref(self))
+
+        def create_kernel_manager(self):
+            return SimpleNamespace(kernel_spec=SimpleNamespace(argv=[]))
+
+        def execute(self, **kwargs):
+            assert kwargs["cleanup_kc"] is True
+
+    monkeypatch.setattr(runner, "NotebookClient", TrackingClient)
+    runner.run_notebooks(tmp_path, tmp_path / "executed", notebooks)
+    assert len(references) == 2
+    assert all(reference() is None for reference in references)
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_runner_shuts_down_real_kernel(runner, tmp_path, monkeypatch, fails):
+    """A real kernel is shut down after either successful execution or a cell error."""
+    source = tmp_path / "notebook.ipynb"
+    code = "raise ValueError('intentional failure')" if fails else "print('done')"
+    nbformat.write(
+        nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(code)]), source,
+    )
+    managers = []
+    client_class = runner.NotebookClient
+
+    class TrackingClient(client_class):
+        def create_kernel_manager(self):
+            manager = super().create_kernel_manager()
+            managers.append(manager)
+            return manager
+
+    monkeypatch.setattr(runner, "NotebookClient", TrackingClient)
+    if fails:
+        from nbclient.exceptions import CellExecutionError
+
+        with pytest.raises(CellExecutionError, match="intentional failure"):
+            runner.run_notebooks(tmp_path, tmp_path / "executed", ("notebook.ipynb",))
+    else:
+        runner.run_notebooks(tmp_path, tmp_path / "executed", ("notebook.ipynb",))
+    assert managers and all(not manager.has_kernel for manager in managers)
+    assert (tmp_path / "executed/notebook.ipynb").is_file()
 
 
 def test_runner_preflights_missing_notebooks_before_execution(runner, tmp_path, monkeypatch):

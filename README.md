@@ -181,6 +181,22 @@ runs it and all later notebooks. It restarts that notebook from its first cell;
 earlier dependencies must already exist in the configured CCC output.
 Combine it with `--dry-run` to preview the selected notebooks.
 
+To run only V1DD with a separate data destination, use
+[scripts/run_etl_single.py](scripts/run_etl_single.py). Its default destination is
+`get_settings().output_root` with `OUTPUT_SUFFIX` appended (default: `_v1dd`).
+Set `OUTPUT_SUFFIX` directly below `NOTEBOOKS` in the script to change the suffix
+for both the data destination and the timestamped executed-notebook directory.
+`--data-output-root` sets a manual destination without modifying `ccc_config.yaml`.
+
+```bash
+uv run python scripts/run_etl_single.py --dry-run
+uv run python scripts/run_etl_single.py
+uv run python scripts/run_etl_single.py --data-output-root scratch/custom_v1dd
+```
+
+This runner uses the same execution and kernel-cleanup code as the full runner.
+Its `--output-dir` option controls executed notebook copies, not the data destination.
+
 Each notebook gets a fresh Python kernel using the runner's interpreter and the
 repository root as its working directory. Cells have no execution timeout, and
 errors stop the run even if a cell is tagged to allow errors. The notebooks retain

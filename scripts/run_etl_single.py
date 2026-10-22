@@ -20,7 +20,7 @@ from run_etl import REPO_ROOT, run_notebooks
 
 from connects_common_connectivity.config import get_settings
 
-NOTEBOOKS = ("code/EM/etl_v1dd1196_01.ipynb",)
+NOTEBOOKS = ("examples/ETL/EM/etl_v1dd1196_01.ipynb",)
 OUTPUT_SUFFIX = "_v1dd"
 
 

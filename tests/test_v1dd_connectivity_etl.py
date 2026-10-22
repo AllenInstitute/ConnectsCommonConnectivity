@@ -17,7 +17,7 @@ from polars.testing import assert_frame_equal
 @pytest.fixture
 def connectivity_cell(tmp_path):
     """Load notebook imports and connectivity code without executing other ETL cells."""
-    path = Path(__file__).resolve().parents[1] / "code/EM/etl_v1dd1196_01.ipynb"
+    path = Path(__file__).resolve().parents[1] / "examples/ETL/EM/etl_v1dd1196_01.ipynb"
     notebook = json.loads(path.read_text())
     namespace = {}
     exec(compile("".join(notebook["cells"][1]["source"]), str(path), "exec"), namespace)

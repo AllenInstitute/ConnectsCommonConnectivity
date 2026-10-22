@@ -17,7 +17,7 @@ from connects_common_connectivity.models import (
     Unit,
 )
 
-NOTEBOOK_ROOT = Path(__file__).resolve().parents[1] / "code/EM"
+NOTEBOOK_ROOT = Path(__file__).resolve().parents[1] / "examples/ETL/EM"
 CAVE_SPACE = "minnie65_v1822_cave_nm"
 STANDARD_SPACE = "minnie65_v1822_standard_transform_um"
 

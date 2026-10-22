@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed the full and single-notebook ETL runners to find notebooks under
+  `examples/ETL/` after the repository reorganization.
+
 ### Security
 
 ## [1.0.0] - 2026-10-22

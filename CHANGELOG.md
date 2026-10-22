@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.0.0] - 2026-10-22
+
+### Added
+
+- Added README links to the `ccm_release_202610_v7` prototype data snapshot and
+  its data overview.
+- Added `scripts/run_etl.py` to execute the ten active ETL notebooks in
+  dependency order, with a dry-run preview, separate execution records, and
+  stop-on-error behavior. Legacy, backup, and source-extraction notebooks are excluded.
 - Added optional `ReferenceSpace.anatomical_orientation`, an embedded
   `AnatomicalOrientation` naming the signed data axis that points toward each
   anatomical pole: `anterior_to_posterior`, `rostral_to_caudal`,
@@ -47,20 +66,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reorganized notebooks into `examples/ETL/` for ingestion and
+  `examples/read_plot/` for reading and plotting ingested data.
+- Reoriented the README around the schemas, their differing maturity, and
+  optional IO helpers, with local ETL configuration instructions.
+- Changed active ETL payload pointers to release-root-relative paths so complete
+  release folders can be relocated. Feature-matrix and Parquet dataset models
+  now accept relative paths while retaining supported absolute URIs.
+- Grouped the excitatory Patch-seq and WNM ETLs in `examples/ETL/EXC_WNM_patchseq/`, using
+  project `visp_exc_morphology`, one canonical morphology feature set, and
+  separate dataset-specific feature tables. Run Patch-seq before WNM.
+  Five count-like shared features now use float64 to preserve fractional WNM
+  measurements; other source datatypes are unchanged.
 - Changed `read_reference_spaces` to select all scopes when `project_id` is omitted, only global spaces for explicit `None`, and only the named project's spaces for a string, without including global spaces automatically.
 - Changed the Minnie and V1DD cell-cell ETLs to share canonical `cellcellconnectivitylong/` storage with connectome-scoped overwrites.
 - Changed identity-bearing metadata and association writes through `write_models` from scoped replacement to pure upserts; rerunning with fewer `Cluster`, `CellFeatureDefinition`, or `ClusterMembership` rows no longer deletes omitted rows. Explicit deletion support is tracked in #21.
 - `HierarchyCategory` now requires `level`, so every category has an unambiguous position in its taxonomy.
 
-### Deprecated
-
 ### Removed
 
+- Removed obsolete standalone examples and legacy ETL notebooks; use the
+  current notebooks under `examples/`.
 - Removed unused `SingleCellReconstruction.soma_location` and `CellMetadata.spatial_location` fields; write project-scoped `SpatialLocation` rows with an explicit reference space and location type instead.
 - Removed the unused `io.write_utils.append_new_dataitems` helper; use merge-scoped `write_models` calls with `DataItem` models instead.
 
 ### Fixed
 
+- Fixed `DatasetReader` ignoring `CellFeatureMatrix.parquet_path`; separate
+  matrices can now share a feature vocabulary without sharing storage.
+  Feature-set discovery includes `parquet_path`, and records without a pointer
+  retain the legacy feature-set-based lookup.
+- Fixed `write_models` and `write_projection_matrix` losing package and LinkML
+  provenance on Delta writes; new commits retain `linkml_schema_version`,
+  `linkml_class`, and `schema_fingerprint` in `DeltaTable.history()`.
 - Fixed `read_spatial_locations` filters mixing `LocationType` members and
   strings; matching rows are retained even when other requested values are unknown.
 - Fixed `ReferenceSpace` writes accepting inconsistent voxel-scale metadata;
@@ -82,5 +120,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `dry_run` being ignored when `output_root` overrides the configured destination.
 - Fixed generated `CellFeatureMeasurement` models to include `feature_set_id` and `unit`, and to accept valid NumPy dtype strings.
 - Fixed `HierarchyCategory.level` to generate as an integer and prevented category writes from colliding across taxonomies.
-
-### Security

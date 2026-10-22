@@ -18,11 +18,16 @@ import polars as pl
 import pyarrow as pa
 import pytest
 import yaml
+from deltalake import DeltaTable, write_deltalake
 from deltalake.exceptions import DeltaError
 from deltalake.table import TableMerger
 from pydantic import BaseModel
 
 from connects_common_connectivity.config import ConfigNotFoundError, Settings
+from connects_common_connectivity.io.arrow_utils import (
+    attach_linkml_metadata,
+    build_arrow_schema,
+)
 from connects_common_connectivity.io.write_spec import REGISTRY, WriteSpec
 from connects_common_connectivity.io.writers import (
     _MAX_PRUNE_LITERALS,
@@ -36,6 +41,7 @@ from connects_common_connectivity.io.writers import (
     _dispatch_merge_scoped,
     _dispatch_overwrite_scoped,
     _group_by_scope,
+    _linkml_commit_properties,
     write_models,
     write_projection_matrix,
 )
@@ -336,10 +342,37 @@ def test_group_by_scope_preserves_first_appearance_order():
     assert first_sub.column("value").to_pylist() == [1, 3]
 
 
+@pytest.mark.parametrize("metadata", [None, {b"unrelated": b"\xff"}])
+def test_linkml_commit_properties_without_provenance(metadata):
+    """Tables without recognized provenance must retain default commit properties."""
+    table = pa.table({"id": ["d1"]}).replace_schema_metadata(metadata)
+    assert _linkml_commit_properties(table) is None
+
+
+def test_linkml_commit_properties_filters_metadata():
+    """Only the three existing provenance fields must be decoded into commit metadata."""
+    table = pa.table({"id": ["d1"]}).replace_schema_metadata(
+        {
+            b"linkml_class": b"DataSet",
+            b"linkml_schema_version": b"1.0.0",
+            b"schema_fingerprint": b"sha256:existing",
+            b"linkml_other": b"excluded",
+            b"unrelated": b"\xff",
+        }
+    )
+    properties = _linkml_commit_properties(table)
+    assert properties is not None
+    assert properties.custom_metadata == {
+        "linkml_class": "DataSet",
+        "linkml_schema_version": "1.0.0",
+        "schema_fingerprint": "sha256:existing",
+    }
+
+
 def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
     tmp_path, monkeypatch
 ):
-    """The retained bulk-table dispatcher must issue one overwrite per scope."""
+    """Each scoped overwrite must preserve other scopes and persist batch provenance."""
     table = pa.table(
         {
             "project_id": ["p", "p", "p"],
@@ -347,6 +380,7 @@ def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
             "value": [1, 2, 3],
         }
     )
+    table = attach_linkml_metadata(table, linkml_class="DataSet")
     spec = WriteSpec(
         model_cls=DataSet,
         subdir="synapse",
@@ -358,6 +392,7 @@ def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
 
     def record_write(path, batch, **kwargs):
         calls.append((path, batch.to_pylist(), kwargs))
+        write_deltalake(path, batch, **kwargs)
 
     monkeypatch.setattr(
         "connects_common_connectivity.io.writers.write_deltalake", record_write
@@ -381,11 +416,18 @@ def test_overwrite_scoped_dispatch_remains_available_for_bulk_tables(
     ]
     assert all(call[2]["mode"] == "overwrite" for call in calls)
     assert all(call[2]["partition_by"] == ["project_id"] for call in calls)
+    history = DeltaTable(str(path)).history()
+    assert len(history) == 2
+    for entry in history:
+        for key, value in table.schema.metadata.items():
+            assert entry[key.decode()] == value.decode()
+    assert pl.read_delta(path).sort("value").to_dicts() == table.to_pylist()
 
 
 def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypatch):
-    """A writer losing table creation must reopen and merge its batch."""
+    """A writer losing table creation must merge its batch with the same provenance."""
     table = pa.table({"project_id": ["p1"], "id": ["d1"], "name": ["one"]})
+    table = attach_linkml_metadata(table, linkml_class="DataSet")
     spec = WriteSpec(
         model_cls=DataSet,
         subdir="dataset",
@@ -395,6 +437,7 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
         merge_on=["project_id", "id"],
     )
     events = []
+    commit_properties = []
     table_checks = iter([False, True])
 
     class FakeMerger:
@@ -417,10 +460,12 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
             events.append("reopen")
 
         def merge(self, **kwargs):
+            commit_properties.append(kwargs["commit_properties"])
             return FakeMerger()
 
     def lose_creation_race(*args, **kwargs):
         events.append("create")
+        commit_properties.append(kwargs["commit_properties"])
         raise DeltaError("table already exists")
 
     monkeypatch.setattr(
@@ -435,6 +480,11 @@ def test_merge_scoped_recovers_from_concurrent_table_creation(tmp_path, monkeypa
 
     assert events == ["create", "reopen", "merge"]
     assert result.rows_written == 1
+    assert len(commit_properties) == 2
+    assert commit_properties[0] is commit_properties[1]
+    assert commit_properties[1].custom_metadata == {
+        key.decode(): value.decode() for key, value in table.schema.metadata.items()
+    }
 
 
 def test_merge_scoped_reraises_unrelated_creation_error(tmp_path, monkeypatch):
@@ -487,6 +537,33 @@ def test_patchseq_regression_two_datasets_same_project(settings, read_delta):
         f"patchseq regression: second write wiped first. "
         f"Expected both datasets, got {ids}"
     )
+
+
+def test_write_models_preserves_commit_metadata(settings, read_delta, monkeypatch):
+    """Creation and changed merges must retain their own package and schema provenance."""
+    schema = build_arrow_schema(DataSet)
+    tagged = attach_linkml_metadata(
+        pa.Table.from_batches([], schema=schema), linkml_class="DataSet"
+    )
+    fingerprint = tagged.schema.metadata[b"schema_fingerprint"].decode()
+    for version, name in (("1.0.0", "original"), ("1.1.0", "updated")):
+        monkeypatch.setattr(
+            "connects_common_connectivity.io.arrow_utils.__version__", version
+        )
+        result = write_models(
+            DataSet(id="d1", name=name, project_id="p1"), settings=settings
+        )
+        assert result.rows_written == 1
+
+    history = DeltaTable(str(result.path)).history()
+    assert len(history) == 2
+    assert [entry["operation"] for entry in history] == ["MERGE", "WRITE"]
+    assert [entry["linkml_schema_version"] for entry in history] == ["1.1.0", "1.0.0"]
+    assert all(entry["linkml_class"] == "DataSet" for entry in history)
+    assert all(entry["schema_fingerprint"] == fingerprint for entry in history)
+    assert read_delta(result.path).select("id", "name").to_dicts() == [
+        {"id": "d1", "name": "updated"}
+    ]
 
 
 def test_merge_scoped_is_idempotent(settings, read_delta):

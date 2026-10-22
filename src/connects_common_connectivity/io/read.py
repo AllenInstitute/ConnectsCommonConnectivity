@@ -13,6 +13,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+from urllib.parse import unquote, urlsplit
 
 import polars as pl
 
@@ -40,6 +41,7 @@ _FEATURESET_DISPLAY_SCHEMA = {
     "extraction_method": pl.String,
     "feature_definition_ids": pl.List(pl.String),
     "cell_index_column": pl.String,
+    "parquet_path": pl.String,
 }
 _CLUSTERSET_DISPLAY_SCHEMA = {
     "clusterset_id": pl.String,
@@ -146,7 +148,8 @@ class DatasetReader:
 
         Each project-scoped cell-feature matrix is read and its index column is
         joined against the dataset's data items; a feature set is reported only
-        when at least one row overlaps.
+        when at least one row overlaps. Matrices may share a feature set while
+        pointing to separate Delta tables with different subsets of its features.
 
         Parameters
         ----------
@@ -156,11 +159,12 @@ class DatasetReader:
         Returns
         -------
         polars.DataFrame
-            Rows keyed by ``feature_set_id`` (sorted), with the originating
+            One row per overlapping matrix, sorted by ``feature_set_id``, with
             ``matrix_id``, ``description``, ``extraction_method``,
-            ``feature_definition_ids``, and ``cell_index_column``. Empty (with
-            the same schema) when no matrices exist for the project or none
-            overlap.
+            ``feature_definition_ids``, ``cell_index_column``, and
+            ``parquet_path``. The feature IDs describe the full vocabulary,
+            not necessarily the columns present in each matrix. Empty (with
+            the same schema) when no matrices exist for the project or none overlap.
 
         Raises
         ------
@@ -216,6 +220,7 @@ class DatasetReader:
                 feature_set_id,
                 index_column,
                 str(dataset["project_id"]),
+                parquet_path=matrix_row.get("parquet_path"),
             )
             overlap = (
                 feature_frame.select(
@@ -238,6 +243,7 @@ class DatasetReader:
                         "feature_definition_ids"
                     ),
                     "cell_index_column": index_column,
+                    "parquet_path": matrix_row.get("parquet_path"),
                 }
             )
 
@@ -488,18 +494,26 @@ class DatasetReader:
         feature_set_id: str,
         index_column: str,
         project_id: str,
+        *,
+        parquet_path: str | None = None,
     ) -> pl.DataFrame:
         """Read a feature matrix table, filtered to ``project_id``.
 
         Parameters
         ----------
         feature_set_id:
-            Subdirectory name under ``cellfeatures/`` identifying the matrix.
+            Feature-set identity, also used for the legacy location when
+            ``parquet_path`` is absent.
         index_column:
             Column expected to hold the cell/data-item index.
         project_id:
             Project scope; applied only if the matrix carries a ``project_id``
             column.
+        parquet_path:
+            Explicit Delta table URI or filesystem path. Relative paths are
+            resolved beneath the dataset root. If omitted, read the legacy
+            ``cellfeatures/<feature_set_id>`` location. An invalid explicit
+            location raises an error rather than falling back to legacy data.
 
         Returns
         -------
@@ -513,16 +527,27 @@ class DatasetReader:
         ValueError
             If ``index_column`` is not present in the matrix.
         """
-        path = (
-            self.dataset_root
-            / WIDE_PAYLOAD_PATHS["cell_features"]
-            / feature_set_id
-        )
-        if not path.exists():
-            raise FileNotFoundError(
-                f"Feature matrix for {feature_set_id!r} is missing: {path}"
+        if parquet_path is None:
+            location = str(
+                self.dataset_root / WIDE_PAYLOAD_PATHS["cell_features"] / feature_set_id
             )
-        frame = pl.read_delta(str(path))
+        else:
+            if not parquet_path.strip():
+                raise ValueError(f"Feature matrix {feature_set_id!r} has an empty parquet_path.")
+            location = parquet_path
+        uri = urlsplit(location)
+        if uri.scheme == "file" and uri.netloc in ("", "localhost"):
+            location = unquote(uri.path)
+        if not uri.scheme or (uri.scheme == "file" and uri.netloc in ("", "localhost")):
+            path = Path(location)
+            if not path.is_absolute():
+                path = self.dataset_root / path
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"Feature matrix for {feature_set_id!r} is missing: {path}"
+                )
+            location = str(path)
+        frame = pl.read_delta(location)
         if index_column not in frame.columns:
             raise ValueError(
                 f"Feature matrix {feature_set_id!r} does not contain its "
@@ -548,8 +573,8 @@ class DatasetReader:
         Parameters
         ----------
         feature_row:
-            A discovered feature-set row providing ``feature_set_id`` and
-            ``cell_index_column``.
+            A discovered matrix row providing ``feature_set_id``,
+            ``cell_index_column``, and an optional ``parquet_path``.
         project_id:
             Project scope passed through to :meth:`_read_feature_matrix`.
         items:
@@ -571,6 +596,7 @@ class DatasetReader:
             feature_set_id,
             index_column,
             project_id,
+            parquet_path=feature_row.get("parquet_path"),
         )
         if index_column != "dataitem_id":
             frame = frame.rename({index_column: "dataitem_id"})

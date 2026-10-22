@@ -21,6 +21,7 @@ from connects_common_connectivity.io import (
 )
 from connects_common_connectivity.models import (
     AnatomicalOrientation,
+    CellFeatureMatrix,
     Default2DView,
     EmbeddingLocation,
     EmbeddingSpace,
@@ -851,6 +852,86 @@ def test_read_dataset_accepts_subset_and_empty_selections(reader_root: Path):
     )
     assert ids_only.columns == ["dataitem_id"]
     assert ids_only.height == 3
+
+
+@pytest.mark.parametrize("path_kind", ["uri", "absolute", "relative", "relocated"])
+def test_shared_feature_set_reads_separate_dataset_matrices(tmp_path: Path, path_kind: str):
+    """Shared-vocabulary matrices read their own subsets even after relative-path relocation."""
+    tmp_path = tmp_path / "release"
+    tmp_path.mkdir()
+    _write_table(tmp_path, "dataset", {
+        "id": ["patchseq", "wnm"], "project_id": ["morphology", "morphology"],
+    })
+    _write_table(tmp_path, "dataitem_dataset_association", {
+        "dataitem_id": ["p", "w"], "dataset_id": ["patchseq", "wnm"],
+        "project_id": ["morphology", "morphology"],
+    })
+    _write_table(tmp_path, "cellfeatureset", {
+        "id": ["shared"], "project_id": ["morphology"],
+        "feature_definition_ids": [["alpha", "beta"]],
+    })
+    paths = [tmp_path / "cellfeatures" / name / "shared" for name in ("patchseq", "wnm")]
+    _write_table(tmp_path, str(paths[0]), {
+        "id": ["p", "w"], "alpha": [1.0, 999.0], "beta": [2.0, 999.0],
+        "project_id": ["morphology", "other"], "feature_set_id": ["shared", "shared"],
+    })
+    _write_table(tmp_path, str(paths[1]), {
+        "id": ["w"], "alpha": [3.0], "project_id": ["morphology"],
+        "feature_set_id": ["shared"],
+    })
+    _write_table(tmp_path, "cellfeatures/shared", {
+        "id": ["p", "w"], "alpha": [-1.0, -1.0],
+    })
+    pointers = [
+        path.as_uri() if path_kind == "uri"
+        else str(path) if path_kind == "absolute"
+        else str(path.relative_to(tmp_path))
+        for path in paths
+    ]
+    if path_kind == "absolute":
+        _write_table(tmp_path, "cellfeaturematrix", {
+            "id": ["patchseq_shared", "wnm_shared"], "feature_set_id": ["shared", "shared"],
+            "project_id": ["morphology", "morphology"], "cell_index_column": ["id", "id"],
+            "parquet_path": pointers,
+        })
+    else:
+        write_models([
+            CellFeatureMatrix(
+                id=matrix, feature_set_id="shared", project_id="morphology",
+                cell_index_column="id", parquet_path=pointer,
+            )
+            for matrix, pointer in zip(("patchseq_shared", "wnm_shared"), pointers)
+        ], output_root=tmp_path)
+    if path_kind == "relocated":
+        tmp_path = tmp_path.rename(tmp_path.parent / "relocated")
+    reader = DatasetReader(tmp_path)
+    for dataset, matrix, pointer in zip(
+        ("patchseq", "wnm"), ("patchseq_shared", "wnm_shared"), pointers
+    ):
+        discovered = reader.discover_featuresets(dataset)
+        assert discovered["matrix_id"].to_list() == [matrix]
+        assert discovered["parquet_path"].to_list() == [pointer]
+        assert discovered["feature_definition_ids"].to_list() == [["alpha", "beta"]]
+    assert reader.read_dataset("patchseq", featuresets="shared").to_dicts() == [
+        {"dataitem_id": "p", "alpha": 1.0, "beta": 2.0},
+    ]
+    assert reader.read_dataset("wnm", featuresets="shared").to_dicts() == [
+        {"dataitem_id": "w", "alpha": 3.0},
+    ]
+
+
+@pytest.mark.parametrize("pointer", ["missing", ""])
+def test_explicit_feature_pointer_does_not_fall_back(reader_root: Path, pointer: str):
+    """A missing or empty explicit pointer raises even when the legacy table is readable."""
+    matrices = pl.read_delta(str(reader_root / "cellfeaturematrix"))
+    matrices = matrices.with_columns(pl.lit(pointer).alias("parquet_path"))
+    write_deltalake(
+        str(reader_root / "cellfeaturematrix"), matrices.to_arrow(),
+        mode="overwrite", schema_mode="overwrite",
+    )
+    error = FileNotFoundError if pointer else ValueError
+    with pytest.raises(error, match="missing|empty parquet_path"):
+        DatasetReader(reader_root).discover_featuresets("dataset_a")
 
 
 def test_project_scoping_excludes_other_project_memberships(reader_root: Path):

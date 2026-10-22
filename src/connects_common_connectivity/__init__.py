@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from connects_common_connectivity import models as _models
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 
 _INTERNAL_CLASSES = frozenset({"ConfiguredBaseModel", "LinkMLMeta"})
 
@@ -33,4 +33,3 @@ def get_schema_path(schema_name: str = "connectivity_schema.yaml") -> str:
     """Resolve a schema filename to its absolute path in the schemas/ directory."""
     schemas_dir = Path(__file__).resolve().parent.parent.parent / "schemas"
     return str(schemas_dir / schema_name)
-

@@ -9,7 +9,7 @@ RUN conda install -y \
     && conda clean -ya
 
 RUN pip install -U --no-cache-dir \
-    caveclient==8.0.0 \
+    caveclient==8.2.1 \
     deltalake==1.2.1 \
     ipywidgets==8.1.8 \
     linkml==1.9.5 \

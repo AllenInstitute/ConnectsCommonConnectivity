@@ -57,7 +57,7 @@ classes:
         description: Ordered data items defining rows (or columns) of the matrix.
       values:
         range: ZarrArray
-        description: Zarr array containing matrix values with shape (data_item_index x region_index).
+        description: Reference to matrix values with shape (data_item_index x region_index). ETL payload paths are relative to the release root or absolute URIs.
       unit:
         range: Unit
       laterality:

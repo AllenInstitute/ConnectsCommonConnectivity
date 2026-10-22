@@ -29,6 +29,7 @@ from connects_common_connectivity.io.read import (
 from connects_common_connectivity.io.write_utils import (
     cell_cell_connectivity_to_arrow,
     derive_cell_cell_connectivity,
+    iter_cell_cell_connectivity,
 )
 from connects_common_connectivity.io.writers import (
     WRITABLE_CLASSES,
@@ -47,6 +48,7 @@ __all__ = [
     "DatasetReader",
     "cell_cell_connectivity_to_arrow",
     "derive_cell_cell_connectivity",
+    "iter_cell_cell_connectivity",
     "read_cell_cell_connectivity",
     "read_embedding_locations",
     "read_embedding_spaces",

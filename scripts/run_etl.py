@@ -14,16 +14,16 @@ from nbclient import NotebookClient
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = (
-    "code/cell_types/etl_ttype_01.ipynb",
-    "code/cell_types/etl_met_type_01.ipynb",
-    "code/cell_types/etl_abc_01.ipynb",
-    "code/BARseq/etl_barseq_01.ipynb",
-    "code/INH_patchseq/etl_patchseq_inh_01.ipynb",
-    "code/EXC_WNM_patchseq/etl_patchseq_exc_01.ipynb",
-    "code/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb",
-    "code/EM/etl_minnie1822_01.ipynb",
-    "code/EM/etl_minnie1822_02_umap_features.ipynb",
-    "code/EM/etl_v1dd1196_01.ipynb",
+    "examples/ETL/cell_types/etl_ttype_01.ipynb",
+    "examples/ETL/cell_types/etl_met_type_01.ipynb",
+    "examples/ETL/cell_types/etl_abc_01.ipynb",
+    "examples/ETL/BARseq/etl_barseq_01.ipynb",
+    "examples/ETL/INH_patchseq/etl_patchseq_inh_01.ipynb",
+    "examples/ETL/EXC_WNM_patchseq/etl_patchseq_exc_01.ipynb",
+    "examples/ETL/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb",
+    "examples/ETL/EM/etl_minnie1822_01.ipynb",
+    "examples/ETL/EM/etl_minnie1822_02_umap_features.ipynb",
+    "examples/ETL/EM/etl_v1dd1196_01.ipynb",
 )
 
 

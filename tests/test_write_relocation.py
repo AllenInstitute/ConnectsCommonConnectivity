@@ -29,7 +29,7 @@ from connects_common_connectivity.io.write_utils import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SEARCH_ROOTS = ["src", "tests", "code", "scripts", "planning"]
+SEARCH_ROOTS = ["src", "tests", "examples", "scripts", "planning"]
 
 EXCLUDED_DIRS = {".venv", ".git", ".pytest_cache", ".ruff_cache",
                  ".ipynb_checkpoints", ".Trash-0", "node_modules"}

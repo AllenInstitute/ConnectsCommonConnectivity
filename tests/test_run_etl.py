@@ -40,7 +40,7 @@ def test_runner_covers_active_etls_in_dependency_order(runner):
     """The plan includes all ten active ETLs and places shared taxonomies before cohorts."""
     active = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in (REPO_ROOT / "code").rglob("etl_*.ipynb")
+        for path in (REPO_ROOT / "examples/ETL").rglob("etl_*.ipynb")
         if "old" not in path.parts and ".ipynb_checkpoints" not in path.parts
     }
     assert set(runner.NOTEBOOKS) == active
@@ -65,7 +65,7 @@ def test_runner_saves_outputs_without_modifying_sources(
     runner, tmp_path, monkeypatch, fail_first,
 ):
     """Success and failure save output and collect runner memory before any next notebook."""
-    notebooks = ("code/first.ipynb", "code/second.ipynb")
+    notebooks = ("examples/ETL/first.ipynb", "examples/ETL/second.ipynb")
     originals = {name: _write_notebook(tmp_path / name) for name in notebooks}
     output = tmp_path / "executed"
     clients = []
@@ -195,7 +195,7 @@ def test_runner_rejects_existing_output_directory(runner, tmp_path, monkeypatch)
 
 @pytest.mark.parametrize(
     "start",
-    ["etl_wnm_exc_01.ipynb", "code/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb"],
+    ["etl_wnm_exc_01.ipynb", "examples/ETL/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb"],
 )
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_from_selects_inclusive_suffix(runner, tmp_path, monkeypatch, capsys, start, dry_run):
@@ -222,10 +222,14 @@ def test_from_selects_inclusive_suffix(runner, tmp_path, monkeypatch, capsys, st
 
 @pytest.mark.parametrize(
     "start",
-    ["missing.ipynb", "code/old/etl_wnm_exc_01.ipynb"],
+    [
+        "missing.ipynb",
+        "code/old/etl_wnm_exc_01.ipynb",
+        "code/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb",
+    ],
 )
 def test_from_rejects_unknown_notebooks(runner, tmp_path, monkeypatch, start):
-    """An unknown start notebook fails before execution or output creation."""
+    """Unknown or obsolete notebook paths fail before execution or output creation."""
     execute = Mock()
     monkeypatch.setattr(runner, "run_notebooks", execute)
     output = tmp_path / "executed"

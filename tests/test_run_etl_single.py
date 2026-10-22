@@ -30,7 +30,7 @@ def single_runner(monkeypatch, tmp_path):
 
 
 def test_single_runner_dry_run_has_no_side_effects(single_runner, monkeypatch, tmp_path, capsys):
-    """Dry-run selects only V1DD and the suffixed data root without writing or executing."""
+    """Dry-run selects an existing V1DD notebook and suffixed root without writing or executing."""
     run = Mock()
     monkeypatch.setattr(single_runner, "run_notebooks", run)
     output = tmp_path / "execution"
@@ -42,7 +42,8 @@ def test_single_runner_dry_run_has_no_side_effects(single_runner, monkeypatch, t
     assert "CCC_OUTPUT_ROOT" not in os.environ
     text = capsys.readouterr().out
     assert f"CCC data destination: {tmp_path / 'release_v1dd'}" in text
-    assert single_runner.NOTEBOOKS == ("code/EM/etl_v1dd1196_01.ipynb",)
+    assert single_runner.NOTEBOOKS == ("examples/ETL/EM/etl_v1dd1196_01.ipynb",)
+    assert (REPO_ROOT / single_runner.NOTEBOOKS[0]).is_file()
     assert single_runner.NOTEBOOKS[0] in text
 
 

@@ -35,6 +35,27 @@ exercise the schemas and support cross-dataset exploration.
 - **Data summary:** [ccm_release_202610_v7 overview](https://alleninstitute.github.io/ccm-data-overview/pages/ccm_release_202610_v7.html)
 - **Data location:** [s3://connects-common-connectivity/ccm_release_202610_v7/](https://connects-common-connectivity.s3.us-west-2.amazonaws.com/ccm_release_202610_v7/)
 
+### Accessing the data
+
+The bucket is public, so no AWS account or credentials are needed. Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and add `--no-sign-request` to every command.
+
+**Browse**
+
+```bash
+# List the top level directories
+aws s3 ls s3://connects-common-connectivity/ccm_release_202610_v7/ --no-sign-request
+
+# List everything with sizes and a total
+aws s3 ls s3://connects-common-connectivity/ccm_release_202610_v7/ --no-sign-request --recursive --human-readable --summarize
+```
+
+**Download**
+
+```bash
+# Whole release (preserves directory layout)
+aws s3 sync s3://connects-common-connectivity/ccm_release_202610_v7/ ./ccm_release_202610_v7/ --no-sign-request
+```
+
 When copying a release locally, preserve its directory layout: relative payload
 references are resolved against the release root, not the working directory.
 

@@ -33,12 +33,7 @@ We have ingested previously published datasets into a common representation to
 exercise the schemas and support cross-dataset exploration.
 
 - **Data summary:** [ccm_release_202610_v7 overview](https://alleninstitute.github.io/ccm-data-overview/pages/ccm_release_202610_v7.html)
-- **Data location:** [s3://ccm-data-prototypes/ccm_release_202610_v7/](https://ccm-data-prototypes.s3.us-west-2.amazonaws.com/ccm_release_202610_v7/)
-
-The snapshot is currently hosted in **BKP-Dev**. Migration to an AWS Open Data
-bucket and registration in the AWS Registry of Open Data are planned; neither is
-complete yet. Access to the current development resources may require
-authentication.
+- **Data location:** [s3://connects-common-connectivity/ccm_release_202610_v7/](https://connects-common-connectivity.s3.us-west-2.amazonaws.com/ccm_release_202610_v7/)
 
 When copying a release locally, preserve its directory layout: relative payload
 references are resolved against the release root, not the working directory.

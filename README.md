@@ -108,6 +108,14 @@ cached within a Python process; restart the notebook kernel after changing the
 file or environment, or call `get_settings.cache_clear()` after importing
 `get_settings` from `connects_common_connectivity.config`.
 
+From the repository root, run all ETLs in order with:
+
+```bash
+uv run python scripts/run_etl.py
+```
+
+add `--dry-run` to preview the order without executing any notebooks.
+
 ## Developing the schemas
 
 Edit the appropriate module under [schemas/](schemas/), then regenerate the

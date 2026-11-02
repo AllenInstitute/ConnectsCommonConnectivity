@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added optional shared `Default2DView` metadata to `EmbeddingSpace`; embedding
   views must use distinct X and Y axes, while spatial views continue to allow
-  any two distinct coordinate axes.
+  any two distinct coordinate axes. V1DD and Minnie65 embedding ETLs now write
+  positive X/Y default views.
 
 ### Changed
 

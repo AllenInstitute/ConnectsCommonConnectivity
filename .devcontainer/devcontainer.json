@@ -5,8 +5,7 @@
     "context": ".."
   },
   "mounts": [
-    "source=${localWorkspaceFolder}/data,target=/data,type=bind",
-    "source=${localWorkspaceFolder}/results,target=/results,type=bind"
+    "source=${localWorkspaceFolder}/data,target=/data,type=bind"
   ],
   "postStartCommand": "pip install -e /workspaces/ConnectsCommonConnectivity",
   "postCreateCommand": "sed -i '/bash_completion/s/^#//' ~/.bashrc && sed -i 's/^#fi$/fi/' ~/.bashrc && grep -q 'completions/git' ~/.bashrc || echo 'source /usr/share/bash-completion/completions/git 2>/dev/null' >> ~/.bashrc",

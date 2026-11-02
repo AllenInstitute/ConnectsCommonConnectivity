@@ -23,6 +23,7 @@ from connects_common_connectivity.io.write_validation import (
     CellFeatureDefinitionWrite,
     ClusterMembershipWrite,
     ClusterWrite,
+    EmbeddingSpaceWrite,
     HierarchyCategoryWrite,
     ReferenceSpaceWrite,
 )
@@ -197,6 +198,7 @@ REGISTRY: dict[str, WriteSpec] = {
     ),
     "EmbeddingSpace": WriteSpec(
         model_cls=EmbeddingSpace,
+        write_cls=EmbeddingSpaceWrite,
         subdir=MODEL_TABLE_PATHS["EmbeddingSpace"],
         partition_by=["project_id"],
         scope_columns=["project_id", "id"],
@@ -395,6 +397,7 @@ __all__ = [
     "CellFeatureDefinitionWrite",
     "ClusterMembershipWrite",
     "ClusterWrite",
+    "EmbeddingSpaceWrite",
     "HierarchyCategoryWrite",
     "ReferenceSpaceWrite",
     "WriteSpec",

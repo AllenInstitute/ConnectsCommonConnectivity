@@ -50,6 +50,34 @@ def test_embedding_constructed_rows_rejected_before_io(model, values, invalid, t
         assert not root.exists()
 
 
+@pytest.mark.parametrize("horizontal", list(SignedAxis))
+@pytest.mark.parametrize("vertical", list(SignedAxis))
+def test_embedding_space_default_view_axes_checked_before_io(
+    horizontal, vertical, tmp_path
+):
+    """Embedding views use distinct X/Y axes and reject the unavailable Z axis."""
+    space = EmbeddingSpace(
+        project_id="p",
+        id="embedding",
+        embedding_method="UMAP",
+        default_2d_view=Default2DView(
+            left_to_right=horizontal,
+            bottom_to_top=vertical,
+        ),
+    )
+    axes = {
+        DATA_AXIS_BY_SIGNED_AXIS[horizontal],
+        DATA_AXIS_BY_SIGNED_AXIS[vertical],
+    }
+    if axes == {"X", "Y"}:
+        assert validate_for_write([space], REGISTRY["EmbeddingSpace"])[0] is space
+    else:
+        root = tmp_path / "must-not-exist"
+        with pytest.raises(ValueError, match="data axes|coordinate space"):
+            write_models(space, output_root=root)
+        assert not root.exists()
+
+
 @pytest.mark.parametrize("construct", [False, True])
 @pytest.mark.parametrize("index", [0, 1, 2])
 @pytest.mark.parametrize("dimension", [0.0, -1.0, float("nan"), float("inf"), -float("inf")])

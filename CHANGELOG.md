@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-02
+
 ### Added
+
+- Added optional shared `Default2DView` metadata to `EmbeddingSpace`; embedding
+  views must use distinct X and Y axes, while spatial views continue to allow
+  any two distinct coordinate axes.
 
 ### Changed
 

@@ -6,9 +6,11 @@ import yaml
 from pydantic import ValidationError
 
 from connects_common_connectivity.models import (
+    Default2DView,
     EmbeddingLocation,
     EmbeddingMethod,
     EmbeddingSpace,
+    SignedAxis,
 )
 
 
@@ -19,7 +21,7 @@ def test_embedding_space_methods_and_optional_metadata(method):
     assert space.embedding_method == method
     for field in (
         "name", "description", "parameters_json", "input_feature_set_id",
-        "input_features_description", "creation_date",
+        "input_features_description", "creation_date", "default_2d_view",
     ):
         assert getattr(space, field) is None
 
@@ -65,6 +67,10 @@ def test_embedding_metadata_json_round_trip(feature_set_id):
         input_feature_set_id=feature_set_id,
         input_features_description="Normalized projection measurements.",
         creation_date="2026-10-07",
+        default_2d_view=Default2DView(
+            left_to_right=SignedAxis.MINUS_Y,
+            bottom_to_top=SignedAxis.PLUS_X,
+        ),
     )
     assert space.input_feature_set_id == feature_set_id
     assert space.creation_date == date(2026, 10, 7)
@@ -99,5 +105,6 @@ def test_embedding_schema_identities_and_feature_set_reference():
     ):
         assert schema["classes"][class_name]["unique_keys"][key]["unique_key_slots"] == fields
     assert schema["slots"]["input_feature_set_id"]["range"] == "CellFeatureSet"
+    assert "default_2d_view" in schema["classes"]["EmbeddingSpace"]["slots"]
     aggregator = yaml.safe_load((schemas / "connectivity_schema.yaml").read_text())
     assert "embedding_schema" in aggregator["imports"]

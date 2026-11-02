@@ -90,6 +90,36 @@ linkml_meta = LinkMLMeta({'default_prefix': 'cc',
                            'prefix_reference': 'http://www.w3.org/2004/02/skos/core#'}},
      'source_file': 'schemas/connectivity_schema.yaml'} )
 
+class SignedAxis(str, Enum):
+    """
+    A data axis together with the sense in which it is traversed.
+    """
+    PLUS_X = "PLUS_X"
+    """
+    Direction of increasing X coordinates.
+    """
+    MINUS_X = "MINUS_X"
+    """
+    Direction of decreasing X coordinates.
+    """
+    PLUS_Y = "PLUS_Y"
+    """
+    Direction of increasing Y coordinates.
+    """
+    MINUS_Y = "MINUS_Y"
+    """
+    Direction of decreasing Y coordinates.
+    """
+    PLUS_Z = "PLUS_Z"
+    """
+    Direction of increasing Z coordinates.
+    """
+    MINUS_Z = "MINUS_Z"
+    """
+    Direction of decreasing Z coordinates.
+    """
+
+
 class Modality(str, Enum):
     BARCODED = "BARCODED"
     """
@@ -275,36 +305,6 @@ class Laterality(str, Enum):
     """
 
 
-class SignedAxis(str, Enum):
-    """
-    A data axis together with the sense in which it is traversed.
-    """
-    PLUS_X = "PLUS_X"
-    """
-    Direction of increasing X coordinates.
-    """
-    MINUS_X = "MINUS_X"
-    """
-    Direction of decreasing X coordinates.
-    """
-    PLUS_Y = "PLUS_Y"
-    """
-    Direction of increasing Y coordinates.
-    """
-    MINUS_Y = "MINUS_Y"
-    """
-    Direction of decreasing Y coordinates.
-    """
-    PLUS_Z = "PLUS_Z"
-    """
-    Direction of increasing Z coordinates.
-    """
-    MINUS_Z = "MINUS_Z"
-    """
-    Direction of decreasing Z coordinates.
-    """
-
-
 class LocationType(str, Enum):
     """
     The anatomical point represented by a coordinate row.
@@ -352,6 +352,18 @@ class EmbeddingMethod(str, Enum):
     Another embedding method; specify the method in EmbeddingSpace.description.
     """
 
+
+
+class Default2DView(ConfiguredBaseModel):
+    """
+    Embedded default screen layout. The two signed axes must use different underlying data axes present in the owning coordinate space. In 3D, the unused axis is depth. Negate MINUS axes to display.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-base-schema',
+         'slot_usage': {'bottom_to_top': {'name': 'bottom_to_top', 'required': True},
+                        'left_to_right': {'name': 'left_to_right', 'required': True}}})
+
+    left_to_right: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen left to screen right.""", json_schema_extra = { "linkml_meta": {'alias': 'left_to_right', 'domain_of': ['Default2DView']} })
+    bottom_to_top: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen bottom to screen top.""", json_schema_extra = { "linkml_meta": {'alias': 'bottom_to_top', 'domain_of': ['Default2DView']} })
 
 
 class ProjectScoped(ConfiguredBaseModel):
@@ -591,23 +603,11 @@ class ReferenceSpace(ProjectScoped):
          'domain_of': ['ReferenceSpace'],
          'list_elements_ordered': True} })
     voxel_size_unit: Optional[Unit] = Field(default=None, description="""Physical length unit shared by all three voxel_size dimensions. At write time, voxel_size and voxel_size_unit must either both be omitted or both be supplied. A supplied unit must be NANOMETERS_LENGTH, MICRONS_LENGTH, MILLIMETERS_LENGTH, or CENTIMETERS_LENGTH, not VOXELS.""", json_schema_extra = { "linkml_meta": {'alias': 'voxel_size_unit', 'domain_of': ['ReferenceSpace']} })
-    default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace']} })
+    default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace', 'EmbeddingSpace']} })
     anatomical_orientation: Optional[AnatomicalOrientation] = Field(default=None, description="""Optional anatomical meaning of the data axes.""", json_schema_extra = { "linkml_meta": {'alias': 'anatomical_orientation', 'domain_of': ['ReferenceSpace']} })
     project_id: Optional[str] = Field(default=None, description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
-
-
-class Default2DView(ConfiguredBaseModel):
-    """
-    Embedded default screen layout. The two signed axes must use different underlying data axes; the unused axis is depth. Negate MINUS axes to display.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://brain-connects.org/ic3-spatial-schema',
-         'slot_usage': {'bottom_to_top': {'name': 'bottom_to_top', 'required': True},
-                        'left_to_right': {'name': 'left_to_right', 'required': True}}})
-
-    left_to_right: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen left to screen right.""", json_schema_extra = { "linkml_meta": {'alias': 'left_to_right', 'domain_of': ['Default2DView']} })
-    bottom_to_top: SignedAxis = Field(default=..., description="""Signed data axis pointing from screen bottom to screen top.""", json_schema_extra = { "linkml_meta": {'alias': 'bottom_to_top', 'domain_of': ['Default2DView']} })
 
 
 class AnatomicalOrientation(ConfiguredBaseModel):
@@ -1128,6 +1128,7 @@ class EmbeddingSpace(ProjectScoped):
     input_feature_set_id: Optional[str] = Field(default=None, description="""Optional identifier of an existing CellFeatureSet in the same project. For inputs not represented by a CellFeatureSet, omit this field and describe them in input_features_description.""", json_schema_extra = { "linkml_meta": {'alias': 'input_feature_set_id', 'domain_of': ['EmbeddingSpace']} })
     input_features_description: Optional[str] = Field(default=None, description="""Optional description of the input features, their source, and any selection or preprocessing. May be supplied without a feature-set id.""", json_schema_extra = { "linkml_meta": {'alias': 'input_features_description', 'domain_of': ['EmbeddingSpace']} })
     creation_date: Optional[date] = Field(default=None, description="""Optional date the embedding was computed, in ISO 8601 YYYY-MM-DD format.""", json_schema_extra = { "linkml_meta": {'alias': 'creation_date', 'domain_of': ['EmbeddingSpace']} })
+    default_2d_view: Optional[Default2DView] = Field(default=None, description="""Optional screen layout; null means the consumer chooses the view.""", json_schema_extra = { "linkml_meta": {'alias': 'default_2d_view', 'domain_of': ['ReferenceSpace', 'EmbeddingSpace']} })
     project_id: str = Field(default=..., description="""Identifier for the project or acquisition program context for this record.""", json_schema_extra = { "linkml_meta": {'alias': 'project_id',
          'aliases': ['project', 'program_id'],
          'domain_of': ['ProjectScoped', 'CellFeatureSet', 'CellFeatureDefinition']} })
@@ -2924,12 +2925,12 @@ class SynapseFeatureMatrix(ProjectScoped):
 
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
+Default2DView.model_rebuild()
 ProjectScoped.model_rebuild()
 DataSet.model_rebuild()
 DataItem.model_rebuild()
 DataItemDataSetAssociation.model_rebuild()
 ReferenceSpace.model_rebuild()
-Default2DView.model_rebuild()
 AnatomicalOrientation.model_rebuild()
 SpatialLocation.model_rebuild()
 CellFeatureSet.model_rebuild()

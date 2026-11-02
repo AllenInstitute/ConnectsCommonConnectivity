@@ -24,6 +24,8 @@ from connects_common_connectivity.models import (
     CellFeatureDefinition,
     Cluster,
     ClusterMembership,
+    Default2DView,
+    EmbeddingSpace,
     HierarchyCategory,
     ReferenceSpace,
     SignedAxis,
@@ -38,6 +40,7 @@ __all__ = [
     "CellFeatureDefinitionWrite",
     "ClusterMembershipWrite",
     "ClusterWrite",
+    "EmbeddingSpaceWrite",
     "HierarchyCategoryWrite",
     "ReferenceSpaceWrite",
     "validate_for_write",
@@ -114,6 +117,55 @@ class HierarchyCategoryWrite(HierarchyCategory):
     hierarchy_id: str
 
 
+def _validate_default_view_axes(
+    view: Default2DView | None,
+    *,
+    allowed_data_axes: frozenset[str] | None = None,
+) -> None:
+    """Validate a default view against its owning coordinate space."""
+    if view is None:
+        return
+
+    axes = []
+    for direction, signed_axis in (
+        ("left_to_right", view.left_to_right),
+        ("bottom_to_top", view.bottom_to_top),
+    ):
+        axis = DATA_AXIS_BY_SIGNED_AXIS.get(signed_axis)
+        if axis is None:
+            raise ValueError(
+                f"default_2d_view.{direction}={signed_axis!r} has no data axis; "
+                f"add it to DATA_AXIS_BY_SIGNED_AXIS"
+            )
+        if allowed_data_axes is not None and axis not in allowed_data_axes:
+            allowed = ", ".join(sorted(allowed_data_axes))
+            raise ValueError(
+                f"default_2d_view.{direction} must use one of the owning "
+                f"coordinate space's data axes ({allowed}), not {axis}"
+            )
+        axes.append(axis)
+
+    if axes[0] == axes[1]:
+        raise ValueError(
+            "default_2d_view must use different data axes, but "
+            f"{view.left_to_right} and {view.bottom_to_top} "
+            f"are both axis {axes[0]}"
+        )
+
+
+class EmbeddingSpaceWrite(EmbeddingSpace):
+    """``EmbeddingSpace`` with a coherent default view."""
+
+    @model_validator(mode="after")
+    def validate_default_view_axes(self) -> EmbeddingSpaceWrite:
+        """Require distinct X and Y screen directions for a 2D embedding."""
+        _validate_default_view_axes(
+            self.default_2d_view,
+            allowed_data_axes=frozenset(("X", "Y")),
+        )
+        return self
+
+
 class ReferenceSpaceWrite(ReferenceSpace):
     """``ReferenceSpace`` with coherent optional voxel scale and default view."""
 
@@ -169,29 +221,7 @@ class ReferenceSpaceWrite(ReferenceSpace):
             If both directions resolve to the same data axis, or if either
             signed axis has no entry in :data:`DATA_AXIS_BY_SIGNED_AXIS`.
         """
-        view = self.default_2d_view
-        if view is None:
-            return self
-
-        axes = []
-        for direction, signed_axis in (
-            ("left_to_right", view.left_to_right),
-            ("bottom_to_top", view.bottom_to_top),
-        ):
-            axis = DATA_AXIS_BY_SIGNED_AXIS.get(signed_axis)
-            if axis is None:
-                raise ValueError(
-                    f"default_2d_view.{direction}={signed_axis!r} has no data axis; "
-                    f"add it to DATA_AXIS_BY_SIGNED_AXIS"
-                )
-            axes.append(axis)
-
-        if axes[0] == axes[1]:
-            raise ValueError(
-                "default_2d_view must use different data axes, but "
-                f"{view.left_to_right} and {view.bottom_to_top} "
-                f"are both axis {axes[0]}"
-            )
+        _validate_default_view_axes(self.default_2d_view)
         return self
 
     @model_validator(mode="after")

@@ -47,6 +47,7 @@ classes:
       - input_feature_set_id
       - input_features_description
       - creation_date
+      - default_2d_view
     slot_usage:
       id:
         required: true

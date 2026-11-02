@@ -20,6 +20,7 @@ from connects_common_connectivity.io.write_spec import (
 from connects_common_connectivity.io.write_validation import (
     ClusterMembershipWrite,
     ClusterWrite,
+    EmbeddingSpaceWrite,
     HierarchyCategoryWrite,
     ReferenceSpaceWrite,
 )
@@ -78,7 +79,12 @@ def test_embedding_registry_identity(model_name, subdir, scope_columns, merge_on
     assert spec.merge_on == merge_on
     assert spec.write_mode == "merge_scoped"
     assert spec.nullable_merge_on == []
-    assert spec.validation_cls is getattr(models_module, model_name)
+    expected_validation_cls = (
+        EmbeddingSpaceWrite
+        if model_name == "EmbeddingSpace"
+        else getattr(models_module, model_name)
+    )
+    assert spec.validation_cls is expected_validation_cls
 
 
 def test_registry_uses_canonical_model_table_paths():

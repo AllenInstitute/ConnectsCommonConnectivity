@@ -21,6 +21,7 @@ NOTEBOOKS = (
     "examples/ETL/INH_patchseq/etl_patchseq_inh_01.ipynb",
     "examples/ETL/EXC_WNM_patchseq/etl_patchseq_exc_01.ipynb",
     "examples/ETL/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb",
+    "examples/ETL/Patchseq_CCF/etl_patchseq_ccf_coord.ipynb",
     "examples/ETL/EM/etl_minnie1822_01.ipynb",
     "examples/ETL/EM/etl_minnie1822_02_umap_features.ipynb",
     "examples/ETL/EM/etl_minnie1822_03_ccf_coord.ipynb",

@@ -18,7 +18,7 @@ from connects_common_connectivity.models import (
 )
 
 NOTEBOOK_ROOT = Path(__file__).resolve().parents[1] / "examples/ETL/EM"
-CAVE_SPACE = "minnie65_v1822_cave_nm"
+CAVE_SPACE = "minnie65_v1822_cave"
 STANDARD_SPACE = "minnie65_v1822_standard_transform_um"
 
 

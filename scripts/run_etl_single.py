@@ -4,8 +4,8 @@ Set NOTEBOOKS and OUTPUT_SUFFIX below (defaults to V1DD and ``_v1dd``).
 The suffix is appended to the configured output root and execution timestamp.
 Override destinations with ``--data-output-root PATH`` and ``--output-dir PATH``;
 the latter controls executed notebook copies only. Use ``--dry-run`` to preview
-both destinations without running the ETL. The configuration file and source
-notebooks are never modified.
+all selected notebooks in order and both destinations without running the ETL.
+The configuration file and source notebooks are never modified.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="Print the notebook and destinations without executing or writing anything.",
+        help="Print the ordered notebook list and destinations without executing or writing anything.",
     )
     args = parser.parse_args(argv)
     data_output_root = args.data_output_root
@@ -49,7 +49,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
         output_dir = REPO_ROOT / "scratch" / "etl_runs" / f"{timestamp}{OUTPUT_SUFFIX}"
     output_dir = output_dir.expanduser().resolve()
-    print(f"ETL notebook: {NOTEBOOKS[0]}", flush=True)
+    print("ETL order:", flush=True)
+    for index, notebook in enumerate(NOTEBOOKS, start=1):
+        print(f"  {index}. {notebook}", flush=True)
     print(f"CCC data destination: {data_output_root}", flush=True)
     print(f"Executed notebooks: {output_dir}", flush=True)
     if args.dry_run:

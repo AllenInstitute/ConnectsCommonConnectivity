@@ -32,6 +32,10 @@ as additional use cases and datasets are incorporated.
 We have ingested previously published datasets into a common representation to
 exercise the schemas and support cross-dataset exploration.
 
+An overview of the latest dataset ingest versions is available
+[here](https://alleninstitute.github.io/ccm-data-overview/).
+
+Initial release:
 - **Data summary:** [ccm_release_202610_v7 overview](https://alleninstitute.github.io/ccm-data-overview/pages/ccm_release_202610_v7.html)
 - **Data location:** [s3://ccm-data-prototypes/ccm_release_202610_v7/](https://ccm-data-prototypes.s3.us-west-2.amazonaws.com/ccm_release_202610_v7/)
 

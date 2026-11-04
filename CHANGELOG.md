@@ -5,11 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - Unreleased
 
 ### Added
 
+- Added optional shared `Default2DView` metadata to `EmbeddingSpace`; embedding
+  views must use distinct X and Y axes, while spatial views continue to allow
+  any two distinct coordinate axes. V1DD and Minnie65 embedding ETLs now write
+  positive X/Y default views.
+- Added optional dataset-level `default_reference_space` and
+  `default_embedding_space` recommendations (#57). Spatial defaults identify
+  an exact `(project_id, id)` pair, with null project selecting global scope;
+  embedding defaults identify a space within the dataset's project. Omitted
+  defaults mean no recommendation, independently of screen orientation.
+
 ### Changed
+
+- V1DD datasets now recommend the streamline spatial space and AD-reference
+  embedding (#57). Removed misleading `_nm` suffixes from V1DD CAVE/streamline
+  and Minnie CAVE space IDs; coordinate units remain microns. Regenerate the
+  ETL output tables rather than migrating existing data.
 
 ### Deprecated
 

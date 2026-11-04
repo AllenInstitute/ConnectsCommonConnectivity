@@ -127,11 +127,16 @@ def test_embedding_space_reader_preserves_metadata(tmp_path, feature_set_id):
         input_feature_set_id=feature_set_id,
         input_features_description="Normalized projection measurements.",
         creation_date=date(2026, 10, 7),
+        default_2d_view=Default2DView(
+            left_to_right=SignedAxis.MINUS_Y,
+            bottom_to_top=SignedAxis.PLUS_X,
+        ),
     )
     minimal = EmbeddingSpace(project_id="first", id="minimal", embedding_method="UMAP")
     write_models([populated, minimal], output_root=tmp_path)
     result = read_embedding_spaces("first", output_root=tmp_path)
     assert result.schema["creation_date"] == pl.Date
+    assert isinstance(result.schema["default_2d_view"], pl.Struct)
     assert {
         row["id"]: EmbeddingSpace.model_validate(row) for row in result.to_dicts()
     } == {"populated": populated, "minimal": minimal}

@@ -185,6 +185,11 @@ def _shape_cell_cell_measurements(
     measurement_type: str,
     unit: str,
 ) -> pl.DataFrame:
+    """Add metadata and readable IDs to aggregated cell-cell measurements.
+
+    Cast measurement values to Float64 and return columns in canonical
+    output-schema order.
+    """
     measurements = measurements.with_columns(
         pl.lit(None, dtype=pl.String).alias("description"),
         pl.lit(project_id).alias("project_id"),

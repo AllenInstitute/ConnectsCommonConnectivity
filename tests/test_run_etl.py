@@ -37,14 +37,14 @@ def _write_notebook(path: Path) -> bytes:
 
 
 def test_runner_covers_active_etls_in_dependency_order(runner):
-    """The plan includes all ten active ETLs and places shared taxonomies before cohorts."""
+    """The plan includes every active ETL once and places prerequisites before dependents."""
     active = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "examples/ETL").rglob("etl_*.ipynb")
         if "old" not in path.parts and ".ipynb_checkpoints" not in path.parts
     }
     assert set(runner.NOTEBOOKS) == active
-    assert len(runner.NOTEBOOKS) == len(active) == 10
+    assert len(runner.NOTEBOOKS) == len(active)
     order = {Path(name).name: index for index, name in enumerate(runner.NOTEBOOKS)}
     for cohort in (
         "etl_patchseq_inh_01.ipynb", "etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb",
@@ -56,6 +56,8 @@ def test_runner_covers_active_etls_in_dependency_order(runner):
         ("etl_abc_01.ipynb", "etl_barseq_01.ipynb"),
         ("etl_patchseq_exc_01.ipynb", "etl_wnm_exc_01.ipynb"),
         ("etl_minnie1822_01.ipynb", "etl_minnie1822_02_umap_features.ipynb"),
+        ("etl_minnie1822_02_umap_features.ipynb", "etl_minnie1822_03_ccf_coord.ipynb"),
+        ("etl_v1dd1196_01.ipynb", "etl_v1dd1196_02_ccf_coord.ipynb"),
     ):
         assert order[before] < order[after]
 
@@ -200,6 +202,12 @@ def test_runner_rejects_existing_output_directory(runner, tmp_path, monkeypatch)
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_from_selects_inclusive_suffix(runner, tmp_path, monkeypatch, capsys, start, dry_run):
     """A filename or relative path selects an inclusive suffix for preview or execution."""
+    notebooks = (
+        "examples/ETL/before.ipynb",
+        "examples/ETL/EXC_WNM_patchseq/etl_wnm_exc_01.ipynb",
+        "examples/ETL/after.ipynb",
+    )
+    monkeypatch.setattr(runner, "NOTEBOOKS", notebooks)
     execute = Mock()
     monkeypatch.setattr(runner, "run_notebooks", execute)
     output = tmp_path / "executed"
@@ -209,10 +217,10 @@ def test_from_selects_inclusive_suffix(runner, tmp_path, monkeypatch, capsys, st
 
     assert runner.main(args) == 0
 
-    selected = runner.NOTEBOOKS[6:]
+    selected = notebooks[1:]
     printed = capsys.readouterr().out
     assert all(name in printed for name in selected)
-    assert all(name not in printed for name in runner.NOTEBOOKS[:6])
+    assert notebooks[0] not in printed
     if dry_run:
         execute.assert_not_called()
     else:

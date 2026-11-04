@@ -18,8 +18,24 @@ classes:
       - name
       - publication
       - modality
+      - default_reference_space
+      - default_embedding_space
     mixins:
       - ProjectScoped
+  ReferenceSpaceReference:
+    description: >-
+      An embedded reference to a ReferenceSpace by its exact (project_id, id)
+      identity. A null or omitted project_id selects the global scope, not the
+      dataset's project; no fallback between scopes is implied.
+    slots:
+      - project_id
+      - id
+    slot_usage:
+      project_id:
+        required: false
+      id:
+        required: true
+        description: Identifier of the ReferenceSpace in the selected scope.
   DataItem:
     description: An individual datum (e.g., neuron reconstruction, barcoded detection, injection experiment).
     slots:
@@ -52,6 +68,24 @@ classes:
         description: Identifier of the DataSet you are linking
     
 slots:
+  default_reference_space:
+    range: ReferenceSpaceReference
+    inlined: true
+    required: false
+    description: >-
+      Optional recommended initial spatial space for this dataset. Null means
+      no recommendation, not that spatial views should be hidden. The referenced
+      space should have coordinates for dataset members; complete coverage is
+      not required. Screen orientation is defined by the space's default_2d_view.
+  default_embedding_space:
+    range: string
+    required: false
+    description: >-
+      Optional identifier of the recommended initial EmbeddingSpace in this
+      dataset's project. Null means no recommendation, not that embedding views
+      should be hidden. The referenced space should have coordinates for dataset
+      members; complete coverage is not required. Screen orientation is defined
+      by the space's default_2d_view.
   dataitem_id:
     range: DataItem
   dataset_id:

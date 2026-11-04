@@ -32,6 +32,10 @@ as additional use cases and datasets are incorporated.
 We have ingested previously published datasets into a common representation to
 exercise the schemas and support cross-dataset exploration.
 
+An overview of the latest dataset ingest versions is available
+[here](https://alleninstitute.github.io/ccm-data-overview/).
+
+Initial release:
 - **Data summary:** [ccm_release_202610_v7 overview](https://alleninstitute.github.io/ccm-data-overview/pages/ccm_release_202610_v7.html)
 - **Data location:** [s3://connects-common-connectivity/ccm_release_202610_v7/](https://connects-common-connectivity.s3.us-west-2.amazonaws.com/ccm_release_202610_v7/)
 
@@ -123,6 +127,14 @@ The configuration file is still required when using this override. Settings are
 cached within a Python process; restart the notebook kernel after changing the
 file or environment, or call `get_settings.cache_clear()` after importing
 `get_settings` from `connects_common_connectivity.config`.
+
+From the repository root, run all ETLs in order with:
+
+```bash
+uv run python scripts/run_etl.py
+```
+
+add `--dry-run` to preview the order without executing any notebooks.
 
 ## Developing the schemas
 

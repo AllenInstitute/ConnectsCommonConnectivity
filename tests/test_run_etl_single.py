@@ -26,11 +26,21 @@ def single_runner(monkeypatch, tmp_path):
     monkeypatch.setattr(
         module, "get_settings", lambda: Settings(output_root=tmp_path / "release"),
     )
+    monkeypatch.setattr(
+        module, "NOTEBOOKS", ("examples/ETL/first.ipynb", "examples/ETL/second.ipynb"),
+    )
+    monkeypatch.setattr(module, "OUTPUT_SUFFIX", "_v1dd")
     return module
 
 
-def test_single_runner_dry_run_has_no_side_effects(single_runner, monkeypatch, tmp_path, capsys):
-    """Dry-run selects an existing V1DD notebook and suffixed root without writing or executing."""
+@pytest.mark.parametrize("notebook_count", [1, 2])
+def test_single_runner_dry_run_has_no_side_effects(
+    single_runner, monkeypatch, tmp_path, capsys, notebook_count,
+):
+    """Dry-run previews every selected notebook in order without writing or executing."""
+    notebooks = single_runner.NOTEBOOKS[:notebook_count]
+    monkeypatch.setattr(single_runner, "NOTEBOOKS", notebooks)
+    monkeypatch.delenv("CCC_OUTPUT_ROOT", raising=False)
     run = Mock()
     monkeypatch.setattr(single_runner, "run_notebooks", run)
     output = tmp_path / "execution"
@@ -42,9 +52,10 @@ def test_single_runner_dry_run_has_no_side_effects(single_runner, monkeypatch, t
     assert "CCC_OUTPUT_ROOT" not in os.environ
     text = capsys.readouterr().out
     assert f"CCC data destination: {tmp_path / 'release_v1dd'}" in text
-    assert single_runner.NOTEBOOKS == ("examples/ETL/EM/etl_v1dd1196_01.ipynb",)
-    assert (REPO_ROOT / single_runner.NOTEBOOKS[0]).is_file()
-    assert single_runner.NOTEBOOKS[0] in text
+    assert text.splitlines()[:notebook_count + 1] == [
+        "ETL order:",
+        *(f"  {index}. {notebook}" for index, notebook in enumerate(notebooks, start=1)),
+    ]
 
 
 @pytest.mark.parametrize("suffix", ["_custom", ""])

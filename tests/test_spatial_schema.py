@@ -121,9 +121,10 @@ def test_anatomical_orientation_directions_are_optional_and_may_share_an_axis():
 def test_spatial_schema_identity_and_removed_slots():
     """Schemas retain the coordinate key and DataItem index contract, not old embedded slots."""
     schemas = Path(__file__).resolve().parents[1] / "schemas"
+    base = yaml.safe_load((schemas / "base_schema.yaml").read_text())
     spatial = yaml.safe_load((schemas / "spatial_schema.yaml").read_text())
-    for enum_name in ["SignedAxis", "LocationType"]:
-        for value in spatial["enums"][enum_name]["permissible_values"].values():
+    for schema, enum_name in [(base, "SignedAxis"), (spatial, "LocationType")]:
+        for value in schema["enums"][enum_name]["permissible_values"].values():
             assert value and value.get("description", "").strip()
     identity = spatial["classes"]["SpatialLocation"]["unique_keys"]["location_identity"]
     assert identity["unique_key_slots"] == [

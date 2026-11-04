@@ -12,6 +12,21 @@ default_prefix: 'cc'
 default_range: string
 
 enums:
+  SignedAxis:
+    description: A data axis together with the sense in which it is traversed.
+    permissible_values:
+      PLUS_X:
+        description: Direction of increasing X coordinates.
+      MINUS_X:
+        description: Direction of decreasing X coordinates.
+      PLUS_Y:
+        description: Direction of increasing Y coordinates.
+      MINUS_Y:
+        description: Direction of decreasing Y coordinates.
+      PLUS_Z:
+        description: Direction of increasing Z coordinates.
+      MINUS_Z:
+        description: Direction of decreasing Z coordinates.
   Modality:
     permissible_values:
       BARCODED:
@@ -111,6 +126,16 @@ enums:
         description: Laterality is not known or not applicable.
 
 slots:
+  default_2d_view:
+    range: Default2DView
+    inlined: true
+    description: Optional screen layout; null means the consumer chooses the view.
+  left_to_right:
+    range: SignedAxis
+    description: Signed data axis pointing from screen left to screen right.
+  bottom_to_top:
+    range: SignedAxis
+    description: Signed data axis pointing from screen bottom to screen top.
   id:
     identifier: true
     description: Unique identifier within the class context.
@@ -178,6 +203,20 @@ slots:
     range: string
 
 classes:
+  Default2DView:
+    description: >-
+      Embedded default screen layout. The two signed axes must use different
+      underlying data axes present in the owning coordinate space. In 3D, the
+      unused axis is depth. Negate MINUS axes to display.
+    slots:
+      - left_to_right
+      - bottom_to_top
+    slot_usage:
+      left_to_right:
+        required: true
+      bottom_to_top:
+        required: true
+
   ProjectScoped:
     description: Mixin providing project scoping to entities that belong to a specific project.
     slots:

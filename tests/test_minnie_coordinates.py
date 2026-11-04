@@ -18,7 +18,7 @@ from connects_common_connectivity.models import (
 )
 
 NOTEBOOK_ROOT = Path(__file__).resolve().parents[1] / "examples/ETL/EM"
-CAVE_SPACE = "minnie65_v1822_cave_nm"
+CAVE_SPACE = "minnie65_v1822_cave"
 STANDARD_SPACE = "minnie65_v1822_standard_transform_um"
 
 
@@ -100,7 +100,7 @@ def test_minnie_spatial_write_repairs_existing_rows_without_duplicates(settings)
             828.19, 638.554, 783.72,
         ]
         assert [by_space[CAVE_SPACE][axis] for axis in ("x", "y", "z")] == [
-            915264, 959104, 783720,
+            915.264, 959.104, 783.72,
         ]
         assert [by_space["other_space"][axis] for axis in ("x", "y", "z")] == [1, 2, 3]
         other = read_spatial_locations("other_project", output_root=settings.output_root)

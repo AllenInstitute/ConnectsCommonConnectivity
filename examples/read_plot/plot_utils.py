@@ -635,6 +635,12 @@ def plot_projection_panel(
     cax = canvas.add(x0, y0 - 0.22, min(2.0, g.main_w * 0.4), 0.09)
     cb = fig.colorbar(im, cax=cax, orientation="horizontal")
     cb.outline.set_linewidth(0.5)
+    # Plain-number decade labels (mathtext 10^n would export in a different font)
+    lo, hi = np.ceil(np.log10(im.norm.vmin)), np.floor(np.log10(im.norm.vmax))
+    decades = 10.0 ** np.arange(lo, hi + 1)
+    short = {1: "1", 10: "10", 100: "100", 1e3: "1k", 1e4: "10k", 1e5: "100k", 1e6: "1M"}
+    cb.set_ticks(decades, labels=[short.get(d, f"{d:g}") for d in decades])
+    cb.ax.xaxis.set_minor_formatter(mpl.ticker.NullFormatter())
     cb.ax.tick_params(labelsize=g.block_label_size - 1, length=2, width=0.5, pad=1.5)
     cb.set_label(colorbar_label, fontsize=g.block_label_size, labelpad=2)
     axes["colorbar"] = cax
